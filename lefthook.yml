@@ -1,0 +1,13 @@
+commit-msg:
+  commands:
+    commitlint:
+      run: pnpm exec commitlint --edit {1}
+
+pre-commit:
+  parallel: true
+  commands:
+    biome-check:
+      glob: "*.{js,ts,jsx,tsx,json}"
+      run: pnpm exec biome check --write --no-errors-on-unmatched {staged_files}
+    typecheck:
+      run: pnpm exec turbo run typecheck

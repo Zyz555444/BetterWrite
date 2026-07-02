@@ -1,0 +1,29 @@
+{
+  "name": "@betterwrite/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@betterwrite/ai": "workspace:*",
+    "@betterwrite/db": "workspace:*",
+    "@betterwrite/shared": "workspace:*",
+    "drizzle-orm": "^0.38.0"
+  },
+  "devDependencies": {
+    "@betterwrite/tsconfig": "workspace:*",
+    "@biomejs/biome": "^1.9.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3"
+  }
+}

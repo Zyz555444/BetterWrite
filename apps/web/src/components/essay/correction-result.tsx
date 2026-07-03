@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { CorrectionDetail } from '@/lib/api/fetcher';
-import { formatScore } from '@betterwrite/shared';
+import { formatScore, getErrorTypeLabel } from '@betterwrite/shared';
 import { AlertTriangle, CheckCircle2, Lightbulb, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import {
@@ -26,20 +26,6 @@ const _dimensionLabels: Record<string, string> = {
   language: '语言',
   structure: '结构',
   presentation: '卷面',
-};
-
-const errorTypeLabels: Record<string, string> = {
-  tense: '时态',
-  subject_verb: '主谓一致',
-  spelling: '拼写',
-  plural: '单复数',
-  article: '冠词',
-  preposition: '介词',
-  word_form: '词性',
-  pronoun: '代词',
-  chinglish: '中式英语',
-  sentence_structure: '句型结构',
-  collocation: '搭配',
 };
 
 const priorityLabels: Record<string, string> = {
@@ -196,7 +182,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
                 <AlertTriangle className="w-5 h-5 text-error mt-0.5" />
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="destructive">{errorTypeLabels[error.type] ?? error.type}</Badge>
+                    <Badge variant="destructive">{getErrorTypeLabel(error.type)}</Badge>
                   </div>
                   <p className="text-text-primary">
                     <span className="line-through text-error/70">{error.original}</span>

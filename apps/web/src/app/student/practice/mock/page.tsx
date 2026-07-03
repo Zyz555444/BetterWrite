@@ -6,20 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { type QuestionBankItem, UserRole, countWords } from '@betterwrite/shared';
+import { type QuestionBankItem, UserRole, countWords, getTopicTypeLabel } from '@betterwrite/shared';
 import { AlertCircle, ArrowRight, CheckCircle2, Clock, LogOut, PenLine } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const MOCK_TOTAL_SECONDS = 15 * 60;
-
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲稿',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
-};
 
 interface FeedbackError {
   original: string;
@@ -165,7 +157,7 @@ export default function StudentPracticeMockPage() {
                   <div className="flex items-center gap-2 mb-2">
                     <Badge variant="secondary">限时模拟</Badge>
                     <Badge variant="outline">
-                      {topicTypeLabels[question.topicType] ?? question.topicType}
+                      {getTopicTypeLabel(question.topicType)}
                     </Badge>
                     <span className="text-sm text-text-secondary flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />

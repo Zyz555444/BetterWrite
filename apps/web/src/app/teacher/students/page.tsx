@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type ImportResult, type StudentListItem, fetcher } from '@/lib/api/fetcher';
-import { UserRole, formatScore } from '@betterwrite/shared';
+import { UserRole, formatScore, StudentTagLabels, getStudentTagLabel } from '@betterwrite/shared';
 import { Download, Search, Upload, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
@@ -17,13 +17,6 @@ interface TeacherClass {
   grade: string;
   studentCount: number;
 }
-
-const tagLabels: Record<string, string> = {
-  excellent: '优秀',
-  good: '良好',
-  improving: '待提升',
-  attention: '需关注',
-};
 
 const tagColors: Record<string, string> = {
   excellent: 'bg-success/10 text-success',
@@ -87,11 +80,11 @@ function TagEditor({
         disabled={loading}
         className={`text-xs px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${tag ? tagColors[tag] : 'bg-bg-tertiary text-text-secondary'}`}
       >
-        {tag ? tagLabels[tag] : '设置标签'}
+        {tag ? getStudentTagLabel(tag) : '设置标签'}
       </button>
       {editing && (
         <div className="absolute z-20 mt-1 left-0 min-w-[120px] rounded-md border border-border bg-bg-primary shadow-md py-1">
-          {Object.entries(tagLabels).map(([value, label]) => (
+          {Object.entries(StudentTagLabels).map(([value, label]) => (
             <button
               key={value}
               type="button"

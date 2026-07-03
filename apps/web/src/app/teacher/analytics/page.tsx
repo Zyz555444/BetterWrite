@@ -7,7 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { type ClassAnalytics, UserRole, formatScore } from '@betterwrite/shared';
+import {
+  type ClassAnalytics,
+  UserRole,
+  formatScore,
+  getTopicTypeLabel,
+  getErrorTypeLabel,
+} from '@betterwrite/shared';
 import {
   AlertCircle,
   BarChart3,
@@ -26,35 +32,6 @@ interface TeacherClass {
   studentCount: number;
 }
 
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
-};
-
-const errorTypeLabels: Record<string, string> = {
-  tense: '时态',
-  subject_verb: '主谓一致',
-  spelling: '拼写',
-  plural: '复数',
-  article: '冠词',
-  preposition: '介词',
-  word_form: '词形',
-  pronoun: '代词',
-  chinglish: '中式英语',
-  sentence_structure: '句式结构',
-  collocation: '搭配',
-};
-
-function resolveTopicLabel(topicType: string): string {
-  return topicTypeLabels[topicType] ?? topicType;
-}
-
-function resolveErrorLabel(type: string): string {
-  return errorTypeLabels[type] ?? type;
-}
 
 export default function TeacherAnalyticsPage() {
   const [classes, setClasses] = useState<TeacherClass[]>([]);
@@ -173,7 +150,7 @@ export default function TeacherAnalyticsPage() {
   const topicTypeData = useMemo(
     () =>
       (analytics?.topicTypeComparison ?? []).map((item) => ({
-        label: resolveTopicLabel(item.topicType),
+        label: getTopicTypeLabel(item.topicType),
         value: item.averageScore,
       })),
     [analytics],
@@ -355,7 +332,7 @@ export default function TeacherAnalyticsPage() {
                               {i + 1}
                             </span>
                             <Badge variant="secondary" className="shrink-0">
-                              {resolveErrorLabel(err.type)}
+                              {getErrorTypeLabel(err.type)}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-3 shrink-0 text-text-secondary tabular-nums">

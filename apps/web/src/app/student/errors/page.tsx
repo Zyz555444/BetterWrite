@@ -6,24 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { type ErrorBookGroup, UserRole } from '@betterwrite/shared';
+import { type ErrorBookGroup, UserRole, getErrorTypeLabel } from '@betterwrite/shared';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-
-const errorTypeLabels: Record<string, string> = {
-  tense: '时态',
-  subject_verb: '主谓一致',
-  spelling: '拼写',
-  plural: '单复数',
-  article: '冠词',
-  preposition: '介词',
-  word_form: '词性',
-  pronoun: '代词',
-  chinglish: '中式英语',
-  sentence_structure: '句子结构',
-  collocation: '搭配',
-};
 
 export default function StudentErrorBookPage() {
   const [groups, setGroups] = useState<ErrorBookGroup[]>([]);
@@ -107,7 +93,7 @@ export default function StudentErrorBookPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {groups.map((group) => {
-                const label = errorTypeLabels[group.errorType] ?? group.errorType;
+                const label = getErrorTypeLabel(group.errorType);
                 const percent =
                   group.total > 0 ? Math.round((group.mastered / group.total) * 100) : 0;
                 return (

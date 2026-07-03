@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowRight } from 'lucide-react';
 import { useEffect } from 'react';
+import { getErrorTypeLabel } from '@betterwrite/shared';
 
 interface ErrorCardProps {
   error: {
@@ -19,27 +20,13 @@ interface ErrorCardProps {
   onMaster?: (id: string) => void;
 }
 
-const errorTypeLabels: Record<string, string> = {
-  tense: '时态',
-  subject_verb: '主谓一致',
-  spelling: '拼写',
-  plural: '单复数',
-  article: '冠词',
-  preposition: '介词',
-  word_form: '词性',
-  pronoun: '代词',
-  chinglish: '中式英语',
-  sentence_structure: '句子结构',
-  collocation: '搭配',
-};
-
 export function ErrorCard({ error, onMaster }: ErrorCardProps) {
   useEffect(() => {
     console.log(`[StudentErrorCard] mounted id=${error.id}`);
   }, [error.id]);
 
   const isMastered = error.status === 'mastered';
-  const typeLabel = errorTypeLabels[error.errorType] ?? error.errorType;
+  const typeLabel = getErrorTypeLabel(error.errorType);
 
   return (
     <Card className="border-l-4 border-l-error">

@@ -71,6 +71,21 @@ async function readPersistedUser(): Promise<AuthUser | null> {
   }
 }
 
+export function getDashboardPath(role: UserRoleType): string {
+  switch (role) {
+    case 'super_admin':
+      return '/admin/dashboard';
+    case 'school_admin':
+      return '/school/dashboard';
+    case 'teacher':
+      return '/(teacher)';
+    case 'student':
+      return '/(student)';
+    default:
+      return '/(auth)/login';
+  }
+}
+
 export const useAuth = create<AuthState>((set, get) => ({
   user: null,
   token: null,

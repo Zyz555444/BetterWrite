@@ -13,6 +13,7 @@ export type InputProps = {
   multiline?: boolean;
   numberOfLines?: number;
   autoCapitalize?: TextInputProps['autoCapitalize'];
+  keyboardType?: TextInputProps['keyboardType'];
   colors: ThemeColors;
 };
 
@@ -26,6 +27,7 @@ export function Input({
   multiline,
   numberOfLines,
   autoCapitalize = 'none',
+  keyboardType,
   colors,
 }: InputProps) {
   const hasError = Boolean(error);
@@ -41,6 +43,7 @@ export function Input({
         multiline={multiline}
         numberOfLines={numberOfLines}
         autoCapitalize={autoCapitalize}
+        keyboardType={keyboardType}
         style={[
           styles.input,
           {

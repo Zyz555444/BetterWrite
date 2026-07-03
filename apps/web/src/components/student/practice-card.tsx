@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, PenLine } from 'lucide-react';
 import { useEffect } from 'react';
+import { getTopicTypeLabel, getPracticeDifficultyLabel } from '@betterwrite/shared';
 
 interface PracticeCardProps {
   question: {
@@ -21,20 +22,6 @@ interface PracticeCardProps {
   onStart?: (id: string) => void;
 }
 
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议信',
-};
-
-const difficultyLabels: Record<string, string> = {
-  easy: '简单',
-  medium: '中等',
-  hard: '困难',
-};
-
 const difficultyClass: Record<string, string> = {
   easy: 'border-transparent bg-success/15 text-success',
   medium: 'border-transparent bg-warning/15 text-warning',
@@ -46,8 +33,8 @@ export function PracticeCard({ question, onStart }: PracticeCardProps) {
     console.log(`[StudentPracticeCard] mounted id=${question.id}`);
   }, [question.id]);
 
-  const topicLabel = topicTypeLabels[question.topicType] ?? question.topicType;
-  const diffLabel = difficultyLabels[question.difficulty] ?? question.difficulty;
+  const topicLabel = getTopicTypeLabel(question.topicType);
+  const diffLabel = getPracticeDifficultyLabel(question.difficulty);
   const diffClass = difficultyClass[question.difficulty] ?? '';
 
   return (

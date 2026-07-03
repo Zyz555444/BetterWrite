@@ -7,17 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type TeachingResourceWithCreator, fetcher } from '@/lib/api/fetcher';
-import { UserRole } from '@betterwrite/shared';
+import {
+  UserRole,
+  TopicTypeLabels,
+  TeachingResourceTypeLabels,
+  TeachingResourceDifficultyLabels,
+} from '@betterwrite/shared';
 import { ChevronDown, ChevronUp, Edit, Eye, Plus, Search, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-
-const resourceTypeLabels: Record<string, string> = {
-  sample: '范文库',
-  sentence: '句型模板库',
-  connector: '连接词库',
-  errorcase: '错误案例库',
-};
 
 const resourceTypeIcons: Record<string, string> = {
   sample: '📚',
@@ -26,24 +24,10 @@ const resourceTypeIcons: Record<string, string> = {
   errorcase: '⚠️',
 };
 
-const difficultyLabels: Record<string, string> = {
-  easy: '简单',
-  medium: '中等',
-  hard: '困难',
-};
-
 const difficultyColors: Record<string, string> = {
   easy: 'bg-success/10 text-success',
   medium: 'bg-warning/10 text-warning',
   hard: 'bg-error/10 text-error',
-};
-
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
 };
 
 interface ResourceForm {
@@ -87,7 +71,7 @@ export default function TeacherResourcesListPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const typeLabel = resourceTypeLabels[type] ?? type;
+  const typeLabel = TeachingResourceTypeLabels[type as keyof typeof TeachingResourceTypeLabels] ?? type;
   const typeIcon = resourceTypeIcons[type] ?? '📄';
 
   const loadList = async () => {
@@ -390,7 +374,7 @@ export default function TeacherResourcesListPage() {
                     className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
                   >
                     <option value="all">全部体裁</option>
-                    {Object.entries(topicTypeLabels).map(([value, label]) => (
+                    {Object.entries(TopicTypeLabels).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -414,7 +398,7 @@ export default function TeacherResourcesListPage() {
                     className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
                   >
                     <option value="all">全部难度</option>
-                    {Object.entries(difficultyLabels).map(([value, label]) => (
+                    {Object.entries(TeachingResourceDifficultyLabels).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -482,7 +466,7 @@ export default function TeacherResourcesListPage() {
                               </p>
                               {resource.topicType && (
                                 <Badge variant="secondary">
-                                  {topicTypeLabels[resource.topicType] ?? resource.topicType}
+                                  {TopicTypeLabels[resource.topicType as keyof typeof TopicTypeLabels] ?? resource.topicType}
                                 </Badge>
                               )}
                               {resource.difficulty && (
@@ -491,7 +475,7 @@ export default function TeacherResourcesListPage() {
                                     difficultyColors[resource.difficulty] ?? ''
                                   }`}
                                 >
-                                  {difficultyLabels[resource.difficulty] ?? resource.difficulty}
+                                  {TeachingResourceDifficultyLabels[resource.difficulty as keyof typeof TeachingResourceDifficultyLabels] ?? resource.difficulty}
                                 </span>
                               )}
                               {(resource.tags ?? []).slice(0, 3).map((tag) => (
@@ -557,7 +541,7 @@ export default function TeacherResourcesListPage() {
                                 <span className="text-text-tertiary">体裁：</span>
                                 <span className="text-text-primary">
                                   {resource.topicType
-                                    ? (topicTypeLabels[resource.topicType] ?? resource.topicType)
+                                    ? TopicTypeLabels[resource.topicType as keyof typeof TopicTypeLabels] ?? resource.topicType
                                     : '-'}
                                 </span>
                               </div>
@@ -565,7 +549,7 @@ export default function TeacherResourcesListPage() {
                                 <span className="text-text-tertiary">难度：</span>
                                 <span className="text-text-primary">
                                   {resource.difficulty
-                                    ? (difficultyLabels[resource.difficulty] ?? resource.difficulty)
+                                    ? TeachingResourceDifficultyLabels[resource.difficulty as keyof typeof TeachingResourceDifficultyLabels] ?? resource.difficulty
                                     : '-'}
                                 </span>
                               </div>
@@ -676,7 +660,7 @@ export default function TeacherResourcesListPage() {
                       className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
                     >
                       <option value="">不限体裁</option>
-                      {Object.entries(topicTypeLabels).map(([value, label]) => (
+                      {Object.entries(TopicTypeLabels).map(([value, label]) => (
                         <option key={value} value={value}>
                           {label}
                         </option>
@@ -693,7 +677,7 @@ export default function TeacherResourcesListPage() {
                       onChange={(e) => setForm((prev) => ({ ...prev, difficulty: e.target.value }))}
                       className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
                     >
-                      {Object.entries(difficultyLabels).map(([value, label]) => (
+                      {Object.entries(TeachingResourceDifficultyLabels).map(([value, label]) => (
                         <option key={value} value={value}>
                           {label}
                         </option>

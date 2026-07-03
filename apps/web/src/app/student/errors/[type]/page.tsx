@@ -6,30 +6,16 @@ import { ErrorCard } from '@/components/student';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { type ErrorBookItem, UserRole } from '@betterwrite/shared';
+import { type ErrorBookItem, UserRole, getErrorTypeLabel } from '@betterwrite/shared';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-const errorTypeLabels: Record<string, string> = {
-  tense: '时态',
-  subject_verb: '主谓一致',
-  spelling: '拼写',
-  plural: '单复数',
-  article: '冠词',
-  preposition: '介词',
-  word_form: '词性',
-  pronoun: '代词',
-  chinglish: '中式英语',
-  sentence_structure: '句子结构',
-  collocation: '搭配',
-};
-
 export default function StudentErrorBookTypePage() {
   const params = useParams();
   const type = typeof params.type === 'string' ? params.type : String(params.type ?? '');
-  const typeLabel = errorTypeLabels[type] ?? type;
+  const typeLabel = getErrorTypeLabel(type);
 
   const [errors, setErrors] = useState<ErrorBookItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);

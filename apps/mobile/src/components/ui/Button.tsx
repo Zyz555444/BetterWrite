@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ThemeColors } from '../../theme/tokens';
@@ -7,7 +8,8 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'outline';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export type ButtonProps = {
-  title: string;
+  title?: string;
+  children?: ReactNode;
   onPress?: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -23,6 +25,7 @@ const sizeFontSizes: Record<ButtonSize, number> = { sm: 13, md: 15, lg: 17 };
 
 export function Button({
   title,
+  children,
   onPress,
   variant = 'primary',
   size = 'md',
@@ -58,6 +61,8 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator color={getTextColor(variant, colors)} size="small" />
+      ) : children ? (
+        children
       ) : (
         <View style={styles.content}>
           <Text style={[styles.text, textStyle]}>{title}</Text>

@@ -7,17 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type EssayTask, fetcher } from '@/lib/api/fetcher';
-import { UserRole } from '@betterwrite/shared';
+import { UserRole, TopicTypeLabels } from '@betterwrite/shared';
 import { Calendar, PenLine, Plus, School, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲稿',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
-};
 
 const statusLabels: Record<string, string> = {
   draft: '草稿',
@@ -237,7 +229,7 @@ export default function TeacherTasksPage() {
                         onChange={(e) => handleChange('topicType', e.target.value)}
                         className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
                       >
-                        {Object.entries(topicTypeLabels).map(([value, label]) => (
+                        {Object.entries(TopicTypeLabels).map(([value, label]) => (
                           <option key={value} value={value}>
                             {label}
                           </option>
@@ -347,7 +339,7 @@ export default function TeacherTasksPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-medium text-text-primary truncate">{task.title}</p>
                           <Badge variant="secondary">
-                            {topicTypeLabels[task.topicType] ?? task.topicType}
+                            {TopicTypeLabels[task.topicType as keyof typeof TopicTypeLabels] ?? task.topicType}
                           </Badge>
                           <Badge>{statusLabels[task.status] ?? task.status}</Badge>
                         </div>

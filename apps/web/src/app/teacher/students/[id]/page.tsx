@@ -5,18 +5,17 @@ import { RoleGuard } from '@/components/layout/role-guard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type StudentDetail, fetcher } from '@/lib/api/fetcher';
-import { UserRole, formatScore } from '@betterwrite/shared';
+import {
+  UserRole,
+  formatScore,
+  getTopicTypeLabel,
+  getStudentTagLabel,
+  StudentTagLabels,
+} from '@betterwrite/shared';
 import { ArrowLeft, BookOpen, Mail, School, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-
-const tagLabels: Record<string, string> = {
-  excellent: '优秀',
-  good: '良好',
-  improving: '待提升',
-  attention: '需关注',
-};
 
 const tagColors: Record<string, string> = {
   excellent: 'bg-success/10 text-success',
@@ -39,15 +38,7 @@ const statusColors: Record<string, string> = {
   failed: 'bg-error/10 text-error',
 };
 
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲稿',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
-};
-
-function TagEditor({
+function TagSelector({
   studentId,
   tag,
   onUpdated,
@@ -99,11 +90,11 @@ function TagEditor({
         disabled={loading}
         className={`text-xs px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${tag ? tagColors[tag] : 'bg-bg-tertiary text-text-secondary'}`}
       >
-        {tag ? tagLabels[tag] : '设置标签'}
+        {tag ? getStudentTagLabel(tag) : '设置标签'}
       </button>
       {editing && (
         <div className="absolute z-20 mt-1 left-0 min-w-[120px] rounded-md border border-border bg-bg-primary shadow-md py-1">
-          {Object.entries(tagLabels).map(([value, label]) => (
+          {Object.entries(StudentTagLabels).map(([value, label]) => (
             <button
               key={value}
               type="button"
@@ -186,7 +177,7 @@ export default function TeacherStudentDetailPage() {
                   </h1>
                   <p className="text-sm text-text-secondary mt-1">学生详情</p>
                 </div>
-                <TagEditor studentId={student.id} tag={student.tag} onUpdated={handleTagUpdated} />
+                <TagSelector studentId={student.id} tag={student.tag} onUpdated={handleTagUpdated} />
               </div>
 
               <Card>
@@ -233,7 +224,7 @@ export default function TeacherStudentDetailPage() {
                     <div>
                       <dt className="text-text-secondary">当前标签</dt>
                       <dd className="mt-0.5">
-                        <TagEditor
+                        <TagSelector
                           studentId={student.id}
                           tag={student.tag}
                           onUpdated={handleTagUpdated}
@@ -305,7 +296,7 @@ export default function TeacherStudentDetailPage() {
                               </td>
                               <td className="px-2 py-3 text-text-secondary">
                                 {essay.topicType
-                                  ? (topicTypeLabels[essay.topicType] ?? essay.topicType)
+                                  ? getTopicTypeLabel(essay.topicType)
                                   : '-'}
                               </td>
                               <td className="px-2 py-3">

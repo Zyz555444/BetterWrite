@@ -12,25 +12,13 @@ import {
   type QuestionBankItem,
   UserRole,
   formatScore,
+  TopicTypeLabels,
+  PracticeDifficultyLabels,
 } from '@betterwrite/shared';
 import { ClipboardList, Clock, History, Timer } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲稿',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
-};
-
-const difficultyLabels: Record<string, string> = {
-  easy: '简单',
-  medium: '中等',
-  hard: '困难',
-};
 
 type TabKey = 'bank' | 'mock' | 'history';
 
@@ -145,7 +133,7 @@ export default function StudentPracticePage() {
                     className="h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
                   >
                     <option value="">全部</option>
-                    {Object.entries(topicTypeLabels).map(([value, label]) => (
+                    {Object.entries(TopicTypeLabels).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -163,7 +151,7 @@ export default function StudentPracticePage() {
                     className="h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
                   >
                     <option value="">全部</option>
-                    {Object.entries(difficultyLabels).map(([value, label]) => (
+                    {Object.entries(PracticeDifficultyLabels).map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
                       </option>
@@ -239,7 +227,7 @@ export default function StudentPracticePage() {
                         <div className="flex items-center gap-2 mb-1">
                           {item.topicType ? (
                             <Badge variant="secondary">
-                              {topicTypeLabels[item.topicType] ?? item.topicType}
+                              {TopicTypeLabels[item.topicType as keyof typeof TopicTypeLabels] ?? item.topicType}
                             </Badge>
                           ) : null}
                           <Badge variant="outline">

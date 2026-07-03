@@ -6,7 +6,12 @@ import { RoleGuard } from '@/components/layout/role-guard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { type StudentAnalytics, UserRole, formatScore } from '@betterwrite/shared';
+import {
+  type StudentAnalytics,
+  UserRole,
+  formatScore,
+  getErrorTypeLabel,
+} from '@betterwrite/shared';
 import { AlertCircle, ArrowLeft, Award, FileText, PenLine, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -25,24 +30,6 @@ const statusColors: Record<string, string> = {
   completed: 'bg-success/10 text-success',
   failed: 'bg-error/10 text-error',
 };
-
-const errorTypeLabels: Record<string, string> = {
-  tense: '时态',
-  subject_verb: '主谓一致',
-  spelling: '拼写',
-  plural: '复数',
-  article: '冠词',
-  preposition: '介词',
-  word_form: '词形',
-  pronoun: '代词',
-  chinglish: '中式英语',
-  sentence_structure: '句式结构',
-  collocation: '搭配',
-};
-
-function resolveErrorLabel(type: string): string {
-  return errorTypeLabels[type] ?? type;
-}
 
 interface RecentEssay {
   id: string;
@@ -113,7 +100,7 @@ export default function TeacherStudentAnalyticsPage() {
   const errorDistData = useMemo(
     () =>
       (data?.errorDistribution ?? []).map((item) => ({
-        label: resolveErrorLabel(item.type),
+        label: getErrorTypeLabel(item.type),
         value: item.count,
       })),
     [data],

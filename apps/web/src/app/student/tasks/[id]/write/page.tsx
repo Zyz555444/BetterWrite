@@ -8,18 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { type EssayTask, fetcher } from '@/lib/api/fetcher';
 import { ESSAY_CHECKLIST_ITEMS, useEssayDraft } from '@/lib/hooks/use-essay-draft';
-import { UserRole, formatDuration } from '@betterwrite/shared';
+import { UserRole, formatDuration, getTopicTypeLabel } from '@betterwrite/shared';
 import { AlertCircle, Clock, PenLine, Save } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲稿',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
-};
 
 export default function EssayEditorPage() {
   const params = useParams();
@@ -96,7 +88,7 @@ export default function EssayEditorPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <Badge variant="secondary">
-                      {task ? (topicTypeLabels[task.topicType] ?? task.topicType) : '自由写作'}
+                      {task ? getTopicTypeLabel(task.topicType) : '自由写作'}
                     </Badge>
                     <span className="text-sm text-text-secondary flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />

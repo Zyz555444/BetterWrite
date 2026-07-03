@@ -6,18 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type EssayTask, fetcher } from '@/lib/api/fetcher';
-import { UserRole } from '@betterwrite/shared';
+import { UserRole, getTopicTypeLabel } from '@betterwrite/shared';
 import { Calendar, Clock, PenLine } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-
-const topicTypeLabels: Record<string, string> = {
-  letter: '书信',
-  speech: '演讲稿',
-  argumentation: '议论文',
-  narration: '记叙文',
-  proposal: '建议书',
-};
 
 const statusLabels: Record<string, string> = {
   draft: '草稿',
@@ -79,7 +71,7 @@ export default function StudentTasksPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <Badge variant="secondary" className="mb-2">
-                        {topicTypeLabels[task.topicType] ?? task.topicType}
+                        {getTopicTypeLabel(task.topicType)}
                       </Badge>
                       <CardTitle className="text-lg">{task.title}</CardTitle>
                     </div>

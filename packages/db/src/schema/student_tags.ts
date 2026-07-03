@@ -6,12 +6,12 @@ export const studentTags = sqliteTable('student_tags', {
   id: text('id').primaryKey(),
   studentId: text('student_id')
     .notNull()
-    .references(() => users.id)
+    .references(() => users.id, { onDelete: 'cascade' })
     .unique(),
   tag: text('tag').notNull(),
   updatedBy: text('updated_by')
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: 'cascade' }),
   updatedAt: text('updated_at').notNull(),
 });
 

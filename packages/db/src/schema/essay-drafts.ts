@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm';
 import { integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { essayTasks } from './essays.js';
 import { users } from './users.js';
 
 export const essayDrafts = sqliteTable(
@@ -8,8 +9,10 @@ export const essayDrafts = sqliteTable(
     id: text('id').primaryKey(),
     studentId: text('student_id')
       .notNull()
-      .references(() => users.id),
-    taskId: text('task_id').notNull(),
+      .references(() => users.id, { onDelete: 'cascade' }),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => essayTasks.id, { onDelete: 'cascade' }),
     content: text('content').notNull(),
     wordCount: integer('word_count'),
     durationMs: integer('duration_ms'),

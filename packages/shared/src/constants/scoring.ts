@@ -22,5 +22,7 @@ export const DEDUCTION_RULES = {
 } as const;
 
 export function getScoreTier(totalScore: number): (typeof SCORE_TIERS)[number] {
-  return SCORE_TIERS.find((t) => totalScore >= t.min && totalScore <= t.max) ?? SCORE_TIERS[4];
+  // 按档次降序匹配，命中第一个 min 即归属该档；避免档位边界之间的浮点空隙
+  // （如 12.7、9.7）落入第五档的归档错误。
+  return SCORE_TIERS.find((t) => totalScore >= t.min) ?? SCORE_TIERS[4];
 }

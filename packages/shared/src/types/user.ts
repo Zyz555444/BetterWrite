@@ -9,6 +9,6 @@ export interface User {
   studentNo: string | null;
   avatarUrl: string | null;
   isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }

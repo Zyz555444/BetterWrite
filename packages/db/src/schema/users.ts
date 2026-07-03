@@ -17,7 +17,7 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   role: text('role').notNull(),
-  schoolId: text('school_id').references(() => schools.id),
+  schoolId: text('school_id').references(() => schools.id, { onDelete: 'set null' }),
   studentNo: text('student_no'),
   avatarUrl: text('avatar_url'),
   isActive: integer('is_active', { mode: 'boolean' }).default(true).notNull(),

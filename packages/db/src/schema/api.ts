@@ -1,4 +1,5 @@
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { essays } from './essays.js';
 
 export const apiConfigs = sqliteTable('api_configs', {
   id: text('id').primaryKey(),
@@ -15,16 +16,22 @@ export const apiConfigs = sqliteTable('api_configs', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const apiCallLogs = sqliteTable('api_call_logs', {
-  id: text('id').primaryKey(),
-  provider: text('provider').notNull(),
-  model: text('model'),
-  endpoint: text('endpoint'),
-  tokensUsed: integer('tokens_used'),
-  latencyMs: integer('latency_ms'),
-  cost: real('cost'),
-  status: text('status'),
-  errorMessage: text('error_message'),
-  essayId: text('essay_id'),
-  createdAt: text('created_at').notNull(),
-});
+export const apiCallLogs = sqliteTable(
+  'api_call_logs',
+  {
+    id: text('id').primaryKey(),
+    provider: text('provider').notNull(),
+    model: text('model'),
+    endpoint: text('endpoint'),
+    tokensUsed: integer('tokens_used'),
+    latencyMs: integer('latency_ms'),
+    cost: real('cost'),
+    status: text('status'),
+    errorMessage: text('error_message'),
+    essayId: text('essay_id').references(() => essays.id, { onDelete: 'set null' }),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => ({
+    createdIdx: index('api_call_logs_created_idx').on(t.createdAt),
+  }),
+);

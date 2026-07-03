@@ -8,7 +8,7 @@ export const apiTokens = sqliteTable(
     id: text('id').primaryKey(),
     userId: text('user_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     token: text('token').notNull(),
     platform: text('platform').notNull(),
     deviceName: text('device_name'),

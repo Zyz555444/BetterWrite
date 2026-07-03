@@ -8,7 +8,7 @@ export const achievements = sqliteTable(
     id: text('id').primaryKey(),
     studentId: text('student_id')
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id, { onDelete: 'cascade' }),
     code: text('code').notNull(),
     tier: text('tier').notNull(),
     title: text('title').notNull(),

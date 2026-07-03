@@ -41,8 +41,8 @@ export interface Essay {
   status: 'pending' | 'correcting' | 'completed' | 'failed';
   totalScore: number | null;
   scoreTier: string | null;
-  submittedAt: Date;
-  correctedAt: Date | null;
+  submittedAt: string;
+  correctedAt: string | null;
 }
 
 export interface CorrectionError {

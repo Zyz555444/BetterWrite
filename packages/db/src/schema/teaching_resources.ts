@@ -13,7 +13,7 @@ export const teachingResources = sqliteTable('teaching_resources', {
   tags: text('tags').default('[]'),
   createdBy: text('created_by')
     .notNull()
-    .references(() => users.id),
+    .references(() => users.id, { onDelete: 'cascade' }),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

@@ -1,43 +1,86 @@
 export const colors = {
-  accent: '#33A6B8',
-  accentHover: '#2A8F9F',
-  accentLight: '#E8F6F8',
-  accentDark: '#F596AA',
+  // Accent — 梅 ume (light)
+  accent: '#c56473',
+  accentHover: '#a85568',
+  accentLight: '#f4dce0',
+  accentDark: '#f596aa', // 桃 momo (dark accent, field retained)
+
+  // Neutral 1-10 — 暖米白 (warm parchment undertone, R > G > B)
+  // Tier 1 (1-4): surface / fill
+  // Tier 2 (5-7): border / icon / secondary text
+  // Tier 3 (8-10): body / heading
+  // n-5 must NEVER be used for text.
+  neutral1: '#f9f8f5',
+  neutral2: '#f0efeb',
+  neutral3: '#e3e1db',
+  neutral4: '#d0cec6',
+  neutral5: '#a8a69f',
+  neutral6: '#787670',
+  neutral7: '#5c5a55',
+  neutral8: '#403f3a',
+  neutral9: '#24231f',
+  neutral10: '#141312',
+
+  // Surface
+  paper: '#fefefb',
+  border: '#e3e1db',
+
+  // Semantic — 和色 (Japanese traditional). Restraint matched to accent.
+  info: '#3d6896', // 縹 hanada
+  success: '#5e9f7e', // 若竹 wakatake
+  warning: '#a87a3d', // 朽葉 kuchiba
+  error: '#a64953', // 蘇芳 suoh
+
+  // ── Legacy aliases (transition, mirror web's P5 cleanup)
   bgPrimary: '#fefefb',
-  bgSecondary: '#F8F8F5',
-  bgTertiary: '#F3F3F0',
-  bgElevated: '#FFFFFF',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#4A4A4A',
-  textTertiary: '#8A8A8A',
-  textDisabled: '#BFBFBF',
-  border: '#E8E8E3',
-  borderHover: '#D4D4CF',
-  success: '#16A34A',
-  warning: '#CA8A04',
-  error: '#DC2626',
-  info: '#2563EB',
+  bgSecondary: '#f0efeb',
+  bgTertiary: '#e3e1db',
+  bgElevated: '#f9f8f5',
+  textPrimary: '#141312',
+  textSecondary: '#403f3a',
+  textTertiary: '#5c5a55',
+  textDisabled: '#787670',
+  borderHover: '#d0cec6',
 } as const;
 
 export const darkColors = {
-  accent: '#4FC2D4',
-  accentHover: '#5FCFE0',
-  accentLight: '#1A3A40',
-  accentDark: '#F596AA',
-  bgPrimary: '#161616',
-  bgSecondary: '#1F1F1F',
-  bgTertiary: '#262626',
-  bgElevated: '#2A2A2A',
-  textPrimary: '#F2F2EF',
-  textSecondary: '#C4C4C0',
-  textTertiary: '#8A8A8A',
-  textDisabled: '#4A4A4A',
-  border: '#333333',
-  borderHover: '#444444',
-  success: '#22C55E',
-  warning: '#EAB308',
-  error: '#EF4444',
-  info: '#3B82F6',
+  // Accent — 桃 momo (dark)
+  accent: '#f596aa',
+  accentHover: '#f7a8ba',
+  accentLight: '#3d2a30',
+  accentDark: '#c56473', // 梅 ume (field retained)
+
+  // Neutral 反相纯灰 (R=G=B). Warmth carried solely by paper.
+  neutral1: '#141312',
+  neutral2: '#1c1c1e',
+  neutral3: '#242426',
+  neutral4: '#2c2c2e',
+  neutral5: '#5a5a5e',
+  neutral6: '#7a7a7e',
+  neutral7: '#9a9a9e',
+  neutral8: '#b8b8bc',
+  neutral9: '#d8d8dc',
+  neutral10: '#f9f8f5',
+
+  paper: 'rgb(28, 28, 30)',
+  border: 'rgba(255, 255, 255, 0.1)',
+
+  // Semantic (unchanged in dark — 和色 saturation is already balanced)
+  info: '#3d6896',
+  success: '#5e9f7e',
+  warning: '#a87a3d',
+  error: '#a64953',
+
+  // Legacy aliases (transition)
+  bgPrimary: 'rgb(28, 28, 30)',
+  bgSecondary: '#1c1c1e',
+  bgTertiary: '#242426',
+  bgElevated: '#2c2c2e',
+  textPrimary: '#f9f8f5',
+  textSecondary: '#b8b8bc',
+  textTertiary: '#9a9a9e',
+  textDisabled: '#7a7a7e',
+  borderHover: '#3a3a3c',
 } as const;
 
 export type ThemeColors = { [K in keyof typeof colors]: string };

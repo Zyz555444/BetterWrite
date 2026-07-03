@@ -1,5 +1,6 @@
 'use client';
 
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-store';
 import { UserRole, type UserRoleType } from '@betterwrite/shared';
@@ -168,11 +169,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-bg-primary flex">
+    <div className="min-h-screen bg-paper flex">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 flex-col border-r border-border bg-bg-secondary">
+      <aside className="hidden lg:flex w-64 flex-col border-r border-border bg-neutral-2">
         <div className="h-16 flex items-center px-6 border-b border-border">
-          <Link href="/" className="text-xl font-serif font-bold text-text-primary">
+          <Link href="/" className="text-title-24 font-serif font-medium text-neutral-10">
             BetterWrite
           </Link>
         </div>
@@ -181,10 +182,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-md text-copy-14 transition-colors ${
                 pathname === item.href
                   ? 'bg-accent/10 text-accent font-medium'
-                  : 'text-text-secondary hover:bg-bg-tertiary hover:text-text-primary'
+                  : 'text-neutral-8 hover:bg-neutral-3 hover:text-neutral-10'
               }`}
             >
               {item.icon}
@@ -192,10 +193,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t border-border">
-          <div className="mb-3">
-            <p className="text-sm font-medium text-text-primary">{user?.name}</p>
-            <p className="text-xs text-text-tertiary">{user ? roleLabels[user.role] : ''}</p>
+        <div className="p-4 border-t border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-copy-14 font-medium text-neutral-10">{user?.name}</p>
+              <p className="text-label-12 text-neutral-7">{user ? roleLabels[user.role] : ''}</p>
+            </div>
+            <ThemeToggle />
           </div>
           <Button variant="secondary" size="sm" className="w-full" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
@@ -206,26 +210,29 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Header */}
       <div className="flex-1 flex flex-col">
-        <header className="lg:hidden h-16 border-b border-border bg-bg-secondary flex items-center justify-between px-4">
-          <Link href="/" className="text-lg font-serif font-bold text-text-primary">
+        <header className="lg:hidden h-16 border-b border-border bg-neutral-2 flex items-center justify-between px-4">
+          <Link href="/" className="text-title-20 font-serif font-medium text-neutral-10">
             BetterWrite
           </Link>
-          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
+              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </Button>
+          </div>
         </header>
 
         {mobileOpen && (
-          <div className="lg:hidden absolute inset-x-0 top-16 z-50 bg-bg-secondary border-b border-border p-3 space-y-1">
+          <div className="lg:hidden absolute inset-x-0 top-16 z-50 bg-neutral-2 border-b border-border p-3 space-y-1">
             {visibleNav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm ${
+                className={`flex items-center gap-3 px-3 py-2 rounded-md text-copy-14 ${
                   pathname === item.href
                     ? 'bg-accent/10 text-accent font-medium'
-                    : 'text-text-secondary hover:bg-bg-tertiary'
+                    : 'text-neutral-8 hover:bg-neutral-3'
                 }`}
               >
                 {item.icon}

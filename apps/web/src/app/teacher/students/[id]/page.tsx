@@ -93,7 +93,7 @@ function TagSelector({
         {tag ? getStudentTagLabel(tag) : '设置标签'}
       </button>
       {editing && (
-        <div className="absolute z-20 mt-1 left-0 min-w-[120px] rounded-md border border-border bg-paper ring-1 ring-border py-1">
+        <div className="absolute z-20 mt-1 left-0 min-w-[120px] rounded-md bg-paper ring-1 ring-border py-1">
           {Object.entries(StudentTagLabels).map(([value, label]) => (
             <button
               key={value}

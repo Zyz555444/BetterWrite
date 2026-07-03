@@ -8,6 +8,13 @@
       "when": 1782962634704,
       "tag": "0000_naive_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1782991988559,
+      "tag": "0001_sharp_nick_fury",
+      "breakpoints": true
     }
   ]
 }

@@ -5,3 +5,5 @@ export * from './classes.js';
 export * from './essays.js';
 export * from './corrections.js';
 export * from './api.js';
+export * from './teaching_resources.js';
+export * from './student_tags.js';

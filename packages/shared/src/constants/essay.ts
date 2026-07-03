@@ -34,3 +34,30 @@ export const ErrorType = {
 } as const;
 
 export type ErrorTypeValue = (typeof ErrorType)[keyof typeof ErrorType];
+
+export const TeachingResourceType = {
+  SAMPLE: 'sample',
+  SENTENCE: 'sentence',
+  CONNECTOR: 'connector',
+  ERROR_CASE: 'errorcase',
+} as const;
+
+export type TeachingResourceTypeValue = (typeof TeachingResourceType)[keyof typeof TeachingResourceType];
+
+export const TeachingResourceDifficulty = {
+  EASY: 'easy',
+  MEDIUM: 'medium',
+  HARD: 'hard',
+} as const;
+
+export type TeachingResourceDifficultyValue =
+  (typeof TeachingResourceDifficulty)[keyof typeof TeachingResourceDifficulty];
+
+export const StudentTag = {
+  EXCELLENT: 'excellent',
+  GOOD: 'good',
+  IMPROVING: 'improving',
+  ATTENTION: 'attention',
+} as const;
+
+export type StudentTagValue = (typeof StudentTag)[keyof typeof StudentTag];

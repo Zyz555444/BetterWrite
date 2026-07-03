@@ -1,3 +1,9 @@
+import type {
+  ClassAnalytics,
+  StudentAnalytics,
+  TeachingResource,
+} from '@betterwrite/shared';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -112,6 +118,55 @@ export interface CorrectionDetail {
   createdAt: string;
 }
 
+export interface StudentListItem {
+  id: string;
+  name: string;
+  email: string;
+  studentNo: string | null;
+  classId: string;
+  className: string;
+  grade: string;
+  tag: string | null;
+  essayCount: number;
+  averageScore: number | null;
+}
+
+export interface StudentDetail {
+  id: string;
+  name: string;
+  email: string;
+  studentNo: string | null;
+  classes: Array<{ id: string; name: string | null; grade: string | null }>;
+  tag: string | null;
+  averageScore: number | null;
+  essayCount: number;
+  recentEssays: Array<{
+    id: string;
+    title: string;
+    status: string;
+    totalScore: number | null;
+    wordCount: number;
+    submittedAt: string;
+    topicType: string | null;
+  }>;
+}
+
+export interface ImportResult {
+  successCount: number;
+  totalCount: number;
+  results: Array<{
+    line: number;
+    name: string;
+    email: string;
+    success: boolean;
+    error?: string;
+  }>;
+}
+
+export interface TeachingResourceWithCreator extends TeachingResource {
+  creator?: { id: string; name: string } | null;
+}
+
 export const fetcher = {
   login: (email: string, password: string) =>
     request<ApiResponse<AuthUserResponse>>('/api/auth/login', {
@@ -188,4 +243,104 @@ export const fetcher = {
     dueDate?: string;
   }) =>
     request<ApiResponse<EssayTask>>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Analytics
+  getClassAnalytics: (classId: string) =>
+    request<ApiResponse<ClassAnalytics>>(`/api/teacher/analytics/class/${classId}`),
+
+  getStudentAnalytics: (studentId: string) =>
+    request<ApiResponse<StudentAnalytics>>(`/api/teacher/analytics/student/${studentId}`),
+
+  exportClassAnalytics: async (classId: string): Promise<void> => {
+    console.log(`[Fetcher] exportClassAnalytics classId=${classId}`);
+    const res = await fetch(`${API_BASE}/api/teacher/analytics/class/${classId}/export`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.warn(`[Fetcher] exportClassAnalytics failed status=${res.status}`);
+      throw new Error('导出失败');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `class-${classId}-essays.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    console.log(`[Fetcher] exportClassAnalytics downloaded classId=${classId}`);
+  },
+
+  // Students
+  listStudents: (params?: { classId?: string; keyword?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.classId) query.set('classId', params.classId);
+    if (params?.keyword) query.set('keyword', params.keyword);
+    const qs = query.toString();
+    return request<ApiResponse<StudentListItem[]>>(
+      `/api/teacher/students${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  getStudentDetail: (id: string) =>
+    request<ApiResponse<StudentDetail>>(`/api/teacher/students/${id}`),
+
+  importStudents: (body: { classId: string; csv: string }) =>
+    request<ApiResponse<ImportResult>>('/api/teacher/students/import', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateStudentTag: (id: string, tag: string) =>
+    request<ApiResponse<{ studentId: string; tag: string }>>(`/api/teacher/students/${id}/tags`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tag }),
+    }),
+
+  // Teaching Resources
+  listResources: (params?: { type?: string; topicType?: string; difficulty?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.type) query.set('type', params.type);
+    if (params?.topicType) query.set('topicType', params.topicType);
+    if (params?.difficulty) query.set('difficulty', params.difficulty);
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<ApiResponse<TeachingResourceWithCreator[]>>(
+      `/api/teacher/resources${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  getResource: (id: string) =>
+    request<ApiResponse<TeachingResourceWithCreator>>(`/api/teacher/resources/${id}`),
+
+  createResource: (body: {
+    type: string;
+    title: string;
+    topicType?: string;
+    difficulty: string;
+    content: string;
+    highlights?: string;
+    tags?: string[];
+  }) =>
+    request<ApiResponse<TeachingResourceWithCreator>>('/api/teacher/resources', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  updateResource: (id: string, body: {
+    title?: string;
+    topicType?: string;
+    difficulty?: string;
+    content?: string;
+    highlights?: string;
+    tags?: string[];
+  }) =>
+    request<ApiResponse<TeachingResourceWithCreator>>(`/api/teacher/resources/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  deleteResource: (id: string) =>
+    request<ApiResponse<null>>(`/api/teacher/resources/${id}`, { method: 'DELETE' }),
 };

@@ -41,3 +41,14 @@ export const classesRelations = relations(classes, ({ one, many }) => ({
   }),
   enrollments: many(classEnrollments),
 }));
+
+export const classEnrollmentsRelations = relations(classEnrollments, ({ one }) => ({
+  class: one(classes, {
+    fields: [classEnrollments.classId],
+    references: [classes.id],
+  }),
+  user: one(users, {
+    fields: [classEnrollments.userId],
+    references: [users.id],
+  }),
+}));

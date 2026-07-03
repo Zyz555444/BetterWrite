@@ -83,9 +83,21 @@ const navItems: NavItem[] = [
     roles: [UserRole.TEACHER],
   },
   {
+    href: '/teacher/analytics',
+    label: '数据分析',
+    icon: <BarChart3 className="w-4 h-4" />,
+    roles: [UserRole.TEACHER],
+  },
+  {
     href: '/teacher/students',
     label: '学生管理',
     icon: <Users className="w-4 h-4" />,
+    roles: [UserRole.TEACHER],
+  },
+  {
+    href: '/teacher/resources',
+    label: '教学资源',
+    icon: <BookOpen className="w-4 h-4" />,
     roles: [UserRole.TEACHER],
   },
   {

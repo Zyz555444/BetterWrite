@@ -1,6 +1,8 @@
 import { relations } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { schools } from './schools.js';
+import { studentTags } from './student_tags.js';
+import { teachingResources } from './teaching_resources.js';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -17,9 +19,11 @@ export const users = sqliteTable('users', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const usersRelations = relations(users, ({ one }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   school: one(schools, {
     fields: [users.schoolId],
     references: [schools.id],
   }),
+  teachingResources: many(teachingResources),
+  studentTags: many(studentTags),
 }));

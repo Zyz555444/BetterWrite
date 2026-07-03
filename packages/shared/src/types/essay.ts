@@ -1,4 +1,11 @@
-import type { ErrorTypeValue, TopicCategoryValue, TopicTypeValue } from '../constants/essay.js';
+import type {
+  ErrorTypeValue,
+  StudentTagValue,
+  TeachingResourceDifficultyValue,
+  TeachingResourceTypeValue,
+  TopicCategoryValue,
+  TopicTypeValue,
+} from '../constants/essay.js';
 
 export interface EssayTask {
   id: string;
@@ -53,4 +60,65 @@ export interface Correction {
   errors: CorrectionError[];
   revisedEssay: string;
   suggestions: { priority: 'high' | 'medium' | 'low'; category: string; suggestion: string }[];
+}
+
+export interface TeachingResource {
+  id: string;
+  type: TeachingResourceTypeValue;
+  title: string;
+  topicType: TopicTypeValue | null;
+  difficulty: TeachingResourceDifficultyValue;
+  content: string;
+  highlights: string;
+  tags: string[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentTagRecord {
+  id: string;
+  studentId: string;
+  tag: StudentTagValue;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface ScoreDistribution {
+  range: string;
+  count: number;
+}
+
+export interface ErrorStatItem {
+  type: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ClassAnalytics {
+  classId: string;
+  className: string;
+  totalStudents: number;
+  totalEssays: number;
+  averageScore: number | null;
+  scoreTrend: Array<{ taskId: string; taskTitle: string; averageScore: number; essayCount: number }>;
+  scoreDistribution: ScoreDistribution[];
+  topErrors: ErrorStatItem[];
+  topicTypeComparison: Array<{ topicType: string; averageScore: number; essayCount: number }>;
+}
+
+export interface StudentAnalytics {
+  studentId: string;
+  studentName: string;
+  totalEssays: number;
+  averageScore: number | null;
+  abilities: {
+    content: number;
+    language: number;
+    structure: number;
+    presentation: number;
+  };
+  scoreTrend: Array<{ essayId: string; title: string; score: number; submittedAt: string }>;
+  errorDistribution: ErrorStatItem[];
+  recentEssays: Essay[];
 }

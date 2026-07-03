@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type EssayTask, fetcher } from '@/lib/api/fetcher';
-import { UserRole, TopicTypeLabels } from '@betterwrite/shared';
+import { TopicTypeLabels, UserRole } from '@betterwrite/shared';
 import { Calendar, PenLine, Plus, School, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -339,7 +339,8 @@ export default function TeacherTasksPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-medium text-text-primary truncate">{task.title}</p>
                           <Badge variant="secondary">
-                            {TopicTypeLabels[task.topicType as keyof typeof TopicTypeLabels] ?? task.topicType}
+                            {TopicTypeLabels[task.topicType as keyof typeof TopicTypeLabels] ??
+                              task.topicType}
                           </Badge>
                           <Badge>{statusLabels[task.status] ?? task.status}</Badge>
                         </div>

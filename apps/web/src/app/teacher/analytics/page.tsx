@@ -11,8 +11,8 @@ import {
   type ClassAnalytics,
   UserRole,
   formatScore,
-  getTopicTypeLabel,
   getErrorTypeLabel,
+  getTopicTypeLabel,
 } from '@betterwrite/shared';
 import {
   AlertCircle,
@@ -31,7 +31,6 @@ interface TeacherClass {
   grade: string;
   studentCount: number;
 }
-
 
 export default function TeacherAnalyticsPage() {
   const [classes, setClasses] = useState<TeacherClass[]>([]);

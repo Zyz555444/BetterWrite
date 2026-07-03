@@ -6,7 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { type QuestionBankItem, UserRole, countWords, getTopicTypeLabel } from '@betterwrite/shared';
+import {
+  type QuestionBankItem,
+  UserRole,
+  countWords,
+  getTopicTypeLabel,
+} from '@betterwrite/shared';
 import { AlertCircle, ArrowRight, CheckCircle2, Clock, PenLine, Sparkles } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -134,9 +139,7 @@ export default function StudentPracticeItemPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="secondary">
-                      {getTopicTypeLabel(question.topicType)}
-                    </Badge>
+                    <Badge variant="secondary">{getTopicTypeLabel(question.topicType)}</Badge>
                     <span className="text-sm text-text-secondary flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {formatTime(elapsed)}

@@ -3,9 +3,9 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getPracticeDifficultyLabel, getTopicTypeLabel } from '@betterwrite/shared';
 import { Clock, PenLine } from 'lucide-react';
 import { useEffect } from 'react';
-import { getTopicTypeLabel, getPracticeDifficultyLabel } from '@betterwrite/shared';
 
 interface PracticeCardProps {
   question: {

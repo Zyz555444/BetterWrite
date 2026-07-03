@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type TeachingResourceWithCreator, fetcher } from '@/lib/api/fetcher';
 import {
-  UserRole,
-  TopicTypeLabels,
-  TeachingResourceTypeLabels,
   TeachingResourceDifficultyLabels,
+  TeachingResourceTypeLabels,
+  TopicTypeLabels,
+  UserRole,
 } from '@betterwrite/shared';
 import { ChevronDown, ChevronUp, Edit, Eye, Plus, Search, Trash2, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -71,7 +71,8 @@ export default function TeacherResourcesListPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const typeLabel = TeachingResourceTypeLabels[type as keyof typeof TeachingResourceTypeLabels] ?? type;
+  const typeLabel =
+    TeachingResourceTypeLabels[type as keyof typeof TeachingResourceTypeLabels] ?? type;
   const typeIcon = resourceTypeIcons[type] ?? '📄';
 
   const loadList = async () => {
@@ -466,7 +467,9 @@ export default function TeacherResourcesListPage() {
                               </p>
                               {resource.topicType && (
                                 <Badge variant="secondary">
-                                  {TopicTypeLabels[resource.topicType as keyof typeof TopicTypeLabels] ?? resource.topicType}
+                                  {TopicTypeLabels[
+                                    resource.topicType as keyof typeof TopicTypeLabels
+                                  ] ?? resource.topicType}
                                 </Badge>
                               )}
                               {resource.difficulty && (
@@ -475,7 +478,9 @@ export default function TeacherResourcesListPage() {
                                     difficultyColors[resource.difficulty] ?? ''
                                   }`}
                                 >
-                                  {TeachingResourceDifficultyLabels[resource.difficulty as keyof typeof TeachingResourceDifficultyLabels] ?? resource.difficulty}
+                                  {TeachingResourceDifficultyLabels[
+                                    resource.difficulty as keyof typeof TeachingResourceDifficultyLabels
+                                  ] ?? resource.difficulty}
                                 </span>
                               )}
                               {(resource.tags ?? []).slice(0, 3).map((tag) => (
@@ -541,7 +546,9 @@ export default function TeacherResourcesListPage() {
                                 <span className="text-text-tertiary">体裁：</span>
                                 <span className="text-text-primary">
                                   {resource.topicType
-                                    ? TopicTypeLabels[resource.topicType as keyof typeof TopicTypeLabels] ?? resource.topicType
+                                    ? (TopicTypeLabels[
+                                        resource.topicType as keyof typeof TopicTypeLabels
+                                      ] ?? resource.topicType)
                                     : '-'}
                                 </span>
                               </div>
@@ -549,7 +556,9 @@ export default function TeacherResourcesListPage() {
                                 <span className="text-text-tertiary">难度：</span>
                                 <span className="text-text-primary">
                                   {resource.difficulty
-                                    ? TeachingResourceDifficultyLabels[resource.difficulty as keyof typeof TeachingResourceDifficultyLabels] ?? resource.difficulty
+                                    ? (TeachingResourceDifficultyLabels[
+                                        resource.difficulty as keyof typeof TeachingResourceDifficultyLabels
+                                      ] ?? resource.difficulty)
                                     : '-'}
                                 </span>
                               </div>

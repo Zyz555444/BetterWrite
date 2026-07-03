@@ -3,9 +3,9 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { getErrorTypeLabel } from '@betterwrite/shared';
 import { ArrowRight } from 'lucide-react';
 import { useEffect } from 'react';
-import { getErrorTypeLabel } from '@betterwrite/shared';
 
 interface ErrorCardProps {
   error: {

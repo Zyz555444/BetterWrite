@@ -6,11 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type StudentDetail, fetcher } from '@/lib/api/fetcher';
 import {
+  StudentTagLabels,
   UserRole,
   formatScore,
-  getTopicTypeLabel,
   getStudentTagLabel,
-  StudentTagLabels,
+  getTopicTypeLabel,
 } from '@betterwrite/shared';
 import { ArrowLeft, BookOpen, Mail, School, Users } from 'lucide-react';
 import Link from 'next/link';
@@ -177,7 +177,11 @@ export default function TeacherStudentDetailPage() {
                   </h1>
                   <p className="text-sm text-text-secondary mt-1">学生详情</p>
                 </div>
-                <TagSelector studentId={student.id} tag={student.tag} onUpdated={handleTagUpdated} />
+                <TagSelector
+                  studentId={student.id}
+                  tag={student.tag}
+                  onUpdated={handleTagUpdated}
+                />
               </div>
 
               <Card>
@@ -295,9 +299,7 @@ export default function TeacherStudentDetailPage() {
                                 {essay.title || '未命名作文'}
                               </td>
                               <td className="px-2 py-3 text-text-secondary">
-                                {essay.topicType
-                                  ? getTopicTypeLabel(essay.topicType)
-                                  : '-'}
+                                {essay.topicType ? getTopicTypeLabel(essay.topicType) : '-'}
                               </td>
                               <td className="px-2 py-3">
                                 <span

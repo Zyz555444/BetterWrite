@@ -62,6 +62,7 @@ import { z } from 'zod';
 import { getAiRouter } from '../ai/router';
 import { authMiddleware, requireRole } from './middleware';
 import type { AuthVariables } from './middleware';
+import { rateLimit } from './rate-limiter';
 
 const app = new Hono<{ Variables: AuthVariables }>().basePath('/api');
 
@@ -85,7 +86,7 @@ const loginSchema = z.object({
   password: z.string().min(1, '请输入密码'),
 });
 
-app.post('/auth/login', zValidator('json', loginSchema), async (c) => {
+app.post('/auth/login', rateLimit(10, 60_000), zValidator('json', loginSchema), async (c) => {
   const { email, password } = c.req.valid('json');
 
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
@@ -133,7 +134,7 @@ const registerSchema = z.object({
   classCode: z.string().optional(),
 });
 
-app.post('/auth/register', zValidator('json', registerSchema), async (c) => {
+app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSchema), async (c) => {
   const { email, password, name, role, schoolCode, classCode } = c.req.valid('json');
 
   const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
@@ -233,7 +234,7 @@ const tokenLoginSchema = z.object({
   deviceName: z.string().optional(),
 });
 
-app.post('/auth/token', zValidator('json', tokenLoginSchema), async (c) => {
+app.post('/auth/token', rateLimit(10, 60_000), zValidator('json', tokenLoginSchema), async (c) => {
   const { email, password, platform, deviceName } = c.req.valid('json');
   console.log(`[API /auth/token] email=${email} platform=${platform}`);
 
@@ -606,7 +607,7 @@ app.post(
   async (c) => {
     const user = c.get('user');
     const data = c.req.valid('json');
-    console.log(`[API POST /tasks] user=${user.id} payload=`, JSON.stringify(data));
+    console.log(`[API POST /tasks] user=${user.id} title=${data.title} classId=${data.classId}`);
     const now = new Date().toISOString();
     const id = randomUUID();
 
@@ -954,11 +955,29 @@ app.get(
       orderBy: desc(essays.createdAt),
     });
 
+    const escapeCSV = (val: string | number | null | undefined): string => {
+      const s = String(val ?? '');
+      if (/^[=@+\-]/.test(s)) {
+        return `"'${s}"`;
+      }
+      if (/[",\n\r]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
     const header = '学生姓名,学号,作文标题,体裁,词数,状态,总分,提交时间\n';
     const rows = allEssays
-      .map(
-        (e) =>
-          `${e.student?.name ?? ''},${e.student?.studentNo ?? ''},${e.title ?? e.task?.title ?? ''},${e.task?.topicType ?? ''},${e.wordCount},${e.status},${e.totalScore ?? ''},${e.submittedAt}`,
+      .map((e) =>
+        [
+          escapeCSV(e.student?.name),
+          escapeCSV(e.student?.studentNo),
+          escapeCSV(e.title ?? e.task?.title),
+          escapeCSV(e.task?.topicType),
+          e.wordCount,
+          e.status,
+          e.totalScore ?? '',
+          e.submittedAt,
+        ].join(','),
       )
       .join('\n');
     const csv = `\uFEFF${header}${rows}`;
@@ -1243,7 +1262,8 @@ app.post(
         }
 
         const userId = randomUUID();
-        const passwordHash = await bcrypt.hash('123456', 10);
+        const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD ?? '123456';
+        const passwordHash = await bcrypt.hash(defaultPassword, 10);
         await db.insert(users).values({
           id: userId,
           email,
@@ -1484,6 +1504,10 @@ app.patch(
     });
     if (!existing) return c.json({ success: false, error: '资源不存在' }, 404);
 
+    if (user.role === UserRole.TEACHER && existing.createdBy !== user.id) {
+      return c.json({ success: false, error: '无权修改他人的资源' }, 403);
+    }
+
     const now = new Date().toISOString();
     const updateData: Record<string, unknown> = { updatedAt: now };
     if (data.title !== undefined) updateData.title = data.title;
@@ -1520,6 +1544,10 @@ app.delete(
       where: eq(teachingResources.id, id),
     });
     if (!existing) return c.json({ success: false, error: '资源不存在' }, 404);
+
+    if (user.role === UserRole.TEACHER && existing.createdBy !== user.id) {
+      return c.json({ success: false, error: '无权删除他人的资源' }, 403);
+    }
 
     await db.delete(teachingResources).where(eq(teachingResources.id, id));
     const duration = Date.now() - start;

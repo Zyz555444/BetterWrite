@@ -201,7 +201,9 @@ export function getTeachingResourceTypeLabel(type: string): string {
 }
 
 export function getTeachingResourceDifficultyLabel(difficulty: string): string {
-  return TeachingResourceDifficultyLabels[difficulty as TeachingResourceDifficultyValue] ?? difficulty;
+  return (
+    TeachingResourceDifficultyLabels[difficulty as TeachingResourceDifficultyValue] ?? difficulty
+  );
 }
 
 export function getStudentTagLabel(tag: string): string {

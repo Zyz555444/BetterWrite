@@ -8,12 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
 import {
+  PracticeDifficultyLabels,
   type PracticeExercise,
   type QuestionBankItem,
+  TopicTypeLabels,
   UserRole,
   formatScore,
-  TopicTypeLabels,
-  PracticeDifficultyLabels,
 } from '@betterwrite/shared';
 import { ClipboardList, Clock, History, Timer } from 'lucide-react';
 import Link from 'next/link';
@@ -227,7 +227,8 @@ export default function StudentPracticePage() {
                         <div className="flex items-center gap-2 mb-1">
                           {item.topicType ? (
                             <Badge variant="secondary">
-                              {TopicTypeLabels[item.topicType as keyof typeof TopicTypeLabels] ?? item.topicType}
+                              {TopicTypeLabels[item.topicType as keyof typeof TopicTypeLabels] ??
+                                item.topicType}
                             </Badge>
                           ) : null}
                           <Badge variant="outline">

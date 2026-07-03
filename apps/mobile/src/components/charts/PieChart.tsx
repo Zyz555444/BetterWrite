@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native';
-import { Path, Svg, Text as SvgText } from 'react-native-svg';
+import { Circle, Path, Svg, Text as SvgText } from 'react-native-svg';
 import { useTheme } from '../../theme/dark-mode';
 
 interface PieChartProps {
@@ -52,13 +52,7 @@ export function PieChart({ data, size = 200 }: PieChartProps) {
       const y2 = cy + Math.sin(endAngle) * radius;
 
       const largeArc = angle > Math.PI ? 1 : 0;
-
-      const path = [
-        `M ${cx} ${cy}`,
-        `L ${x1.toFixed(2)} ${y1.toFixed(2)}`,
-        `A ${radius} ${radius} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`,
-        'Z',
-      ].join(' ');
+      const isFullCircle = angle >= 2 * Math.PI - 0.001;
 
       const sliceColor = d.color ?? defaultColors[i % defaultColors.length];
 
@@ -69,28 +63,49 @@ export function PieChart({ data, size = 200 }: PieChartProps) {
       const percentage = Math.round((d.value / total) * 100);
 
       return {
-        path,
+        isFullCircle,
+        path: '',
         color: sliceColor,
         label: d.label,
         value: d.value,
         percentage,
         labelX,
         labelY,
+        cx,
+        cy,
+        radius,
+        x1,
+        y1,
+        x2,
+        y2,
+        largeArc,
       };
     });
 
   return (
     <View style={{ flexDirection: 'column', alignItems: 'center', gap: 16 }}>
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {slices.map((s) => (
-          <Path
-            key={`slice-${s.label}`}
-            d={s.path}
-            fill={s.color}
-            stroke={colors.bgElevated}
-            strokeWidth={1.5}
-          />
-        ))}
+        {slices.map((s) =>
+          s.isFullCircle ? (
+            <Circle
+              key={`slice-${s.label}`}
+              cx={s.cx}
+              cy={s.cy}
+              r={s.radius}
+              fill={s.color}
+              stroke={colors.bgElevated}
+              strokeWidth={1.5}
+            />
+          ) : (
+            <Path
+              key={`slice-${s.label}`}
+              d={`M ${s.cx} ${s.cy} L ${s.x1.toFixed(2)} ${s.y1.toFixed(2)} A ${s.radius} ${s.radius} 0 ${s.largeArc} 1 ${s.x2.toFixed(2)} ${s.y2.toFixed(2)} Z`}
+              fill={s.color}
+              stroke={colors.bgElevated}
+              strokeWidth={1.5}
+            />
+          ),
+        )}
         {slices.map((s) =>
           s.percentage >= 8 ? (
             <SvgText

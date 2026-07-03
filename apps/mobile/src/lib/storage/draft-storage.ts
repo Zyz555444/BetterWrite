@@ -18,15 +18,19 @@ export async function saveLocalDraft(
   taskId: string,
   body: { content: string; wordCount: number; durationMs: number },
 ): Promise<void> {
-  const draft: LocalDraft = {
-    taskId,
-    content: body.content,
-    wordCount: body.wordCount,
-    durationMs: body.durationMs,
-    savedAt: new Date().toISOString(),
-  };
-  await AsyncStorage.setItem(key(taskId), JSON.stringify(draft));
-  console.log(`[DraftStorage] saved taskId=${taskId} words=${body.wordCount}`);
+  try {
+    const draft: LocalDraft = {
+      taskId,
+      content: body.content,
+      wordCount: body.wordCount,
+      durationMs: body.durationMs,
+      savedAt: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem(key(taskId), JSON.stringify(draft));
+    console.log(`[DraftStorage] saved taskId=${taskId} words=${body.wordCount}`);
+  } catch (err) {
+    console.warn(`[DraftStorage] saveLocalDraft error taskId=${taskId}`, err);
+  }
 }
 
 export async function getLocalDraft(taskId: string): Promise<LocalDraft | null> {

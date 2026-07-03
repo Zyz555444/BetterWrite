@@ -21,14 +21,15 @@
     },
     "android": {
       "package": "com.betterwrite.app",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "POST_NOTIFICATIONS"]
     },
     "plugins": ["expo-router", "expo-camera", "expo-notifications"],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": "http://localhost:3000"
+      "apiUrl": "http://10.0.2.2:3000",
+      "easProjectId": ""
     }
   }
 }

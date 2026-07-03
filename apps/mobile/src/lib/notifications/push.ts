@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
@@ -28,8 +29,16 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   try {
+    const easProjectId = (Constants.expoConfig?.extra as { easProjectId?: string } | undefined)
+      ?.easProjectId;
+    if (!easProjectId) {
+      console.warn(
+        '[Push] Missing EAS projectId in app.json extra.easProjectId — push tokens will not be generated',
+      );
+      return null;
+    }
     const tokenResponse = await Notifications.getExpoPushTokenAsync({
-      projectId: 'com.betterwrite.app',
+      projectId: easProjectId,
     });
     const token = tokenResponse.data;
     console.log(`[Push] obtained token length=${token.length}`);

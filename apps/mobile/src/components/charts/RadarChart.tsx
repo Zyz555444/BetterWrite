@@ -58,7 +58,7 @@ export function RadarChart({ data, size = 240 }: RadarChartProps) {
   const dataPolygon = dataPoints.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 
   return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <Svg width={size} height={size} viewBox={`-24 -24 ${size + 48} ${size + 48}`}>
       {gridPolygons.map((pts, i) => (
         <Polygon
           key={`grid-${levels[i]}`}

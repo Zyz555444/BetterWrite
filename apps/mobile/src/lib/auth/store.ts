@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { AuthError, clearStoredToken, setStoredToken } from '../api/client';
 import { fetcher } from '../api/fetcher';
+import { registerForPushNotifications } from '../notifications/push';
 
 const TOKEN_KEY = '@betterwrite/token';
 const USER_KEY = '@betterwrite/user';
@@ -111,6 +112,9 @@ export const useAuth = create<AuthState>((set, get) => ({
       await persistUser(user);
       set({ user, token, isLoading: false });
       console.log(`[AuthStore] login success userId=${user.id} role=${user.role}`);
+      registerForPushNotifications().catch((err: unknown) =>
+        console.warn('[AuthStore] push registration failed:', err),
+      );
       return user;
     } catch (err) {
       const message = err instanceof Error ? err.message : '登录失败';

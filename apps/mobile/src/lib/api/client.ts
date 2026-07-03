@@ -26,7 +26,11 @@ export async function getStoredToken(): Promise<string | null> {
 }
 
 export async function setStoredToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  try {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  } catch (err) {
+    console.warn('[APIClient] setStoredToken error:', err);
+  }
 }
 
 export async function clearStoredToken(): Promise<void> {
@@ -54,12 +58,19 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
   }
 
   const url = `${API_BASE}${path}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
   let res: Response;
   try {
-    res = await fetch(url, { ...options, headers });
+    res = await fetch(url, { ...options, headers, signal: controller.signal });
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('请求超时,请检查网络后重试');
+    }
     console.error(`[APIClient] network error path=${path}`, err);
     throw new Error('网络连接失败,请检查网络设置');
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (res.status === 401) {

@@ -38,9 +38,10 @@ export function LineChart({ data, height = 200, color }: LineChartProps) {
   const paddedRange = paddedMax - paddedMin || 1;
 
   const stepX = data.length > 1 ? chartWidth / (data.length - 1) : 0;
+  const isSinglePoint = data.length === 1;
 
   const points = data.map((d, i) => {
-    const x = PADDING_LEFT + i * stepX;
+    const x = isSinglePoint ? PADDING_LEFT + chartWidth / 2 : PADDING_LEFT + i * stepX;
     const y = PADDING_TOP + chartHeight - ((d.value - paddedMin) / paddedRange) * chartHeight;
     return { x, y, ...d };
   });
@@ -49,9 +50,11 @@ export function LineChart({ data, height = 200, color }: LineChartProps) {
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
     .join(' ');
 
-  const areaPath = `${linePath} L ${points[points.length - 1].x.toFixed(2)} ${(
-    PADDING_TOP + chartHeight
-  ).toFixed(2)} L ${points[0].x.toFixed(2)} ${(PADDING_TOP + chartHeight).toFixed(2)} Z`;
+  const areaPath = isSinglePoint
+    ? ''
+    : `${linePath} L ${points[points.length - 1].x.toFixed(2)} ${(
+        PADDING_TOP + chartHeight
+      ).toFixed(2)} L ${points[0].x.toFixed(2)} ${(PADDING_TOP + chartHeight).toFixed(2)} Z`;
 
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((t) => {
     const val = paddedMin + t * paddedRange;
@@ -62,12 +65,7 @@ export function LineChart({ data, height = 200, color }: LineChartProps) {
   const labelStep = Math.max(1, Math.ceil(data.length / 8));
 
   return (
-    <Svg
-      width="100%"
-      height={height}
-      viewBox={`0 0 ${VIEWBOX_WIDTH} ${height}`}
-      preserveAspectRatio="none"
-    >
+    <Svg width="100%" height={height} viewBox={`0 0 ${VIEWBOX_WIDTH} ${height}`}>
       {yTicks.map((tick) => (
         <G key={`y-${tick.val.toFixed(2)}`}>
           <Line
@@ -101,20 +99,22 @@ export function LineChart({ data, height = 200, color }: LineChartProps) {
         strokeWidth={1}
       />
 
-      <Path d={areaPath} fill={lineColor} opacity={0.1} />
+      {!isSinglePoint && <Path d={areaPath} fill={lineColor} opacity={0.1} />}
 
-      <Path
-        d={linePath}
-        fill="none"
-        stroke={lineColor}
-        strokeWidth={2}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
+      {!isSinglePoint && (
+        <Path
+          d={linePath}
+          fill="none"
+          stroke={lineColor}
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      )}
 
       {points.map((p, i) => (
         <G key={`pt-${p.label}-${p.value}`}>
-          <Circle cx={p.x} cy={p.y} r={3} fill={lineColor} />
+          <Circle cx={p.x} cy={p.y} r={isSinglePoint ? 5 : 3} fill={lineColor} />
           {i % labelStep === 0 && (
             <SvgText
               x={p.x}

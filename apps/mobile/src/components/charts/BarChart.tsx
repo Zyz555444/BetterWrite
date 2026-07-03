@@ -46,12 +46,7 @@ export function BarChart({ data, height = 200, color }: BarChartProps) {
   const labelStep = Math.max(1, Math.ceil(barCount / 8));
 
   return (
-    <Svg
-      width="100%"
-      height={height}
-      viewBox={`0 0 ${VIEWBOX_WIDTH} ${height}`}
-      preserveAspectRatio="none"
-    >
+    <Svg width="100%" height={height} viewBox={`0 0 ${VIEWBOX_WIDTH} ${height}`}>
       {yTicks.map((tick) => (
         <G key={`y-${tick.val.toFixed(2)}`}>
           <Line

@@ -20,6 +20,7 @@ export class OpenAIProvider extends BaseAIProvider {
       prompt,
       temperature: options?.temperature ?? 0.3,
       maxOutputTokens: options?.maxOutputTokens ?? 4096,
+      abortSignal: AbortSignal.timeout(60_000),
     });
     return text;
   }
@@ -35,6 +36,7 @@ export class OpenAIProvider extends BaseAIProvider {
       schema,
       temperature: options?.temperature ?? 0.3,
       maxOutputTokens: options?.maxOutputTokens ?? 4096,
+      abortSignal: AbortSignal.timeout(60_000),
     });
     return object;
   }

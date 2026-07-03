@@ -20,7 +20,7 @@ export function scorerPrompt(input: {
 - 内容维度: ${input.contentResult.contentScore}/4.5
 - 语言维度: ${input.languageResult.languageScore}/6.0
 - 结构维度: ${input.structureResult.structureScore}/3.0
-- 卷面维度: 1.5/1.5
+- 卷面维度: 满分1.5，依据字数达标度与格式规范评分（非硬性满分）
 
 ## 词数
 当前词数: ${input.wordCount}

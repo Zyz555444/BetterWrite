@@ -29,11 +29,13 @@ export function OcrCameraModal({
   const [stage, setStage] = useState<Stage>('idle');
   const [error, setError] = useState<string | null>(null);
   const [lowConfidence, setLowConfidence] = useState(false);
+  const [lastResult, setLastResult] = useState<OcrResult | null>(null);
 
   const reset = () => {
     setStage('idle');
     setError(null);
     setLowConfidence(false);
+    setLastResult(null);
   };
 
   const handleClose = () => {
@@ -57,6 +59,7 @@ export function OcrCameraModal({
           `[OcrCamera] OCR success confidence=${res.data.confidence} length=${res.data.content.length}`,
         );
         if (res.data.confidence < 0.7) {
+          setLastResult(res.data);
           setLowConfidence(true);
           setStage('idle');
           return;
@@ -136,8 +139,8 @@ export function OcrCameraModal({
   };
 
   const handleUseAnyway = () => {
-    if (lowConfidence) {
-      onResult({ content: '', confidence: 0 });
+    if (lowConfidence && lastResult) {
+      onResult(lastResult);
     }
     reset();
   };

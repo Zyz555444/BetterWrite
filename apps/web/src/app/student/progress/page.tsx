@@ -88,7 +88,9 @@ export default function StudentProgressPage() {
                     <FileText className="w-4 h-4 text-neutral-7" />
                   </CardHeader>
                   <CardContent>
-                    <p className="text-title-28 font-medium text-neutral-10">{progress.totalEssays}</p>
+                    <p className="text-title-28 font-medium text-neutral-10">
+                      {progress.totalEssays}
+                    </p>
                   </CardContent>
                 </Card>
 

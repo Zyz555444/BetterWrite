@@ -7,11 +7,11 @@ interface PieChartProps {
 
 // Yohaku 和色 series palette — 5 colors cycle for >5 slices
 const DEFAULT_COLORS = [
-  'var(--color-accent)',  // 梅 ume
-  'var(--color-info)',    // 縹 hanada
+  'var(--color-accent)', // 梅 ume
+  'var(--color-info)', // 縹 hanada
   'var(--color-success)', // 若竹 wakatake
   'var(--color-warning)', // 朽葉 kuchiba
-  'var(--color-error)',   // 蘇芳 suoh
+  'var(--color-error)', // 蘇芳 suoh
 ];
 
 export function PieChart({ data, size = 200 }: PieChartProps) {

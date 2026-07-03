@@ -220,7 +220,10 @@ export default function TeacherTasksPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <label htmlFor="topicType" className="text-copy-14 font-medium text-neutral-10">
+                      <label
+                        htmlFor="topicType"
+                        className="text-copy-14 font-medium text-neutral-10"
+                      >
                         体裁
                       </label>
                       <select
@@ -271,7 +274,10 @@ export default function TeacherTasksPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label htmlFor="requirements" className="text-copy-14 font-medium text-neutral-10">
+                    <label
+                      htmlFor="requirements"
+                      className="text-copy-14 font-medium text-neutral-10"
+                    >
                       写作要求
                     </label>
                     <textarea

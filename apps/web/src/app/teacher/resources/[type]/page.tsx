@@ -592,7 +592,9 @@ export default function TeacherResourcesListPage() {
 
                             {(resource.tags ?? []).length > 0 && (
                               <div>
-                                <p className="text-label-12 font-medium text-neutral-7 mb-1">标签</p>
+                                <p className="text-label-12 font-medium text-neutral-7 mb-1">
+                                  标签
+                                </p>
                                 <div className="flex flex-wrap gap-1">
                                   {resource.tags.map((tag) => (
                                     <Badge key={tag} variant="outline">
@@ -677,7 +679,10 @@ export default function TeacherResourcesListPage() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="difficulty" className="text-copy-14 font-medium text-neutral-10">
+                    <label
+                      htmlFor="difficulty"
+                      className="text-copy-14 font-medium text-neutral-10"
+                    >
                       难度
                     </label>
                     <select
@@ -750,7 +755,9 @@ export default function TeacherResourcesListPage() {
         {showDeleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="bg-paper rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-title-20 font-serif font-medium text-neutral-10 mb-2">确认删除</h3>
+              <h3 className="text-title-20 font-serif font-medium text-neutral-10 mb-2">
+                确认删除
+              </h3>
               <p className="text-copy-14 text-neutral-8 mb-4">
                 删除后不可恢复，确定要删除该资源吗？
               </p>

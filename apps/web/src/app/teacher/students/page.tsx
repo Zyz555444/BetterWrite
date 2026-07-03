@@ -479,9 +479,7 @@ export default function TeacherStudentsPage() {
                               <span className="text-label-12 text-neutral-7">{student.email}</span>
                             </div>
                           </td>
-                          <td className="px-2 py-3 text-neutral-8">
-                            {student.studentNo ?? '-'}
-                          </td>
+                          <td className="px-2 py-3 text-neutral-8">{student.studentNo ?? '-'}</td>
                           <td className="px-2 py-3 text-neutral-8">
                             {student.grade} · {student.className}
                           </td>

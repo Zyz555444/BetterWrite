@@ -170,9 +170,7 @@ export default function StudentPracticeMockPage() {
                   <h1 className="text-title-24 font-serif font-medium text-neutral-10">
                     {question.title}
                   </h1>
-                  <p className="text-neutral-8 mt-2 whitespace-pre-wrap">
-                    {question.requirements}
-                  </p>
+                  <p className="text-neutral-8 mt-2 whitespace-pre-wrap">{question.requirements}</p>
                 </div>
                 <div className="text-right ml-4 shrink-0">
                   <p

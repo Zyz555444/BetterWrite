@@ -248,7 +248,9 @@ export default function TeacherStudentDetailPage() {
                     <BookOpen className="w-4 h-4 text-neutral-7" />
                   </CardHeader>
                   <CardContent>
-                    <p className="text-title-28 font-medium text-neutral-10">{student.essayCount}</p>
+                    <p className="text-title-28 font-medium text-neutral-10">
+                      {student.essayCount}
+                    </p>
                   </CardContent>
                 </Card>
                 <Card>

@@ -50,7 +50,9 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
         <Card className="bg-accent/10 ring-1 ring-accent/20">
           <CardContent className="p-6 text-center">
             <p className="text-copy-14 text-neutral-8 mb-1">总分</p>
-            <p className="text-display-48 font-medium text-accent">{formatScore(correction.totalScore)}</p>
+            <p className="text-display-48 font-medium text-accent">
+              {formatScore(correction.totalScore)}
+            </p>
             <p className="text-copy-14 text-neutral-8 mt-1">/ 15 分</p>
           </CardContent>
         </Card>
@@ -209,9 +211,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
             <ul className="space-y-3">
               {correction.highlights.map((highlight) => (
                 <li key={highlight.sentence} className="p-3 bg-neutral-2 rounded-md">
-                  <p className="text-neutral-10 font-medium">
-                    &ldquo;{highlight.sentence}&rdquo;
-                  </p>
+                  <p className="text-neutral-10 font-medium">&ldquo;{highlight.sentence}&rdquo;</p>
                   <p className="text-copy-14 text-neutral-8 mt-1">
                     {highlight.type}: {highlight.comment}
                   </p>

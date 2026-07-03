@@ -10,7 +10,7 @@ export default function AdminDashboardPage() {
     <RoleGuard allowedRoles={[UserRole.SUPER_ADMIN]}>
       <DashboardLayout>
         <div className="space-y-6">
-          <h1 className="text-2xl font-serif font-bold text-text-primary">超级管理员控制台</h1>
+          <h1 className="text-title-24 font-serif font-medium text-neutral-10">超级管理员控制台</h1>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: '学校总数', value: '-' },
@@ -20,12 +20,12 @@ export default function AdminDashboardPage() {
             ].map((stat) => (
               <Card key={stat.label}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-text-secondary">
+                  <CardTitle className="text-copy-14 font-medium text-neutral-8">
                     {stat.label}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-text-primary">{stat.value}</p>
+                  <p className="text-title-28 font-medium text-neutral-10">{stat.value}</p>
                 </CardContent>
               </Card>
             ))}

@@ -42,16 +42,16 @@ export default function RegisterPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-bg-primary">
+    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-paper">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-serif text-text-primary">创建账号</CardTitle>
-          <p className="text-text-secondary text-sm mt-1">加入 BetterWrite 提升英语写作</p>
+          <CardTitle className="text-title-24 font-serif text-neutral-10">创建账号</CardTitle>
+          <p className="text-neutral-8 text-copy-14 mt-1">加入 BetterWrite 提升英语写作</p>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label htmlFor="name" className="text-sm font-medium text-text-primary">
+              <label htmlFor="name" className="text-copy-14 font-medium text-neutral-10">
                 姓名
               </label>
               <Input
@@ -63,7 +63,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium text-text-primary">
+              <label htmlFor="email" className="text-copy-14 font-medium text-neutral-10">
                 邮箱
               </label>
               <Input
@@ -76,7 +76,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium text-text-primary">
+              <label htmlFor="password" className="text-copy-14 font-medium text-neutral-10">
                 密码
               </label>
               <Input
@@ -90,7 +90,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="role" className="text-sm font-medium text-text-primary">
+              <label htmlFor="role" className="text-copy-14 font-medium text-neutral-10">
                 身份
               </label>
               <select
@@ -99,7 +99,7 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setForm({ ...form, role: e.target.value as typeof UserRole.STUDENT })
                 }
-                className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
               >
                 <option value={UserRole.STUDENT}>学生</option>
                 <option value={UserRole.TEACHER}>教师</option>
@@ -107,7 +107,7 @@ export default function RegisterPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label htmlFor="schoolCode" className="text-sm font-medium text-text-primary">
+                <label htmlFor="schoolCode" className="text-copy-14 font-medium text-neutral-10">
                   学校代码
                 </label>
                 <Input
@@ -118,7 +118,7 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="space-y-2">
-                <label htmlFor="classCode" className="text-sm font-medium text-text-primary">
+                <label htmlFor="classCode" className="text-copy-14 font-medium text-neutral-10">
                   班级代码
                 </label>
                 <Input
@@ -129,12 +129,12 @@ export default function RegisterPage() {
                 />
               </div>
             </div>
-            {error && <p className="text-error text-sm">{error}</p>}
+            {error && <p className="text-error text-copy-14">{error}</p>}
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? '注册中...' : '注册'}
             </Button>
           </form>
-          <p className="text-text-secondary text-sm text-center mt-4">
+          <p className="text-neutral-8 text-copy-14 text-center mt-4">
             已有账号？{' '}
             <Link href="/login" className="text-accent hover:underline">
               立即登录

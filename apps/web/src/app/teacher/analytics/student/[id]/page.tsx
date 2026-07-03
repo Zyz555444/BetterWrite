@@ -147,16 +147,16 @@ export default function TeacherStudentAnalyticsPage() {
           </div>
 
           <div>
-            <h1 className="text-2xl font-serif font-bold text-text-primary">
+            <h1 className="text-title-24 font-serif font-medium text-neutral-10">
               {isLoading ? '加载中...' : (data?.studentName ?? '学生报告')}
             </h1>
-            <p className="text-sm text-text-secondary mt-1">
+            <p className="text-copy-14 text-neutral-8 mt-1">
               学生 ID：{studentId} · 四维能力、进步曲线与错误分布
             </p>
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 text-error text-sm">
+            <div className="flex items-center gap-2 text-error text-copy-14">
               <AlertCircle className="w-4 h-4" />
               {error}
             </div>
@@ -167,13 +167,13 @@ export default function TeacherStudentAnalyticsPage() {
             {stats.map((stat) => (
               <Card key={stat.label}>
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-text-secondary">
+                  <CardTitle className="text-copy-14 font-medium text-neutral-8">
                     {stat.label}
                   </CardTitle>
-                  <span className="text-text-tertiary">{stat.icon}</span>
+                  <span className="text-neutral-7">{stat.icon}</span>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-text-primary">{stat.value}</p>
+                  <p className="text-title-28 font-medium text-neutral-10">{stat.value}</p>
                 </CardContent>
               </Card>
             ))}
@@ -183,14 +183,14 @@ export default function TeacherStudentAnalyticsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <Target className="w-4 h-4 text-accent" />
                   四维能力雷达
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex justify-center">
                 {isLoading ? (
-                  <p className="text-text-secondary text-sm h-[240px] flex items-center">
+                  <p className="text-neutral-8 text-copy-14 h-[240px] flex items-center">
                     加载中...
                   </p>
                 ) : (
@@ -201,14 +201,14 @@ export default function TeacherStudentAnalyticsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <PenLine className="w-4 h-4 text-accent" />
                   分数进步曲线
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <p className="text-text-secondary text-sm h-[240px] flex items-center">
+                  <p className="text-neutral-8 text-copy-14 h-[240px] flex items-center">
                     加载中...
                   </p>
                 ) : (
@@ -222,14 +222,14 @@ export default function TeacherStudentAnalyticsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-accent" />
                   错误类型分布
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <p className="text-text-secondary text-sm">加载中...</p>
+                  <p className="text-neutral-8 text-copy-14">加载中...</p>
                 ) : (
                   <PieChart data={errorDistData} size={200} />
                 )}
@@ -238,39 +238,39 @@ export default function TeacherStudentAnalyticsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-accent" />
                   近期作文
-                  <span className="text-xs font-normal text-text-secondary ml-2">
+                  <span className="text-label-12 font-normal text-neutral-8 ml-2">
                     共 {recentEssays.length} 篇
                   </span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <p className="text-text-secondary text-sm">加载中...</p>
+                  <p className="text-neutral-8 text-copy-14">加载中...</p>
                 ) : recentEssays.length === 0 ? (
-                  <p className="text-text-secondary text-sm">暂无作文记录</p>
+                  <p className="text-neutral-8 text-copy-14">暂无作文记录</p>
                 ) : (
                   <ul className="space-y-3">
                     {recentEssays.map((essay) => (
                       <li
                         key={essay.id}
-                        className="p-3 bg-bg-secondary rounded-md border border-border"
+                        className="p-3 bg-neutral-2 rounded-md border border-border"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium text-text-primary truncate min-w-0 flex-1">
+                          <p className="font-medium text-neutral-10 truncate min-w-0 flex-1">
                             {essay.title ?? '未命名作文'}
                           </p>
                           <span
-                            className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${statusColors[essay.status] ?? 'bg-bg-tertiary text-text-secondary'}`}
+                            className={`text-label-12 px-2 py-0.5 rounded-full shrink-0 ${statusColors[essay.status] ?? 'bg-neutral-3 text-neutral-8'}`}
                           >
                             {statusLabels[essay.status] ?? essay.status}
                           </span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary mt-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-label-12 text-neutral-8 mt-2">
                           {essay.status === 'completed' && essay.totalScore !== null && (
-                            <span className="font-medium text-text-primary">
+                            <span className="font-medium text-neutral-10">
                               {formatScore(essay.totalScore)} 分
                             </span>
                           )}

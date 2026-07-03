@@ -94,8 +94,8 @@ export default function TeacherDashboardPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-serif font-bold text-text-primary">班级概览</h1>
-              <p className="text-sm text-text-secondary mt-1">查看班级动态、任务与作文批改情况</p>
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10">班级概览</h1>
+              <p className="text-copy-14 text-neutral-8 mt-1">查看班级动态、任务与作文批改情况</p>
             </div>
             <Link href="/teacher/tasks">
               <Button>
@@ -109,24 +109,24 @@ export default function TeacherDashboardPage() {
             {stats.map((stat) => (
               <Card key={stat.label}>
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-text-secondary">
+                  <CardTitle className="text-copy-14 font-medium text-neutral-8">
                     {stat.label}
                   </CardTitle>
-                  <span className="text-text-tertiary">{stat.icon}</span>
+                  <span className="text-neutral-7">{stat.icon}</span>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-text-primary">{stat.value}</p>
+                  <p className="text-title-28 font-medium text-neutral-10">{stat.value}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          {error && <p className="text-error text-sm">{error}</p>}
+          {error && <p className="text-error text-copy-14">{error}</p>}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="flex flex-col">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <School className="w-4 h-4 text-accent" />
                   我的班级
                 </CardTitle>
@@ -139,25 +139,25 @@ export default function TeacherDashboardPage() {
               </CardHeader>
               <CardContent className="flex-1">
                 {isLoading ? (
-                  <p className="text-text-secondary text-sm">加载中...</p>
+                  <p className="text-neutral-8 text-copy-14">加载中...</p>
                 ) : data?.classes.length === 0 ? (
-                  <p className="text-text-secondary text-sm">暂无任教班级</p>
+                  <p className="text-neutral-8 text-copy-14">暂无任教班级</p>
                 ) : (
                   <ul className="space-y-3">
                     {data?.classes.map((cls) => (
                       <li
                         key={cls.id}
-                        className="flex items-center justify-between p-3 bg-bg-secondary rounded-md"
+                        className="flex items-center justify-between p-3 bg-neutral-2 rounded-md"
                       >
                         <div>
-                          <p className="font-medium text-text-primary">
+                          <p className="font-medium text-neutral-10">
                             {cls.grade} · {cls.name}
                           </p>
-                          <p className="text-xs text-text-secondary mt-0.5">
+                          <p className="text-label-12 text-neutral-8 mt-0.5">
                             {cls.studentCount} 名学生
                           </p>
                         </div>
-                        <Users className="w-4 h-4 text-text-tertiary" />
+                        <Users className="w-4 h-4 text-neutral-7" />
                       </li>
                     ))}
                   </ul>
@@ -167,7 +167,7 @@ export default function TeacherDashboardPage() {
 
             <Card className="flex flex-col">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <PenLine className="w-4 h-4 text-accent" />
                   最近任务
                 </CardTitle>
@@ -180,23 +180,23 @@ export default function TeacherDashboardPage() {
               </CardHeader>
               <CardContent className="flex-1">
                 {isLoading ? (
-                  <p className="text-text-secondary text-sm">加载中...</p>
+                  <p className="text-neutral-8 text-copy-14">加载中...</p>
                 ) : data?.recentTasks.length === 0 ? (
-                  <p className="text-text-secondary text-sm">暂无任务，点击右上角布置第一篇作文</p>
+                  <p className="text-neutral-8 text-copy-14">暂无任务，点击右上角布置第一篇作文</p>
                 ) : (
                   <ul className="space-y-3">
                     {data?.recentTasks.map((task) => (
                       <li
                         key={task.id}
-                        className="flex items-center justify-between p-3 bg-bg-secondary rounded-md"
+                        className="flex items-center justify-between p-3 bg-neutral-2 rounded-md"
                       >
                         <div className="min-w-0">
-                          <p className="font-medium text-text-primary truncate">{task.title}</p>
-                          <p className="text-xs text-text-secondary mt-0.5">
+                          <p className="font-medium text-neutral-10 truncate">{task.title}</p>
+                          <p className="text-label-12 text-neutral-8 mt-0.5">
                             {task.topicType} · {task.wordLimitMin}-{task.wordLimitMax} 词
                           </p>
                         </div>
-                        <BookOpen className="w-4 h-4 text-text-tertiary shrink-0 ml-2" />
+                        <BookOpen className="w-4 h-4 text-neutral-7 shrink-0 ml-2" />
                       </li>
                     ))}
                   </ul>
@@ -207,7 +207,7 @@ export default function TeacherDashboardPage() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="text-title-20 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-accent" />
                 最近作文
               </CardTitle>
@@ -220,21 +220,21 @@ export default function TeacherDashboardPage() {
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <p className="text-text-secondary text-sm">加载中...</p>
+                <p className="text-neutral-8 text-copy-14">加载中...</p>
               ) : data?.recentEssays.length === 0 ? (
-                <p className="text-text-secondary text-sm">暂无学生提交作文</p>
+                <p className="text-neutral-8 text-copy-14">暂无学生提交作文</p>
               ) : (
                 <ul className="space-y-3">
                   {data?.recentEssays.map((essay) => (
                     <li
                       key={essay.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-bg-secondary rounded-md"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-neutral-2 rounded-md"
                     >
                       <div className="min-w-0">
-                        <p className="font-medium text-text-primary truncate">
+                        <p className="font-medium text-neutral-10 truncate">
                           {essay.title ?? essay.task?.title ?? '未命名作文'}
                         </p>
-                        <p className="text-xs text-text-secondary mt-0.5">
+                        <p className="text-label-12 text-neutral-8 mt-0.5">
                           {essay.student?.name ?? '未知学生'}
                           {essay.student?.studentNo ? ` (${essay.student.studentNo})` : ''} ·{' '}
                           {essay.wordCount} 词 · {new Date(essay.submittedAt).toLocaleDateString()}
@@ -242,12 +242,12 @@ export default function TeacherDashboardPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${statusColors[essay.status] ?? 'bg-bg-tertiary text-text-secondary'}`}
+                          className={`text-label-12 px-2 py-0.5 rounded-full ${statusColors[essay.status] ?? 'bg-neutral-3 text-neutral-8'}`}
                         >
                           {statusLabels[essay.status] ?? essay.status}
                         </span>
                         {essay.status === 'completed' && (
-                          <span className="text-sm font-medium text-text-primary">
+                          <span className="text-copy-14 font-medium text-neutral-10">
                             {formatScore(essay.totalScore)} 分
                           </span>
                         )}

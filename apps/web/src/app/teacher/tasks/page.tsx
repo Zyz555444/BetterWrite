@@ -158,8 +158,8 @@ export default function TeacherTasksPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-serif font-bold text-text-primary">作文任务</h1>
-              <p className="text-sm text-text-secondary mt-1">布置、查看和管理班级作文任务</p>
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10">作文任务</h1>
+              <p className="text-copy-14 text-neutral-8 mt-1">布置、查看和管理班级作文任务</p>
             </div>
             <Button
               onClick={() => {
@@ -172,12 +172,12 @@ export default function TeacherTasksPage() {
             </Button>
           </div>
 
-          {error && <p className="text-error text-sm">{error}</p>}
+          {error && <p className="text-error text-copy-14">{error}</p>}
 
           {showForm && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <PenLine className="w-4 h-4 text-accent" />
                   新建作文任务
                 </CardTitle>
@@ -186,7 +186,7 @@ export default function TeacherTasksPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <label htmlFor="title" className="text-sm font-medium text-text-primary">
+                      <label htmlFor="title" className="text-copy-14 font-medium text-neutral-10">
                         标题
                       </label>
                       <Input
@@ -198,7 +198,7 @@ export default function TeacherTasksPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label htmlFor="classId" className="text-sm font-medium text-text-primary">
+                      <label htmlFor="classId" className="text-copy-14 font-medium text-neutral-10">
                         班级
                       </label>
                       <select
@@ -206,7 +206,7 @@ export default function TeacherTasksPage() {
                         value={form.classId}
                         onChange={(e) => handleChange('classId', e.target.value)}
                         required
-                        className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                        className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                       >
                         <option value="">选择班级</option>
                         {classes.map((cls) => (
@@ -220,14 +220,14 @@ export default function TeacherTasksPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <label htmlFor="topicType" className="text-sm font-medium text-text-primary">
+                      <label htmlFor="topicType" className="text-copy-14 font-medium text-neutral-10">
                         体裁
                       </label>
                       <select
                         id="topicType"
                         value={form.topicType}
                         onChange={(e) => handleChange('topicType', e.target.value)}
-                        className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                        className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                       >
                         {Object.entries(TopicTypeLabels).map(([value, label]) => (
                           <option key={value} value={value}>
@@ -239,7 +239,7 @@ export default function TeacherTasksPage() {
                     <div className="space-y-2">
                       <label
                         htmlFor="wordLimitMin"
-                        className="text-sm font-medium text-text-primary"
+                        className="text-copy-14 font-medium text-neutral-10"
                       >
                         最少词数
                       </label>
@@ -255,7 +255,7 @@ export default function TeacherTasksPage() {
                     <div className="space-y-2">
                       <label
                         htmlFor="wordLimitMax"
-                        className="text-sm font-medium text-text-primary"
+                        className="text-copy-14 font-medium text-neutral-10"
                       >
                         最多词数
                       </label>
@@ -271,7 +271,7 @@ export default function TeacherTasksPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label htmlFor="requirements" className="text-sm font-medium text-text-primary">
+                    <label htmlFor="requirements" className="text-copy-14 font-medium text-neutral-10">
                       写作要求
                     </label>
                     <textarea
@@ -279,13 +279,13 @@ export default function TeacherTasksPage() {
                       value={form.requirements}
                       onChange={(e) => handleChange('requirements', e.target.value)}
                       placeholder="描述题目背景、写作要点和评分标准..."
-                      className="w-full min-h-[100px] rounded-md border border-border bg-bg-primary p-3 text-sm text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20"
+                      className="w-full min-h-[100px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                       required
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label htmlFor="keyPoints" className="text-sm font-medium text-text-primary">
+                    <label htmlFor="keyPoints" className="text-copy-14 font-medium text-neutral-10">
                       评分要点（每行一条）
                     </label>
                     <textarea
@@ -293,12 +293,12 @@ export default function TeacherTasksPage() {
                       value={form.keyPoints}
                       onChange={(e) => handleChange('keyPoints', e.target.value)}
                       placeholder="例如：&#10;包含至少两个季节特点&#10;使用恰当的连接词"
-                      className="w-full min-h-[80px] rounded-md border border-border bg-bg-primary p-3 text-sm text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20"
+                      className="w-full min-h-[80px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label htmlFor="dueDate" className="text-sm font-medium text-text-primary">
+                    <label htmlFor="dueDate" className="text-copy-14 font-medium text-neutral-10">
                       截止时间（可选）
                     </label>
                     <Input
@@ -321,30 +321,30 @@ export default function TeacherTasksPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">任务列表</CardTitle>
+              <CardTitle className="text-title-20">任务列表</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <p className="text-text-secondary text-sm">加载中...</p>
+                <p className="text-neutral-8 text-copy-14">加载中...</p>
               ) : tasks.length === 0 ? (
-                <p className="text-text-secondary text-sm">暂无任务，点击右上角创建</p>
+                <p className="text-neutral-8 text-copy-14">暂无任务，点击右上角创建</p>
               ) : (
                 <ul className="space-y-3">
                   {tasks.map((task) => (
                     <li
                       key={task.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-bg-secondary rounded-md"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-neutral-2 rounded-md"
                     >
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <p className="font-medium text-text-primary truncate">{task.title}</p>
+                          <p className="font-medium text-neutral-10 truncate">{task.title}</p>
                           <Badge variant="secondary">
                             {TopicTypeLabels[task.topicType as keyof typeof TopicTypeLabels] ??
                               task.topicType}
                           </Badge>
                           <Badge>{statusLabels[task.status] ?? task.status}</Badge>
                         </div>
-                        <p className="text-xs text-text-secondary flex items-center gap-2">
+                        <p className="text-label-12 text-neutral-8 flex items-center gap-2">
                           <School className="w-3 h-3" />
                           {getClassLabel(task.classId)}
                           <span>·</span>

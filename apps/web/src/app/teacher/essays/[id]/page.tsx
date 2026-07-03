@@ -90,7 +90,7 @@ export default function TeacherEssayDetailPage() {
           </div>
 
           {isLoading ? (
-            <p className="text-text-secondary">加载中...</p>
+            <p className="text-neutral-8">加载中...</p>
           ) : error && !essay ? (
             <p className="text-error">{error}</p>
           ) : essay ? (
@@ -99,15 +99,15 @@ export default function TeacherEssayDetailPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <Badge>{statusLabels[essay.status] ?? essay.status}</Badge>
-                    <span className="text-sm text-text-secondary flex items-center gap-1">
+                    <span className="text-copy-14 text-neutral-8 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       提交于 {new Date(essay.submittedAt).toLocaleString()}
                     </span>
                   </div>
-                  <h1 className="text-2xl font-serif font-bold text-text-primary">
+                  <h1 className="text-title-24 font-serif font-medium text-neutral-10">
                     {essay.title ?? essay.task?.title ?? '作文详情'}
                   </h1>
-                  <p className="text-sm text-text-secondary mt-1">
+                  <p className="text-copy-14 text-neutral-8 mt-1">
                     学生：{essay.student?.name ?? '未知学生'}
                     {essay.student?.studentNo ? ` (${essay.student.studentNo})` : ''} ·{' '}
                     {essay.wordCount} 词
@@ -123,10 +123,10 @@ export default function TeacherEssayDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">原文</CardTitle>
+                  <CardTitle className="text-title-20">原文</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-text-primary leading-relaxed whitespace-pre-wrap">
+                  <p className="text-neutral-10 leading-relaxed whitespace-pre-wrap">
                     {essay.content}
                   </p>
                 </CardContent>
@@ -136,7 +136,7 @@ export default function TeacherEssayDetailPage() {
                 <Card>
                   <CardContent className="py-12 text-center">
                     <RefreshCw className="w-10 h-10 text-accent mx-auto mb-3 animate-spin" />
-                    <p className="text-text-primary font-medium">作文正在排队等待批改</p>
+                    <p className="text-neutral-10 font-medium">作文正在排队等待批改</p>
                   </CardContent>
                 </Card>
               )}
@@ -145,7 +145,7 @@ export default function TeacherEssayDetailPage() {
                 <Card>
                   <CardContent className="py-12 text-center">
                     <RefreshCw className="w-10 h-10 text-accent mx-auto mb-3 animate-spin" />
-                    <p className="text-text-primary font-medium">AI 正在批改中</p>
+                    <p className="text-neutral-10 font-medium">AI 正在批改中</p>
                   </CardContent>
                 </Card>
               )}
@@ -154,7 +154,7 @@ export default function TeacherEssayDetailPage() {
                 <Card>
                   <CardContent className="py-12 text-center">
                     <p className="text-error font-medium">批改失败</p>
-                    <p className="text-text-secondary text-sm mt-1">可尝试刷新或检查 worker 日志</p>
+                    <p className="text-neutral-8 text-copy-14 mt-1">可尝试刷新或检查 worker 日志</p>
                   </CardContent>
                 </Card>
               )}

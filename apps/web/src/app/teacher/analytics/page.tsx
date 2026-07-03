@@ -192,8 +192,8 @@ export default function TeacherAnalyticsPage() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-serif font-bold text-text-primary">数据分析</h1>
-              <p className="text-sm text-text-secondary mt-1">
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10">数据分析</h1>
+              <p className="text-copy-14 text-neutral-8 mt-1">
                 查看班级作文成绩分布、错误类型与体裁对比
               </p>
             </div>
@@ -213,13 +213,13 @@ export default function TeacherAnalyticsPage() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex items-center gap-2">
                   <School className="w-4 h-4 text-accent" />
-                  <span className="text-sm font-medium text-text-primary">选择班级</span>
+                  <span className="text-copy-14 font-medium text-neutral-10">选择班级</span>
                 </div>
                 <select
                   value={selectedClassId}
                   onChange={(e) => handleClassChange(e.target.value)}
                   disabled={isLoadingClasses}
-                  className="h-10 flex-1 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20"
+                  className="h-10 flex-1 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   {isLoadingClasses ? (
                     <option value="">加载中...</option>
@@ -234,12 +234,12 @@ export default function TeacherAnalyticsPage() {
                   )}
                 </select>
               </div>
-              {exportError && <p className="text-error text-xs mt-3">{exportError}</p>}
+              {exportError && <p className="text-error text-label-12 mt-3">{exportError}</p>}
             </CardContent>
           </Card>
 
           {error && (
-            <div className="flex items-center gap-2 text-error text-sm">
+            <div className="flex items-center gap-2 text-error text-copy-14">
               <AlertCircle className="w-4 h-4" />
               {error}
             </div>
@@ -250,20 +250,20 @@ export default function TeacherAnalyticsPage() {
             {stats.map((stat) => (
               <Card key={stat.label}>
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-medium text-text-secondary">
+                  <CardTitle className="text-copy-14 font-medium text-neutral-8">
                     {stat.label}
                   </CardTitle>
-                  <span className="text-text-tertiary">{stat.icon}</span>
+                  <span className="text-neutral-7">{stat.icon}</span>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-text-primary">{stat.value}</p>
+                  <p className="text-title-28 font-medium text-neutral-10">{stat.value}</p>
                 </CardContent>
               </Card>
             ))}
           </div>
 
           {selectedClass && (
-            <p className="text-xs text-text-tertiary">
+            <p className="text-label-12 text-neutral-7">
               当前班级：{selectedClass.grade} · {selectedClass.name}
             </p>
           )}
@@ -272,14 +272,14 @@ export default function TeacherAnalyticsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-accent" />
                   平均分趋势
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoadingAnalytics ? (
-                  <p className="text-text-secondary text-sm h-[200px] flex items-center">
+                  <p className="text-neutral-8 text-copy-14 h-[200px] flex items-center">
                     加载中...
                   </p>
                 ) : (
@@ -290,14 +290,14 @@ export default function TeacherAnalyticsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-accent" />
                   分数段分布
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoadingAnalytics ? (
-                  <p className="text-text-secondary text-sm h-[200px] flex items-center">
+                  <p className="text-neutral-8 text-copy-14 h-[200px] flex items-center">
                     加载中...
                   </p>
                 ) : (
@@ -311,35 +311,35 @@ export default function TeacherAnalyticsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-accent" />
                   高频错误 Top 10
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoadingAnalytics ? (
-                  <p className="text-text-secondary text-sm">加载中...</p>
+                  <p className="text-neutral-8 text-copy-14">加载中...</p>
                 ) : topErrors.length === 0 ? (
-                  <p className="text-text-secondary text-sm">暂无数据</p>
+                  <p className="text-neutral-8 text-copy-14">暂无数据</p>
                 ) : (
                   <ul className="space-y-2.5">
                     {topErrors.slice(0, 10).map((err, i) => (
                       <li key={`${err.type}-${i}`} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center justify-between text-copy-14">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-text-tertiary tabular-nums w-5 shrink-0">
+                            <span className="text-neutral-7 tabular-nums w-5 shrink-0">
                               {i + 1}
                             </span>
                             <Badge variant="secondary" className="shrink-0">
                               {getErrorTypeLabel(err.type)}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-3 shrink-0 text-text-secondary tabular-nums">
+                          <div className="flex items-center gap-3 shrink-0 text-neutral-8 tabular-nums">
                             <span>{err.count} 次</span>
-                            <span className="text-text-tertiary">{err.percentage}%</span>
+                            <span className="text-neutral-7">{err.percentage}%</span>
                           </div>
                         </div>
-                        <div className="h-1.5 w-full bg-bg-secondary rounded-full overflow-hidden">
+                        <div className="h-1.5 w-full bg-neutral-2 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-accent rounded-full"
                             style={{ width: `${(err.count / maxErrorCount) * 100}%` }}
@@ -354,14 +354,14 @@ export default function TeacherAnalyticsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-accent" />
                   体裁平均分对比
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoadingAnalytics ? (
-                  <p className="text-text-secondary text-sm h-[220px] flex items-center">
+                  <p className="text-neutral-8 text-copy-14 h-[220px] flex items-center">
                     加载中...
                   </p>
                 ) : (

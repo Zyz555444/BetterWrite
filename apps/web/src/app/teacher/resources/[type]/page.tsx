@@ -307,8 +307,8 @@ export default function TeacherResourcesListPage() {
       <RoleGuard allowedRoles={[UserRole.TEACHER]}>
         <DashboardLayout>
           <div className="space-y-4">
-            <h1 className="text-2xl font-serif font-bold text-text-primary">教学资源</h1>
-            <p className="text-error text-sm">缺少资源类型参数</p>
+            <h1 className="text-title-24 font-serif font-medium text-neutral-10">教学资源</h1>
+            <p className="text-error text-copy-14">缺少资源类型参数</p>
           </div>
         </DashboardLayout>
       </RoleGuard>
@@ -321,11 +321,11 @@ export default function TeacherResourcesListPage() {
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-serif font-bold text-text-primary flex items-center gap-2">
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10 flex items-center gap-2">
                 <span aria-hidden>{typeIcon}</span>
                 {typeLabel}
               </h1>
-              <p className="text-sm text-text-secondary mt-1">
+              <p className="text-copy-14 text-neutral-8 mt-1">
                 管理当前类型的教学资源，支持筛选、搜索与增删改
               </p>
             </div>
@@ -337,7 +337,7 @@ export default function TeacherResourcesListPage() {
 
           {error && (
             <div className="flex items-center justify-between p-3 rounded-md bg-error/10 border border-error/20">
-              <p className="text-sm text-error">{error}</p>
+              <p className="text-copy-14 text-error">{error}</p>
               <Button
                 type="button"
                 variant="ghost"
@@ -354,14 +354,14 @@ export default function TeacherResourcesListPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">筛选与搜索</CardTitle>
+              <CardTitle className="text-title-20">筛选与搜索</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label
                     htmlFor="topicTypeFilter"
-                    className="text-sm font-medium text-text-primary"
+                    className="text-copy-14 font-medium text-neutral-10"
                   >
                     体裁
                   </label>
@@ -372,7 +372,7 @@ export default function TeacherResourcesListPage() {
                       console.log(`[TeacherResourcesList] topicType filter=${e.target.value}`);
                       setTopicTypeFilter(e.target.value);
                     }}
-                    className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                    className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                   >
                     <option value="all">全部体裁</option>
                     {Object.entries(TopicTypeLabels).map(([value, label]) => (
@@ -385,7 +385,7 @@ export default function TeacherResourcesListPage() {
                 <div className="space-y-2">
                   <label
                     htmlFor="difficultyFilter"
-                    className="text-sm font-medium text-text-primary"
+                    className="text-copy-14 font-medium text-neutral-10"
                   >
                     难度
                   </label>
@@ -396,7 +396,7 @@ export default function TeacherResourcesListPage() {
                       console.log(`[TeacherResourcesList] difficulty filter=${e.target.value}`);
                       setDifficultyFilter(e.target.value);
                     }}
-                    className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                    className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                   >
                     <option value="all">全部难度</option>
                     {Object.entries(TeachingResourceDifficultyLabels).map(([value, label]) => (
@@ -407,11 +407,11 @@ export default function TeacherResourcesListPage() {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="search" className="text-sm font-medium text-text-primary">
+                  <label htmlFor="search" className="text-copy-14 font-medium text-neutral-10">
                     搜索
                   </label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-7" />
                     <Input
                       id="search"
                       value={search}
@@ -427,19 +427,19 @@ export default function TeacherResourcesListPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">
+              <CardTitle className="text-title-20">
                 资源列表
-                <span className="ml-2 text-text-secondary text-sm font-normal">
+                <span className="ml-2 text-neutral-8 text-copy-14 font-normal">
                   共 {filteredList.length} 条
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <p className="text-text-secondary text-sm">加载中...</p>
+                <p className="text-neutral-8 text-copy-14">加载中...</p>
               ) : filteredList.length === 0 ? (
                 <div className="text-center py-12">
-                  <p className="text-text-secondary text-sm">暂无资源，点击右上角新增</p>
+                  <p className="text-neutral-8 text-copy-14">暂无资源，点击右上角新增</p>
                   <Button
                     type="button"
                     variant="secondary"
@@ -457,12 +457,12 @@ export default function TeacherResourcesListPage() {
                     return (
                       <li
                         key={resource.id}
-                        className="border border-border rounded-md bg-bg-secondary overflow-hidden"
+                        className="border border-border rounded-md bg-neutral-2 overflow-hidden"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <p className="font-medium text-text-primary truncate">
+                              <p className="font-medium text-neutral-10 truncate">
                                 {resource.title}
                               </p>
                               {resource.topicType && (
@@ -474,7 +474,7 @@ export default function TeacherResourcesListPage() {
                               )}
                               {resource.difficulty && (
                                 <span
-                                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-label-12 font-medium ${
                                     difficultyColors[resource.difficulty] ?? ''
                                   }`}
                                 >
@@ -489,12 +489,12 @@ export default function TeacherResourcesListPage() {
                                 </Badge>
                               ))}
                               {(resource.tags ?? []).length > 3 && (
-                                <span className="text-xs text-text-tertiary">
+                                <span className="text-label-12 text-neutral-7">
                                   +{resource.tags.length - 3}
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-text-secondary flex items-center gap-2 flex-wrap">
+                            <p className="text-label-12 text-neutral-8 flex items-center gap-2 flex-wrap">
                               <span>
                                 创建者：{resource.creator?.name ?? resource.createdBy ?? '-'}
                               </span>
@@ -540,11 +540,11 @@ export default function TeacherResourcesListPage() {
                         </div>
 
                         {isExpanded && (
-                          <div className="border-t border-border bg-bg-primary p-4 space-y-3">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                          <div className="border-t border-border bg-paper p-4 space-y-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-copy-14">
                               <div>
-                                <span className="text-text-tertiary">体裁：</span>
-                                <span className="text-text-primary">
+                                <span className="text-neutral-7">体裁：</span>
+                                <span className="text-neutral-10">
                                   {resource.topicType
                                     ? (TopicTypeLabels[
                                         resource.topicType as keyof typeof TopicTypeLabels
@@ -553,8 +553,8 @@ export default function TeacherResourcesListPage() {
                                 </span>
                               </div>
                               <div>
-                                <span className="text-text-tertiary">难度：</span>
-                                <span className="text-text-primary">
+                                <span className="text-neutral-7">难度：</span>
+                                <span className="text-neutral-10">
                                   {resource.difficulty
                                     ? (TeachingResourceDifficultyLabels[
                                         resource.difficulty as keyof typeof TeachingResourceDifficultyLabels
@@ -563,28 +563,28 @@ export default function TeacherResourcesListPage() {
                                 </span>
                               </div>
                               <div>
-                                <span className="text-text-tertiary">创建时间：</span>
-                                <span className="text-text-primary">
+                                <span className="text-neutral-7">创建时间：</span>
+                                <span className="text-neutral-10">
                                   {formatDate(resource.createdAt)}
                                 </span>
                               </div>
                             </div>
 
                             <div>
-                              <p className="text-xs font-medium text-text-tertiary mb-1">
+                              <p className="text-label-12 font-medium text-neutral-7 mb-1">
                                 正文内容
                               </p>
-                              <div className="whitespace-pre-wrap text-sm text-text-primary bg-bg-secondary rounded-md p-3 border border-border">
+                              <div className="whitespace-pre-wrap text-copy-14 text-neutral-10 bg-neutral-2 rounded-md p-3 border border-border">
                                 {resource.content || '（无）'}
                               </div>
                             </div>
 
                             {resource.highlights && (
                               <div>
-                                <p className="text-xs font-medium text-text-tertiary mb-1">
+                                <p className="text-label-12 font-medium text-neutral-7 mb-1">
                                   亮点点评
                                 </p>
-                                <div className="whitespace-pre-wrap text-sm text-text-primary bg-bg-secondary rounded-md p-3 border border-border">
+                                <div className="whitespace-pre-wrap text-copy-14 text-neutral-10 bg-neutral-2 rounded-md p-3 border border-border">
                                   {resource.highlights}
                                 </div>
                               </div>
@@ -592,7 +592,7 @@ export default function TeacherResourcesListPage() {
 
                             {(resource.tags ?? []).length > 0 && (
                               <div>
-                                <p className="text-xs font-medium text-text-tertiary mb-1">标签</p>
+                                <p className="text-label-12 font-medium text-neutral-7 mb-1">标签</p>
                                 <div className="flex flex-wrap gap-1">
                                   {resource.tags.map((tag) => (
                                     <Badge key={tag} variant="outline">
@@ -603,7 +603,7 @@ export default function TeacherResourcesListPage() {
                               </div>
                             )}
 
-                            <div className="text-xs text-text-tertiary">
+                            <div className="text-label-12 text-neutral-7">
                               创建者：{resource.creator?.name ?? resource.createdBy ?? '-'} ·
                               更新时间：{formatDate(resource.updatedAt)}
                             </div>
@@ -620,9 +620,9 @@ export default function TeacherResourcesListPage() {
 
         {showFormModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-bg-primary rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-auto">
+            <div className="bg-paper rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-auto">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-serif font-bold text-text-primary flex items-center gap-2">
+                <h2 className="text-title-20 font-serif font-medium text-neutral-10 flex items-center gap-2">
                   <span aria-hidden>{typeIcon}</span>
                   {editingId ? '编辑资源' : '新增资源'} · {typeLabel}
                 </h2>
@@ -639,13 +639,13 @@ export default function TeacherResourcesListPage() {
 
               {formError && (
                 <div className="mb-4 p-3 rounded-md bg-error/10 border border-error/20">
-                  <p className="text-sm text-error">{formError}</p>
+                  <p className="text-copy-14 text-error">{formError}</p>
                 </div>
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label htmlFor="title" className="text-sm font-medium text-text-primary">
+                  <label htmlFor="title" className="text-copy-14 font-medium text-neutral-10">
                     标题 <span className="text-error">*</span>
                   </label>
                   <Input
@@ -659,14 +659,14 @@ export default function TeacherResourcesListPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label htmlFor="topicType" className="text-sm font-medium text-text-primary">
+                    <label htmlFor="topicType" className="text-copy-14 font-medium text-neutral-10">
                       体裁（可选）
                     </label>
                     <select
                       id="topicType"
                       value={form.topicType}
                       onChange={(e) => setForm((prev) => ({ ...prev, topicType: e.target.value }))}
-                      className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                      className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                     >
                       <option value="">不限体裁</option>
                       {Object.entries(TopicTypeLabels).map(([value, label]) => (
@@ -677,14 +677,14 @@ export default function TeacherResourcesListPage() {
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label htmlFor="difficulty" className="text-sm font-medium text-text-primary">
+                    <label htmlFor="difficulty" className="text-copy-14 font-medium text-neutral-10">
                       难度
                     </label>
                     <select
                       id="difficulty"
                       value={form.difficulty}
                       onChange={(e) => setForm((prev) => ({ ...prev, difficulty: e.target.value }))}
-                      className="w-full h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                      className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                     >
                       {Object.entries(TeachingResourceDifficultyLabels).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -696,7 +696,7 @@ export default function TeacherResourcesListPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="content" className="text-sm font-medium text-text-primary">
+                  <label htmlFor="content" className="text-copy-14 font-medium text-neutral-10">
                     正文内容 <span className="text-error">*</span>
                   </label>
                   <textarea
@@ -704,13 +704,13 @@ export default function TeacherResourcesListPage() {
                     value={form.content}
                     onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))}
                     placeholder="范文正文 / 句型模板 / 连接词列表 / 错误案例..."
-                    className="w-full min-h-[160px] px-3 py-2 rounded-md border border-border bg-bg-primary text-text-primary text-sm placeholder:text-text-tertiary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20"
+                    className="w-full min-h-[160px] px-3 py-2 rounded-md bg-paper text-neutral-10 text-copy-14 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="highlights" className="text-sm font-medium text-text-primary">
+                  <label htmlFor="highlights" className="text-copy-14 font-medium text-neutral-10">
                     亮点点评
                   </label>
                   <textarea
@@ -718,12 +718,12 @@ export default function TeacherResourcesListPage() {
                     value={form.highlights}
                     onChange={(e) => setForm((prev) => ({ ...prev, highlights: e.target.value }))}
                     placeholder="对该资源的亮点、用法或教学建议..."
-                    className="w-full min-h-[80px] px-3 py-2 rounded-md border border-border bg-bg-primary text-text-primary text-sm placeholder:text-text-tertiary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20"
+                    className="w-full min-h-[80px] px-3 py-2 rounded-md bg-paper text-neutral-10 text-copy-14 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="tags" className="text-sm font-medium text-text-primary">
+                  <label htmlFor="tags" className="text-copy-14 font-medium text-neutral-10">
                     标签（逗号分隔）
                   </label>
                   <Input
@@ -749,9 +749,9 @@ export default function TeacherResourcesListPage() {
 
         {showDeleteConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-bg-primary rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-serif font-bold text-text-primary mb-2">确认删除</h3>
-              <p className="text-sm text-text-secondary mb-4">
+            <div className="bg-paper rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-title-20 font-serif font-medium text-neutral-10 mb-2">确认删除</h3>
+              <p className="text-copy-14 text-neutral-8 mb-4">
                 删除后不可恢复，确定要删除该资源吗？
               </p>
               <div className="flex justify-end gap-2">

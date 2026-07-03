@@ -60,8 +60,8 @@ export default function TeacherResourcesPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div>
-            <h1 className="text-2xl font-serif font-bold text-text-primary">教学资源库</h1>
-            <p className="text-sm text-text-secondary mt-1">
+            <h1 className="text-title-24 font-serif font-medium text-neutral-10">教学资源库</h1>
+            <p className="text-copy-14 text-neutral-8 mt-1">
               管理范文、句型模板、连接词与错误案例，为写作教学提供素材
             </p>
           </div>
@@ -70,7 +70,7 @@ export default function TeacherResourcesPage() {
             {categories.map((category) => (
               <Card
                 key={category.type}
-                className="hover:border-accent hover:shadow-md cursor-pointer group"
+                className="hover:border-accent hover:ring-1 ring-border cursor-pointer group"
                 onClick={() => handleNavigate(category.type)}
               >
                 <CardContent className="p-6">
@@ -80,12 +80,12 @@ export default function TeacherResourcesPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
-                        <h2 className="text-lg font-semibold text-text-primary">
+                        <h2 className="text-title-20 font-medium text-neutral-10">
                           {category.label}
                         </h2>
-                        <ArrowRight className="w-4 h-4 text-text-tertiary group-hover:text-accent transition-colors" />
+                        <ArrowRight className="w-4 h-4 text-neutral-7 group-hover:text-accent transition-colors" />
                       </div>
-                      <p className="text-sm text-text-secondary mt-1">{category.description}</p>
+                      <p className="text-copy-14 text-neutral-8 mt-1">{category.description}</p>
                       <div className="mt-3">
                         <Button
                           type="button"

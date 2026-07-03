@@ -139,10 +139,10 @@ export function OcrCameraModal({
   };
 
   const handleUseAnyway = () => {
-    if (lowConfidence && lastResult) {
-      onResult(lastResult);
+    if (lowConfidence) {
+      onResult(lastResult ?? { content: '', confidence: 0 });
+      reset();
     }
-    reset();
   };
 
   const isBusy = stage === 'capturing' || stage === 'processing';

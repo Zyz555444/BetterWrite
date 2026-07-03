@@ -83,7 +83,7 @@ export default function TeacherResourcesPage() {
                         <h2 className="text-title-20 font-medium text-neutral-10">
                           {category.label}
                         </h2>
-                        <ArrowRight className="w-4 h-4 text-neutral-7 group-hover:text-accent transition-colors" />
+                        <ArrowRight className="w-4 h-4 text-neutral-7 group-hover:text-accent transition-colors duration-fast ease-yohaku" />
                       </div>
                       <p className="text-copy-14 text-neutral-8 mt-1">{category.description}</p>
                       <div className="mt-3">

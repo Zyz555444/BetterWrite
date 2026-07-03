@@ -119,7 +119,7 @@ export default function FreeWritingPage() {
                 </p>
                 <div className="h-2 bg-neutral-2 rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all ${
+                    className={`h-full transition-all duration-normal ease-yohaku ${
                       draft.wordCount < WORD_LIMIT_MIN
                         ? 'bg-error'
                         : draft.wordCount <= WORD_LIMIT_MAX

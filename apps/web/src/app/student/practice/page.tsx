@@ -107,7 +107,7 @@ export default function StudentPracticePage() {
                 key={t.key}
                 type="button"
                 onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 px-4 py-2 text-copy-14 font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 py-2 text-copy-14 font-medium transition-colors duration-fast ease-yohaku border-b-2 -mb-px ${
                   tab === t.key
                     ? 'border-accent text-accent'
                     : 'border-transparent text-neutral-8 hover:text-neutral-10'

@@ -88,7 +88,7 @@ function TagSelector({
         type="button"
         onClick={() => setEditing((v) => !v)}
         disabled={loading}
-        className={`text-label-12 px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${tag ? tagColors[tag] : 'bg-neutral-3 text-neutral-8'}`}
+        className={`text-label-12 px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity duration-fast ease-yohaku ${tag ? tagColors[tag] : 'bg-neutral-3 text-neutral-8'}`}
       >
         {tag ? getStudentTagLabel(tag) : '设置标签'}
       </button>
@@ -99,7 +99,7 @@ function TagSelector({
               key={value}
               type="button"
               onClick={() => handleSelect(value)}
-              className={`w-full text-left px-3 py-1.5 text-label-12 hover:bg-neutral-2 transition-colors ${tag === value ? 'font-medium text-accent' : 'text-neutral-10'}`}
+              className={`w-full text-left px-3 py-1.5 text-label-12 hover:bg-neutral-2 transition-colors duration-fast ease-yohaku ${tag === value ? 'font-medium text-accent' : 'text-neutral-10'}`}
             >
               <span className={`inline-block w-2 h-2 rounded-full mr-2 ${tagColors[value]}`} />
               {label}

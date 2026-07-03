@@ -44,7 +44,7 @@ export function ChecklistGuard({
                   className="flex items-start gap-3 w-full text-left group"
                 >
                   <span
-                    className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center transition-colors flex-shrink-0 ${
+                    className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center transition-colors duration-fast ease-yohaku flex-shrink-0 ${
                       isChecked
                         ? 'bg-accent ring-1 ring-accent text-white'
                         : 'bg-paper ring-1 ring-border group-hover:ring-neutral-4'

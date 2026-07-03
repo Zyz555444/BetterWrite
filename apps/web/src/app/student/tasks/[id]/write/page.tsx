@@ -149,7 +149,7 @@ export default function EssayEditorPage() {
                     </p>
                     <div className="h-2 bg-neutral-2 rounded-full overflow-hidden">
                       <div
-                        className={`h-full transition-all ${
+                        className={`h-full transition-all duration-normal ease-yohaku ${
                           draft.wordCount < wordLimitMin
                             ? 'bg-error'
                             : draft.wordCount <= wordLimitMax

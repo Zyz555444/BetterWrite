@@ -98,7 +98,7 @@ export default function StudentErrorBookPage() {
                   group.total > 0 ? Math.round((group.mastered / group.total) * 100) : 0;
                 return (
                   <Link key={group.errorType} href={`/student/errors/${group.errorType}`}>
-                    <Card className="h-full hover:ring-accent/30 transition-colors cursor-pointer">
+                    <Card className="h-full hover:ring-accent/30 transition-colors duration-fast ease-yohaku cursor-pointer">
                       <CardContent className="p-5 space-y-4">
                         <div className="flex items-center justify-between">
                           <Badge variant="destructive">{label}</Badge>
@@ -114,7 +114,7 @@ export default function StudentErrorBookPage() {
                           </div>
                           <div className="h-2 w-full rounded-full bg-neutral-3 overflow-hidden">
                             <div
-                              className="h-full rounded-full bg-success transition-all"
+                              className="h-full rounded-full bg-success transition-all duration-normal ease-yohaku"
                               style={{ width: `${percent}%` }}
                             />
                           </div>

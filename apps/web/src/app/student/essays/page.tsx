@@ -76,7 +76,7 @@ export default function StudentEssaysPage() {
           <div className="grid grid-cols-1 gap-4">
             {essays.map((essay) => (
               <Link key={essay.id} href={`/student/essays/${essay.id}`}>
-                <Card className="hover:ring-accent/30 transition-colors cursor-pointer group">
+                <Card className="hover:ring-accent/30 transition-colors duration-fast ease-yohaku cursor-pointer group">
                   <CardContent className="p-5">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
@@ -101,7 +101,7 @@ export default function StudentEssaysPage() {
                         </p>
                         <p className="text-label-12 text-neutral-7">/ 15</p>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-neutral-7 ml-4 group-hover:text-accent transition-colors" />
+                      <ChevronRight className="w-5 h-5 text-neutral-7 ml-4 group-hover:text-accent transition-colors duration-fast ease-yohaku" />
                     </div>
                   </CardContent>
                 </Card>

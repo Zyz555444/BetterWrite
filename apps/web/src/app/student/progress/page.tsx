@@ -181,7 +181,7 @@ export default function StudentProgressPage() {
                       </div>
                       <div className="h-2 w-full rounded-full bg-neutral-3 overflow-hidden">
                         <div
-                          className="h-full rounded-full bg-accent transition-all duration-normal"
+                          className="h-full rounded-full bg-accent transition-all duration-normal ease-yohaku"
                           style={{ width: `${progress.rank.percentile}%` }}
                         />
                       </div>

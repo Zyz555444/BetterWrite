@@ -92,7 +92,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
                   </div>
                   <div className="h-2 bg-neutral-2 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-accent transition-all"
+                      className="h-full bg-accent transition-all duration-normal ease-yohaku"
                       style={{ width: `${Math.min(100, (dim.score / dim.max) * 100)}%` }}
                     />
                   </div>

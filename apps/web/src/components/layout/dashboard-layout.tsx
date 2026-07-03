@@ -182,7 +182,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-copy-14 transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-md text-copy-14 transition-colors duration-fast ease-yohaku ${
                 pathname === item.href
                   ? 'bg-accent/10 text-accent font-medium'
                   : 'text-neutral-8 hover:bg-neutral-3 hover:text-neutral-10'

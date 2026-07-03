@@ -47,18 +47,18 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
   const renderOverview = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="bg-accent-light/30 border-accent/20">
+        <Card className="bg-accent/10 ring-1 ring-accent/20">
           <CardContent className="p-6 text-center">
-            <p className="text-sm text-text-secondary mb-1">总分</p>
-            <p className="text-5xl font-bold text-accent">{formatScore(correction.totalScore)}</p>
-            <p className="text-sm text-text-secondary mt-1">/ 15 分</p>
+            <p className="text-copy-14 text-neutral-8 mb-1">总分</p>
+            <p className="text-display-48 font-medium text-accent">{formatScore(correction.totalScore)}</p>
+            <p className="text-copy-14 text-neutral-8 mt-1">/ 15 分</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-6 text-center">
-            <p className="text-sm text-text-secondary mb-1">评级</p>
-            <p className="text-2xl font-bold text-text-primary">{correction.scoreTier}</p>
-            <p className="text-sm text-text-secondary mt-1">深圳中考评分标准</p>
+            <p className="text-copy-14 text-neutral-8 mb-1">评级</p>
+            <p className="text-title-24 font-medium text-neutral-10">{correction.scoreTier}</p>
+            <p className="text-copy-14 text-neutral-8 mt-1">深圳中考评分标准</p>
           </CardContent>
         </Card>
       </div>
@@ -66,7 +66,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">维度得分</CardTitle>
+            <CardTitle className="text-title-20">维度得分</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -82,13 +82,13 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
                 },
               ].map((dim) => (
                 <div key={dim.key}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-text-secondary">{dim.label}</span>
-                    <span className="font-medium text-text-primary">
+                  <div className="flex justify-between text-copy-14 mb-1">
+                    <span className="text-neutral-8">{dim.label}</span>
+                    <span className="font-medium text-neutral-10">
                       {formatScore(dim.score)} / {dim.max}
                     </span>
                   </div>
-                  <div className="h-2 bg-bg-secondary rounded-full overflow-hidden">
+                  <div className="h-2 bg-neutral-2 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-accent transition-all"
                       style={{ width: `${Math.min(100, (dim.score / dim.max) * 100)}%` }}
@@ -102,7 +102,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">能力雷达</CardTitle>
+            <CardTitle className="text-title-20">能力雷达</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[220px]">
@@ -111,7 +111,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
                   <PolarGrid stroke="var(--color-border)" />
                   <PolarAngleAxis
                     dataKey="subject"
-                    tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-neutral-8)', fontSize: 12 }}
                   />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                   <Radar
@@ -131,7 +131,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
       {correction.suggestions.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-title-20 flex items-center gap-2">
               <Lightbulb className="w-4 h-4 text-accent" />
               改进建议
             </CardTitle>
@@ -152,8 +152,8 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
                     {priorityLabels[item.priority]}
                   </Badge>
                   <div>
-                    <p className="text-sm font-medium text-text-primary">{item.category}</p>
-                    <p className="text-sm text-text-secondary">{item.suggestion}</p>
+                    <p className="text-copy-14 font-medium text-neutral-10">{item.category}</p>
+                    <p className="text-copy-14 text-neutral-8">{item.suggestion}</p>
                   </div>
                 </li>
               ))}
@@ -170,8 +170,8 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
         <Card>
           <CardContent className="py-12 text-center">
             <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-3" />
-            <p className="text-text-primary font-medium">未发现明显语言错误</p>
-            <p className="text-text-secondary text-sm mt-1">继续保持！</p>
+            <p className="text-neutral-10 font-medium">未发现明显语言错误</p>
+            <p className="text-neutral-8 text-copy-14 mt-1">继续保持！</p>
           </CardContent>
         </Card>
       ) : (
@@ -184,12 +184,12 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
                   <div className="flex items-center gap-2 mb-1">
                     <Badge variant="destructive">{getErrorTypeLabel(error.type)}</Badge>
                   </div>
-                  <p className="text-text-primary">
+                  <p className="text-neutral-10">
                     <span className="line-through text-error/70">{error.original}</span>
-                    <span className="mx-2 text-text-tertiary">→</span>
+                    <span className="mx-2 text-neutral-7">→</span>
                     <span className="text-success font-medium">{error.corrected}</span>
                   </p>
-                  <p className="text-sm text-text-secondary mt-2">{error.explanation}</p>
+                  <p className="text-copy-14 text-neutral-8 mt-2">{error.explanation}</p>
                 </div>
               </div>
             </CardContent>
@@ -200,7 +200,7 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
       {correction.highlights.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="text-title-20 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-accent" />
               亮点表达
             </CardTitle>
@@ -208,11 +208,11 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
           <CardContent>
             <ul className="space-y-3">
               {correction.highlights.map((highlight) => (
-                <li key={highlight.sentence} className="p-3 bg-bg-secondary rounded-md">
-                  <p className="text-text-primary font-medium">
+                <li key={highlight.sentence} className="p-3 bg-neutral-2 rounded-md">
+                  <p className="text-neutral-10 font-medium">
                     &ldquo;{highlight.sentence}&rdquo;
                   </p>
-                  <p className="text-sm text-text-secondary mt-1">
+                  <p className="text-copy-14 text-neutral-8 mt-1">
                     {highlight.type}: {highlight.comment}
                   </p>
                 </li>
@@ -228,10 +228,10 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">AI 修改版</CardTitle>
+          <CardTitle className="text-title-20">AI 修改版</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="p-4 bg-bg-secondary rounded-md text-text-primary leading-relaxed whitespace-pre-wrap">
+          <div className="p-4 bg-neutral-2 rounded-md text-neutral-10 leading-relaxed whitespace-pre-wrap">
             {correction.revisedEssay}
           </div>
         </CardContent>
@@ -239,10 +239,10 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">原文</CardTitle>
+          <CardTitle className="text-title-20">原文</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="p-4 bg-bg-secondary rounded-md text-text-primary leading-relaxed whitespace-pre-wrap">
+          <div className="p-4 bg-neutral-2 rounded-md text-neutral-10 leading-relaxed whitespace-pre-wrap">
             {originalEssay}
           </div>
         </CardContent>

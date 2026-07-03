@@ -1,19 +1,25 @@
 import { relations } from 'drizzle-orm';
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { users } from './users.js';
 
-export const studentTags = sqliteTable('student_tags', {
-  id: text('id').primaryKey(),
-  studentId: text('student_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' })
-    .unique(),
-  tag: text('tag').notNull(),
-  updatedBy: text('updated_by')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  updatedAt: text('updated_at').notNull(),
-});
+export const studentTags = sqliteTable(
+  'student_tags',
+  {
+    id: text('id').primaryKey(),
+    studentId: text('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' })
+      .unique(),
+    tag: text('tag').notNull(),
+    updatedBy: text('updated_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => ({
+    tagIdx: index('student_tags_tag_idx').on(t.tag),
+  }),
+);
 
 export const studentTagsRelations = relations(studentTags, ({ one }) => ({
   student: one(users, {

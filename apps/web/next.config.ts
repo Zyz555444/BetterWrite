@@ -43,6 +43,12 @@ const nextConfig: NextConfig = {
     '@betterwrite/worker',
   ],
   typedRoutes: true,
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts'],
+  },
+  images: {
+    formats: ['image/avif', 'image/webp'],
+  },
   async headers() {
     return [
       {

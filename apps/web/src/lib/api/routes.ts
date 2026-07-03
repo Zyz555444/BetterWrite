@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { lucia } from '@/lib/auth';
+import { decrypt, encrypt, maskKey } from '@/lib/crypto';
 import {
   type GrammarResult,
   checkGrammar,
@@ -10,6 +11,9 @@ import {
 import {
   achievements,
   aiConversations,
+  announcements,
+  apiCallLogs,
+  apiConfigs,
   apiTokens,
   classEnrollments,
   classes,
@@ -43,23 +47,31 @@ import {
 } from '@betterwrite/shared';
 import type {
   Achievement,
+  AdminDashboardStats,
   AiAssistantResult,
   AiConversation,
+  AnnouncementItem,
+  ApiCallLogItem,
+  ApiConfigItem,
   DailyQuote,
   ErrorBookGroup,
   EssayDraft,
   PracticeExercise,
   QuestionBankItem,
+  SchoolStats,
+  SchoolWithStats,
   StudentProgress,
 } from '@betterwrite/shared';
+import { DEDUCTION_RULES, SCORE_TIERS, SCORING_WEIGHTS } from '@betterwrite/shared';
 import { performOcr, processCorrection } from '@betterwrite/worker';
 import { zValidator } from '@hono/zod-validator';
 import bcrypt from 'bcryptjs';
-import { and, desc, eq, gt, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import { getAiRouter } from '../ai/router';
+import { memoizeAsync } from './cache';
 import { authMiddleware, requireRole } from './middleware';
 import type { AuthVariables } from './middleware';
 import { rateLimit } from './rate-limiter';
@@ -696,56 +708,55 @@ app.get('/teacher/dashboard', authMiddleware, requireRole(UserRole.TEACHER), asy
   const user = c.get('user');
   console.log(`[API /teacher/dashboard] user=${user.id}`);
 
-  const myClasses = await db.query.classes.findMany({
-    where: eq(classes.teacherId, user.id),
-    with: { enrollments: true },
-  });
+  const data = await memoizeAsync(`teacher_dash:${user.id}`, 60_000, async () => {
+    const myClasses = await db.query.classes.findMany({
+      where: eq(classes.teacherId, user.id),
+      with: { enrollments: true },
+    });
 
-  const classIds = myClasses.map((cls) => cls.id);
-  const allEnrollments = myClasses.flatMap((cls) => cls.enrollments ?? []);
-  const studentIds = allEnrollments.filter((e) => e.role === 'student').map((e) => e.userId);
+    const classIds = myClasses.map((cls) => cls.id);
+    const allEnrollments = myClasses.flatMap((cls) => cls.enrollments ?? []);
+    const studentIds = allEnrollments.filter((e) => e.role === 'student').map((e) => e.userId);
 
-  const [recentTasks, recentEssays] = await Promise.all([
-    db.query.essayTasks.findMany({
-      where: classIds.length > 0 ? inArray(essayTasks.classId, classIds) : undefined,
-      orderBy: desc(essayTasks.createdAt),
-      limit: 5,
-    }),
-    db.query.essays.findMany({
-      where: studentIds.length > 0 ? inArray(essays.studentId, studentIds) : undefined,
-      orderBy: desc(essays.createdAt),
-      limit: 10,
-      with: {
-        student: { columns: { id: true, name: true, studentNo: true } },
-        task: true,
-        correction: true,
-      },
-    }),
-  ]);
+    const [recentTasks, recentEssays] = await Promise.all([
+      db.query.essayTasks.findMany({
+        where: classIds.length > 0 ? inArray(essayTasks.classId, classIds) : undefined,
+        orderBy: desc(essayTasks.createdAt),
+        limit: 5,
+      }),
+      db.query.essays.findMany({
+        where: studentIds.length > 0 ? inArray(essays.studentId, studentIds) : undefined,
+        orderBy: desc(essays.createdAt),
+        limit: 10,
+        with: {
+          student: { columns: { id: true, name: true, studentNo: true } },
+          task: true,
+          correction: true,
+        },
+      }),
+    ]);
 
-  const pendingEssays = recentEssays.filter(
-    (e) => e.status === 'pending' || e.status === 'correcting',
-  ).length;
-  const completedEssays = recentEssays.filter((e) => e.status === 'completed');
-  const averageScore =
-    completedEssays.length > 0
-      ? completedEssays.reduce((sum, e) => sum + (e.totalScore ?? 0), 0) / completedEssays.length
-      : null;
+    const pendingEssays = recentEssays.filter(
+      (e) => e.status === 'pending' || e.status === 'correcting',
+    ).length;
+    const completedEssays = recentEssays.filter((e) => e.status === 'completed');
+    const averageScore =
+      completedEssays.length > 0
+        ? completedEssays.reduce((sum, e) => sum + (e.totalScore ?? 0), 0) / completedEssays.length
+        : null;
 
-  const classStats = myClasses.map((cls) => ({
-    id: cls.id,
-    name: cls.name,
-    grade: cls.grade,
-    studentCount: (cls.enrollments ?? []).filter((e) => e.role === 'student').length,
-  }));
+    const classStats = myClasses.map((cls) => ({
+      id: cls.id,
+      name: cls.name,
+      grade: cls.grade,
+      studentCount: (cls.enrollments ?? []).filter((e) => e.role === 'student').length,
+    }));
 
-  console.log(
-    `[API /teacher/dashboard] user=${user.id} classes=${myClasses.length} students=${studentIds.length} pending=${pendingEssays}`,
-  );
+    console.log(
+      `[API /teacher/dashboard] user=${user.id} classes=${myClasses.length} students=${studentIds.length} pending=${pendingEssays}`,
+    );
 
-  return c.json({
-    success: true,
-    data: {
+    return {
       stats: {
         totalClasses: myClasses.length,
         totalStudents: studentIds.length,
@@ -755,8 +766,10 @@ app.get('/teacher/dashboard', authMiddleware, requireRole(UserRole.TEACHER), asy
       classes: classStats,
       recentTasks,
       recentEssays,
-    },
+    };
   });
+
+  return c.json({ success: true, data });
 });
 
 // ========== Teacher Analytics ==========
@@ -1966,6 +1979,7 @@ app.post(
   '/student/ai/upgrade',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  rateLimit(5, 60_000),
   zValidator('json', aiUpgradeBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -2022,6 +2036,7 @@ app.post(
   '/student/ai/synonym',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  rateLimit(5, 60_000),
   zValidator('json', aiSynonymBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -2544,46 +2559,50 @@ app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), asy
   const user = c.get('user');
   const start = Date.now();
   console.log(`[API /student/dashboard] user=${user.id}`);
-  const enrollments = await db.query.classEnrollments.findMany({
-    where: and(eq(classEnrollments.userId, user.id), eq(classEnrollments.role, 'student')),
-    columns: { classId: true },
+
+  const data = await memoizeAsync(`student_dash:${user.id}`, 60_000, async () => {
+    const enrollments = await db.query.classEnrollments.findMany({
+      where: and(eq(classEnrollments.userId, user.id), eq(classEnrollments.role, 'student')),
+      columns: { classId: true },
+    });
+    const classIds = enrollments.map((e) => e.classId);
+    const [pendingTasksRows, studentEssays, sentenceResources] = await Promise.all([
+      classIds.length > 0
+        ? db.query.essayTasks.findMany({
+            where: and(inArray(essayTasks.classId, classIds), eq(essayTasks.status, 'published')),
+            columns: { id: true },
+          })
+        : Promise.resolve([]),
+      db.query.essays.findMany({
+        where: eq(essays.studentId, user.id),
+        columns: { status: true, totalScore: true },
+      }),
+      db.query.teachingResources.findMany({
+        where: eq(teachingResources.type, TeachingResourceType.SENTENCE),
+        limit: 100,
+      }),
+    ]);
+    const pendingTasks = pendingTasksRows.length;
+    const completedEssays = studentEssays.filter((e) => e.status === 'completed');
+    const correctedEssays = completedEssays.length;
+    const allScores = completedEssays
+      .map((e) => e.totalScore)
+      .filter((s): s is number => s !== null);
+    const averageScore =
+      allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
+    let quote: DailyQuote | null = null;
+    if (sentenceResources.length > 0) {
+      const pick = sentenceResources[Math.floor(Math.random() * sentenceResources.length)];
+      quote = { id: pick.id, text: pick.content, translation: null, source: pick.title };
+    }
+    return { pendingTasks, correctedEssays, averageScore, quote };
   });
-  const classIds = enrollments.map((e) => e.classId);
-  const [pendingTasksRows, studentEssays, sentenceResources] = await Promise.all([
-    classIds.length > 0
-      ? db.query.essayTasks.findMany({
-          where: and(inArray(essayTasks.classId, classIds), eq(essayTasks.status, 'published')),
-          columns: { id: true },
-        })
-      : Promise.resolve([]),
-    db.query.essays.findMany({
-      where: eq(essays.studentId, user.id),
-      columns: { status: true, totalScore: true },
-    }),
-    db.query.teachingResources.findMany({
-      where: eq(teachingResources.type, TeachingResourceType.SENTENCE),
-      limit: 100,
-    }),
-  ]);
-  const pendingTasks = pendingTasksRows.length;
-  const completedEssays = studentEssays.filter((e) => e.status === 'completed');
-  const correctedEssays = completedEssays.length;
-  const allScores = completedEssays.map((e) => e.totalScore).filter((s): s is number => s !== null);
-  const averageScore =
-    allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
-  let quote: DailyQuote | null = null;
-  if (sentenceResources.length > 0) {
-    const pick = sentenceResources[Math.floor(Math.random() * sentenceResources.length)];
-    quote = { id: pick.id, text: pick.content, translation: null, source: pick.title };
-  }
+
   const duration = Date.now() - start;
   console.log(
-    `[API /student/dashboard] user=${user.id} pending=${pendingTasks} corrected=${correctedEssays} duration=${duration}ms`,
+    `[API /student/dashboard] user=${user.id} pending=${data.pendingTasks} corrected=${data.correctedEssays} duration=${duration}ms`,
   );
-  return c.json({
-    success: true,
-    data: { pendingTasks, correctedEssays, averageScore, quote },
-  });
+  return c.json({ success: true, data });
 });
 
 app.get('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
@@ -2673,6 +2692,938 @@ app.delete('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDE
     .delete(essayDrafts)
     .where(and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)));
   return c.json({ success: true });
+});
+
+// ========== Admin: Dashboard ==========
+app.get('/admin/dashboard/stats', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  console.log(`[API /admin/dashboard/stats] user=${user.id}`);
+
+  try {
+    const data = await memoizeAsync(`admin_dash:${user.id}`, 60_000, async () => {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayIso = todayStart.toISOString();
+
+      const [
+        schoolCount,
+        teacherCount,
+        studentCount,
+        essayCount,
+        todayEssayCount,
+        activeStudentCount,
+        apiCallsToday,
+        apiCallsTotal,
+        apiSuccessCount,
+        latencyRow,
+      ] = await Promise.all([
+        db.select({ value: count() }).from(schools),
+        db.select({ value: count() }).from(users).where(eq(users.role, UserRole.TEACHER)),
+        db.select({ value: count() }).from(users).where(eq(users.role, UserRole.STUDENT)),
+        db.select({ value: count() }).from(essays),
+        db.select({ value: count() }).from(essays).where(gte(essays.submittedAt, todayIso)),
+        db
+          .select({ value: count() })
+          .from(users)
+          .where(and(eq(users.role, UserRole.STUDENT), eq(users.isActive, true))),
+        db.select({ value: count() }).from(apiCallLogs).where(gte(apiCallLogs.createdAt, todayIso)),
+        db.select({ value: count() }).from(apiCallLogs),
+        db.select({ value: count() }).from(apiCallLogs).where(eq(apiCallLogs.status, 'success')),
+        db.select({ avg: sql<number>`AVG(${apiCallLogs.latencyMs})` }).from(apiCallLogs),
+      ]);
+
+      const totalApi = Number(apiCallsTotal[0]?.value ?? 0);
+      const successApi = Number(apiSuccessCount[0]?.value ?? 0);
+      const totalStudents = Number(studentCount[0]?.value ?? 0);
+      return {
+        totalSchools: Number(schoolCount[0]?.value ?? 0),
+        totalTeachers: Number(teacherCount[0]?.value ?? 0),
+        totalStudents,
+        totalEssays: Number(essayCount[0]?.value ?? 0),
+        todayEssays: Number(todayEssayCount[0]?.value ?? 0),
+        activeRate:
+          totalStudents === 0
+            ? 0
+            : Math.round((Number(activeStudentCount[0]?.value ?? 0) / totalStudents) * 100),
+        apiCallsToday: Number(apiCallsToday[0]?.value ?? 0),
+        apiCallsTotal: totalApi,
+        apiSuccessRate: totalApi === 0 ? 0 : Math.round((successApi / totalApi) * 100),
+        apiAvgLatencyMs: Math.round(Number(latencyRow[0]?.avg ?? 0)),
+      } satisfies AdminDashboardStats;
+    });
+
+    console.log(
+      `[API /admin/dashboard/stats] exit duration=${Date.now() - startedAt}ms schools=${data.totalSchools}`,
+    );
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error(
+      '[API /admin/dashboard/stats] error:',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return c.json({ success: false, error: '获取仪表盘统计失败' }, 500);
+  }
+});
+
+// ========== Admin: Schools ==========
+const schoolCreateSchema = z.object({
+  code: z.string().min(1, '学校代码不能为空'),
+  name: z.string().min(1, '学校名称不能为空'),
+  region: z.string().min(1, '所属区域不能为空'),
+  contactName: z.string().optional(),
+  contactPhone: z.string().optional(),
+});
+
+const schoolUpdateSchema = schoolCreateSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+app.get('/admin/schools', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  const region = c.req.query('region');
+  const offset = Number(c.req.query('offset') ?? '0');
+  const limit = Number(c.req.query('limit') ?? '50');
+  console.log(
+    `[API /admin/schools] user=${user.id} region=${region ?? 'all'} offset=${offset} limit=${limit}`,
+  );
+
+  try {
+    const where = region ? eq(schools.region, region) : undefined;
+    const rows = await db.query.schools.findMany({
+      where,
+      orderBy: desc(schools.createdAt),
+      limit,
+      offset,
+    });
+
+    const schoolIds = rows.map((s) => s.id);
+
+    const [teacherCounts, studentCounts, classCounts, essayCounts, scoreAverages] =
+      await Promise.all([
+        db
+          .select({ schoolId: users.schoolId, value: count() })
+          .from(users)
+          .where(and(inArray(users.schoolId, schoolIds), eq(users.role, UserRole.TEACHER)))
+          .groupBy(users.schoolId),
+        db
+          .select({ schoolId: users.schoolId, value: count() })
+          .from(users)
+          .where(and(inArray(users.schoolId, schoolIds), eq(users.role, UserRole.STUDENT)))
+          .groupBy(users.schoolId),
+        db
+          .select({ schoolId: classes.schoolId, value: count() })
+          .from(classes)
+          .where(inArray(classes.schoolId, schoolIds))
+          .groupBy(classes.schoolId),
+        db
+          .select({ schoolId: users.schoolId, value: count() })
+          .from(essays)
+          .innerJoin(users, eq(essays.studentId, users.id))
+          .where(inArray(users.schoolId, schoolIds))
+          .groupBy(users.schoolId),
+        db
+          .select({ schoolId: users.schoolId, avg: sql<number>`AVG(${essays.totalScore})` })
+          .from(essays)
+          .innerJoin(users, eq(essays.studentId, users.id))
+          .where(and(inArray(users.schoolId, schoolIds), sql`${essays.totalScore} IS NOT NULL`))
+          .groupBy(users.schoolId),
+      ]);
+
+    const teacherMap = new Map(teacherCounts.map((r) => [r.schoolId, Number(r.value)]));
+    const studentMap = new Map(studentCounts.map((r) => [r.schoolId, Number(r.value)]));
+    const classMap = new Map(classCounts.map((r) => [r.schoolId, Number(r.value)]));
+    const essayMap = new Map(essayCounts.map((r) => [r.schoolId, Number(r.value)]));
+    const scoreMap = new Map(scoreAverages.map((r) => [r.schoolId, r.avg]));
+
+    const stats: SchoolWithStats[] = rows.map((s) => {
+      const avg = scoreMap.get(s.id);
+      return {
+        id: s.id,
+        code: s.code,
+        name: s.name,
+        region: s.region,
+        contactName: s.contactName,
+        contactPhone: s.contactPhone,
+        isActive: s.isActive,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+        totalTeachers: teacherMap.get(s.id) ?? 0,
+        totalStudents: studentMap.get(s.id) ?? 0,
+        totalClasses: classMap.get(s.id) ?? 0,
+        totalEssays: essayMap.get(s.id) ?? 0,
+        averageScore: avg != null ? Math.round(Number(avg) * 10) / 10 : null,
+      };
+    });
+
+    console.log(
+      `[API /admin/schools] exit duration=${Date.now() - startedAt}ms count=${stats.length}`,
+    );
+    return c.json({ success: true, data: stats });
+  } catch (err) {
+    console.error('[API /admin/schools] error:', err instanceof Error ? err.message : 'unknown');
+    return c.json({ success: false, error: '获取学校列表失败' }, 500);
+  }
+});
+
+app.post(
+  '/admin/schools',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', schoolCreateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const body = c.req.valid('json');
+    console.log(`[API /admin/schools POST] user=${user.id} code=${body.code} name=${body.name}`);
+
+    try {
+      const existing = await db.query.schools.findFirst({ where: eq(schools.code, body.code) });
+      if (existing) {
+        return c.json({ success: false, error: '学校代码已存在' }, 409);
+      }
+      const now = new Date().toISOString();
+      const id = randomUUID();
+      await db.insert(schools).values({
+        id,
+        code: body.code,
+        name: body.name,
+        region: body.region,
+        contactName: body.contactName ?? null,
+        contactPhone: body.contactPhone ?? null,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log(`[API /admin/schools POST] exit duration=${Date.now() - startedAt}ms id=${id}`);
+      return c.json({ success: true, data: { id } }, 201);
+    } catch (err) {
+      console.error(
+        '[API /admin/schools POST] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '创建学校失败' }, 500);
+    }
+  },
+);
+
+app.put(
+  '/admin/schools/:id',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', schoolUpdateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    const body = c.req.valid('json');
+    console.log(`[API /admin/schools/:id PUT] user=${user.id} id=${id}`);
+
+    try {
+      const existing = await db.query.schools.findFirst({ where: eq(schools.id, id) });
+      if (!existing) {
+        return c.json({ success: false, error: '学校不存在' }, 404);
+      }
+      const now = new Date().toISOString();
+      await db
+        .update(schools)
+        .set({
+          ...(body.code !== undefined && { code: body.code }),
+          ...(body.name !== undefined && { name: body.name }),
+          ...(body.region !== undefined && { region: body.region }),
+          ...(body.contactName !== undefined && { contactName: body.contactName }),
+          ...(body.contactPhone !== undefined && { contactPhone: body.contactPhone }),
+          ...(body.isActive !== undefined && { isActive: body.isActive }),
+          updatedAt: now,
+        })
+        .where(eq(schools.id, id));
+      console.log(`[API /admin/schools/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      return c.json({ success: true });
+    } catch (err) {
+      console.error(
+        '[API /admin/schools/:id PUT] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '更新学校失败' }, 500);
+    }
+  },
+);
+
+app.delete('/admin/schools/:id', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  const id = c.req.param('id');
+  console.log(`[API /admin/schools/:id DELETE] user=${user.id} id=${id}`);
+
+  try {
+    const existing = await db.query.schools.findFirst({ where: eq(schools.id, id) });
+    if (!existing) {
+      return c.json({ success: false, error: '学校不存在' }, 404);
+    }
+    const now = new Date().toISOString();
+    await db.update(schools).set({ isActive: false, updatedAt: now }).where(eq(schools.id, id));
+    console.log(`[API /admin/schools/:id DELETE] exit duration=${Date.now() - startedAt}ms`);
+    return c.json({ success: true });
+  } catch (err) {
+    console.error(
+      '[API /admin/schools/:id DELETE] error:',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return c.json({ success: false, error: '删除学校失败' }, 500);
+  }
+});
+
+app.get(
+  '/admin/schools/:id/stats',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    console.log(`[API /admin/schools/:id/stats] user=${user.id} id=${id}`);
+
+    try {
+      const school = await db.query.schools.findFirst({ where: eq(schools.id, id) });
+      if (!school) {
+        return c.json({ success: false, error: '学校不存在' }, 404);
+      }
+      const [teacherRow] = await db
+        .select({ value: count() })
+        .from(users)
+        .where(and(eq(users.schoolId, id), eq(users.role, UserRole.TEACHER)));
+      const [studentRow] = await db
+        .select({ value: count() })
+        .from(users)
+        .where(and(eq(users.schoolId, id), eq(users.role, UserRole.STUDENT)));
+      const [classRow] = await db
+        .select({ value: count() })
+        .from(classes)
+        .where(eq(classes.schoolId, id));
+      const studentIds = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.schoolId, id), eq(users.role, UserRole.STUDENT)));
+      const studentIdList = studentIds.map((r) => r.id);
+      let totalEssays = 0;
+      let averageScore: number | null = null;
+      if (studentIdList.length > 0) {
+        const [essayRow] = await db
+          .select({ value: count() })
+          .from(essays)
+          .where(inArray(essays.studentId, studentIdList));
+        totalEssays = Number(essayRow?.value ?? 0);
+        const scoreRow = await db
+          .select({ avg: sql<number>`AVG(${essays.totalScore})` })
+          .from(essays)
+          .where(
+            and(inArray(essays.studentId, studentIdList), sql`${essays.totalScore} IS NOT NULL`),
+          );
+        averageScore =
+          scoreRow[0]?.avg != null ? Math.round(Number(scoreRow[0].avg) * 10) / 10 : null;
+      }
+      const [activeStudentRow] = await db
+        .select({ value: count() })
+        .from(users)
+        .where(
+          and(eq(users.schoolId, id), eq(users.role, UserRole.STUDENT), eq(users.isActive, true)),
+        );
+
+      const data: SchoolStats = {
+        schoolId: school.id,
+        schoolName: school.name,
+        totalTeachers: Number(teacherRow?.value ?? 0),
+        totalStudents: Number(studentRow?.value ?? 0),
+        totalClasses: Number(classRow?.value ?? 0),
+        totalEssays,
+        averageScore,
+        activeRate:
+          Number(studentRow?.value ?? 0) === 0
+            ? 0
+            : Math.round(
+                (Number(activeStudentRow?.value ?? 0) / Number(studentRow?.value ?? 0)) * 100,
+              ),
+      };
+      console.log(`[API /admin/schools/:id/stats] exit duration=${Date.now() - startedAt}ms`);
+      return c.json({ success: true, data });
+    } catch (err) {
+      console.error(
+        '[API /admin/schools/:id/stats] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '获取学校统计失败' }, 500);
+    }
+  },
+);
+
+// ========== Admin: API Configs ==========
+const apiConfigCreateSchema = z.object({
+  provider: z.string().min(1, 'provider 不能为空'),
+  apiKey: z.string().min(1, 'apiKey 不能为空'),
+  baseUrl: z.string().optional(),
+  model: z.string().optional(),
+  isActive: z.boolean().optional(),
+  priority: z.number().optional(),
+  maxTokens: z.number().optional(),
+  temperature: z.number().optional(),
+  rateLimitPerMin: z.number().optional(),
+});
+
+const apiConfigUpdateSchema = apiConfigCreateSchema.partial().omit({ apiKey: true }).extend({
+  apiKey: z.string().optional(),
+});
+
+app.get('/admin/api-configs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  console.log(`[API /admin/api-configs] user=${user.id}`);
+
+  try {
+    const rows = await db.query.apiConfigs.findMany({ orderBy: desc(apiConfigs.priority) });
+    const data: ApiConfigItem[] = rows.map((r) => ({
+      id: r.id,
+      provider: r.provider,
+      apiKeyMasked: (() => {
+        try {
+          return maskKey(decrypt(r.apiKeyEncrypted));
+        } catch {
+          return '****';
+        }
+      })(),
+      baseUrl: r.baseUrl,
+      model: r.model,
+      isActive: r.isActive,
+      priority: r.priority,
+      maxTokens: r.maxTokens,
+      temperature: r.temperature,
+      rateLimitPerMin: r.rateLimitPerMin,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+    console.log(
+      `[API /admin/api-configs] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    );
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error(
+      '[API /admin/api-configs] error:',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return c.json({ success: false, error: '获取 API 配置失败' }, 500);
+  }
+});
+
+app.post(
+  '/admin/api-configs',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', apiConfigCreateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const body = c.req.valid('json');
+    console.log(`[API /admin/api-configs POST] user=${user.id} provider=${body.provider}`);
+
+    try {
+      const now = new Date().toISOString();
+      const id = randomUUID();
+      await db.insert(apiConfigs).values({
+        id,
+        provider: body.provider,
+        apiKeyEncrypted: encrypt(body.apiKey),
+        baseUrl: body.baseUrl ?? null,
+        model: body.model ?? null,
+        isActive: body.isActive ?? true,
+        priority: body.priority ?? 0,
+        maxTokens: body.maxTokens ?? 4096,
+        temperature: body.temperature ?? 0.3,
+        rateLimitPerMin: body.rateLimitPerMin ?? 60,
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log(
+        `[API /admin/api-configs POST] exit duration=${Date.now() - startedAt}ms id=${id}`,
+      );
+      return c.json({ success: true, data: { id } }, 201);
+    } catch (err) {
+      console.error(
+        '[API /admin/api-configs POST] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '创建 API 配置失败' }, 500);
+    }
+  },
+);
+
+app.put(
+  '/admin/api-configs/:id',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', apiConfigUpdateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    const body = c.req.valid('json');
+    console.log(`[API /admin/api-configs/:id PUT] user=${user.id} id=${id}`);
+
+    try {
+      const existing = await db.query.apiConfigs.findFirst({ where: eq(apiConfigs.id, id) });
+      if (!existing) {
+        return c.json({ success: false, error: 'API 配置不存在' }, 404);
+      }
+      const now = new Date().toISOString();
+      await db
+        .update(apiConfigs)
+        .set({
+          ...(body.provider !== undefined && { provider: body.provider }),
+          ...(body.apiKey !== undefined && { apiKeyEncrypted: encrypt(body.apiKey) }),
+          ...(body.baseUrl !== undefined && { baseUrl: body.baseUrl }),
+          ...(body.model !== undefined && { model: body.model }),
+          ...(body.isActive !== undefined && { isActive: body.isActive }),
+          ...(body.priority !== undefined && { priority: body.priority }),
+          ...(body.maxTokens !== undefined && { maxTokens: body.maxTokens }),
+          ...(body.temperature !== undefined && { temperature: body.temperature }),
+          ...(body.rateLimitPerMin !== undefined && { rateLimitPerMin: body.rateLimitPerMin }),
+          updatedAt: now,
+        })
+        .where(eq(apiConfigs.id, id));
+      console.log(`[API /admin/api-configs/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      return c.json({ success: true });
+    } catch (err) {
+      console.error(
+        '[API /admin/api-configs/:id PUT] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '更新 API 配置失败' }, 500);
+    }
+  },
+);
+
+app.delete(
+  '/admin/api-configs/:id',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    console.log(`[API /admin/api-configs/:id DELETE] user=${user.id} id=${id}`);
+
+    try {
+      await db.delete(apiConfigs).where(eq(apiConfigs.id, id));
+      console.log(`[API /admin/api-configs/:id DELETE] exit duration=${Date.now() - startedAt}ms`);
+      return c.json({ success: true });
+    } catch (err) {
+      console.error(
+        '[API /admin/api-configs/:id DELETE] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '删除 API 配置失败' }, 500);
+    }
+  },
+);
+
+// ========== Admin: API Logs ==========
+app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  const provider = c.req.query('provider');
+  const dateFrom = c.req.query('dateFrom');
+  const dateTo = c.req.query('dateTo');
+  const offset = Number(c.req.query('offset') ?? '0');
+  const limit = Number(c.req.query('limit') ?? '50');
+  console.log(
+    `[API /admin/api-logs] user=${user.id} provider=${provider ?? 'all'} dateFrom=${dateFrom ?? ''} dateTo=${dateTo ?? ''}`,
+  );
+
+  try {
+    const conds = [];
+    if (provider) conds.push(eq(apiCallLogs.provider, provider));
+    if (dateFrom) conds.push(gte(apiCallLogs.createdAt, dateFrom));
+    if (dateTo) conds.push(lt(apiCallLogs.createdAt, dateTo));
+    const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
+
+    const rows = await db.query.apiCallLogs.findMany({
+      where,
+      orderBy: desc(apiCallLogs.createdAt),
+      limit,
+      offset,
+    });
+
+    const data: ApiCallLogItem[] = rows.map((r) => ({
+      id: r.id,
+      provider: r.provider,
+      model: r.model,
+      endpoint: r.endpoint,
+      tokensUsed: r.tokensUsed,
+      latencyMs: r.latencyMs,
+      cost: r.cost,
+      status: r.status,
+      errorMessage: r.errorMessage,
+      essayId: r.essayId,
+      createdAt: r.createdAt,
+    }));
+    console.log(
+      `[API /admin/api-logs] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    );
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error('[API /admin/api-logs] error:', err instanceof Error ? err.message : 'unknown');
+    return c.json({ success: false, error: '获取 API 日志失败' }, 500);
+  }
+});
+
+// ========== Admin: Announcements ==========
+const announcementCreateSchema = z.object({
+  title: z.string().min(1, '标题不能为空'),
+  content: z.string().min(1, '内容不能为空'),
+  targetRole: z.string().optional(),
+  isActive: z.boolean().optional(),
+});
+
+const announcementUpdateSchema = announcementCreateSchema.partial();
+
+app.get('/admin/announcements', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  console.log(`[API /admin/announcements] user=${user.id}`);
+
+  try {
+    const rows = await db.query.announcements.findMany({
+      with: { creator: true },
+      orderBy: desc(announcements.createdAt),
+    });
+    const data: AnnouncementItem[] = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      content: r.content,
+      targetRole: r.targetRole ?? 'all',
+      isActive: r.isActive,
+      createdBy: r.createdBy,
+      creatorName: r.creator?.name ?? null,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+    console.log(
+      `[API /admin/announcements] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    );
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error(
+      '[API /admin/announcements] error:',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return c.json({ success: false, error: '获取公告列表失败' }, 500);
+  }
+});
+
+app.post(
+  '/admin/announcements',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', announcementCreateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const body = c.req.valid('json');
+    console.log(`[API /admin/announcements POST] user=${user.id} title=${body.title}`);
+
+    try {
+      const now = new Date().toISOString();
+      const id = randomUUID();
+      await db.insert(announcements).values({
+        id,
+        title: body.title,
+        content: body.content,
+        targetRole: body.targetRole ?? 'all',
+        isActive: body.isActive ?? true,
+        createdBy: user.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log(
+        `[API /admin/announcements POST] exit duration=${Date.now() - startedAt}ms id=${id}`,
+      );
+      return c.json({ success: true, data: { id } }, 201);
+    } catch (err) {
+      console.error(
+        '[API /admin/announcements POST] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '发布公告失败' }, 500);
+    }
+  },
+);
+
+app.put(
+  '/admin/announcements/:id',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', announcementUpdateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    const body = c.req.valid('json');
+    console.log(`[API /admin/announcements/:id PUT] user=${user.id} id=${id}`);
+
+    try {
+      const existing = await db.query.announcements.findFirst({
+        where: eq(announcements.id, id),
+      });
+      if (!existing) {
+        return c.json({ success: false, error: '公告不存在' }, 404);
+      }
+      const now = new Date().toISOString();
+      await db
+        .update(announcements)
+        .set({
+          ...(body.title !== undefined && { title: body.title }),
+          ...(body.content !== undefined && { content: body.content }),
+          ...(body.targetRole !== undefined && { targetRole: body.targetRole }),
+          ...(body.isActive !== undefined && { isActive: body.isActive }),
+          updatedAt: now,
+        })
+        .where(eq(announcements.id, id));
+      console.log(`[API /admin/announcements/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      return c.json({ success: true });
+    } catch (err) {
+      console.error(
+        '[API /admin/announcements/:id PUT] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '更新公告失败' }, 500);
+    }
+  },
+);
+
+app.delete(
+  '/admin/announcements/:id',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    console.log(`[API /admin/announcements/:id DELETE] user=${user.id} id=${id}`);
+
+    try {
+      await db.delete(announcements).where(eq(announcements.id, id));
+      console.log(
+        `[API /admin/announcements/:id DELETE] exit duration=${Date.now() - startedAt}ms`,
+      );
+      return c.json({ success: true });
+    } catch (err) {
+      console.error(
+        '[API /admin/announcements/:id DELETE] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '删除公告失败' }, 500);
+    }
+  },
+);
+
+// ========== Admin: Question Bank ==========
+const questionCreateSchema = z.object({
+  topicType: z.string().min(1, '题目类型不能为空'),
+  topicCategory: z.string().optional(),
+  title: z.string().min(1, '标题不能为空'),
+  requirements: z.string().min(1, '要求不能为空'),
+  keyPoints: z.array(z.string()).optional(),
+  referenceEssay: z.string().optional(),
+  wordLimitMin: z.number().optional(),
+  wordLimitMax: z.number().optional(),
+  timeLimitMinutes: z.number().optional(),
+  difficulty: z.string().optional(),
+  source: z.string().optional(),
+});
+
+const questionUpdateSchema = questionCreateSchema.partial();
+
+app.get('/admin/question-bank', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  const topicType = c.req.query('topicType');
+  const difficulty = c.req.query('difficulty');
+  const offset = Number(c.req.query('offset') ?? '0');
+  const limit = Number(c.req.query('limit') ?? '50');
+  console.log(
+    `[API /admin/question-bank] user=${user.id} topicType=${topicType ?? 'all'} difficulty=${difficulty ?? 'all'}`,
+  );
+
+  try {
+    const conds = [];
+    if (topicType) conds.push(eq(questionBank.topicType, topicType));
+    if (difficulty) conds.push(eq(questionBank.difficulty, difficulty));
+    const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
+
+    const rows = await db.query.questionBank.findMany({
+      where,
+      orderBy: desc(questionBank.createdAt),
+      limit,
+      offset,
+    });
+    const data: QuestionBankItem[] = rows.map((r) => ({
+      id: r.id,
+      topicType: r.topicType,
+      topicCategory: r.topicCategory,
+      title: r.title,
+      requirements: r.requirements,
+      keyPoints: safeJsonArray(r.keyPoints),
+      referenceEssay: r.referenceEssay,
+      wordLimitMin: r.wordLimitMin,
+      wordLimitMax: r.wordLimitMax,
+      timeLimitMinutes: r.timeLimitMinutes,
+      difficulty: r.difficulty as QuestionBankItem['difficulty'],
+      source: r.source,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+    }));
+    console.log(
+      `[API /admin/question-bank] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    );
+    return c.json({ success: true, data });
+  } catch (err) {
+    console.error(
+      '[API /admin/question-bank] error:',
+      err instanceof Error ? err.message : 'unknown',
+    );
+    return c.json({ success: false, error: '获取题库失败' }, 500);
+  }
+});
+
+app.post(
+  '/admin/question-bank',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', questionCreateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const body = c.req.valid('json');
+    console.log(`[API /admin/question-bank POST] user=${user.id} title=${body.title}`);
+
+    try {
+      const now = new Date().toISOString();
+      const id = randomUUID();
+      await db.insert(questionBank).values({
+        id,
+        topicType: body.topicType,
+        topicCategory: body.topicCategory ?? null,
+        title: body.title,
+        requirements: body.requirements,
+        keyPoints: JSON.stringify(body.keyPoints ?? []),
+        referenceEssay: body.referenceEssay ?? null,
+        wordLimitMin: body.wordLimitMin ?? 80,
+        wordLimitMax: body.wordLimitMax ?? 125,
+        timeLimitMinutes: body.timeLimitMinutes ?? 15,
+        difficulty: body.difficulty ?? 'medium',
+        source: body.source ?? null,
+        isPublic: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+      console.log(
+        `[API /admin/question-bank POST] exit duration=${Date.now() - startedAt}ms id=${id}`,
+      );
+      return c.json({ success: true, data: { id } }, 201);
+    } catch (err) {
+      console.error(
+        '[API /admin/question-bank POST] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '创建题目失败' }, 500);
+    }
+  },
+);
+
+app.put(
+  '/admin/question-bank/:id',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  zValidator('json', questionUpdateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    const body = c.req.valid('json');
+    console.log(`[API /admin/question-bank/:id PUT] user=${user.id} id=${id}`);
+
+    try {
+      const existing = await db.query.questionBank.findFirst({ where: eq(questionBank.id, id) });
+      if (!existing) {
+        return c.json({ success: false, error: '题目不存在' }, 404);
+      }
+      const now = new Date().toISOString();
+      await db
+        .update(questionBank)
+        .set({
+          ...(body.topicType !== undefined && { topicType: body.topicType }),
+          ...(body.topicCategory !== undefined && { topicCategory: body.topicCategory }),
+          ...(body.title !== undefined && { title: body.title }),
+          ...(body.requirements !== undefined && { requirements: body.requirements }),
+          ...(body.keyPoints !== undefined && { keyPoints: JSON.stringify(body.keyPoints) }),
+          ...(body.referenceEssay !== undefined && { referenceEssay: body.referenceEssay }),
+          ...(body.wordLimitMin !== undefined && { wordLimitMin: body.wordLimitMin }),
+          ...(body.wordLimitMax !== undefined && { wordLimitMax: body.wordLimitMax }),
+          ...(body.timeLimitMinutes !== undefined && { timeLimitMinutes: body.timeLimitMinutes }),
+          ...(body.difficulty !== undefined && { difficulty: body.difficulty }),
+          ...(body.source !== undefined && { source: body.source }),
+          updatedAt: now,
+        })
+        .where(eq(questionBank.id, id));
+      console.log(`[API /admin/question-bank/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      return c.json({ success: true });
+    } catch (err) {
+      console.error(
+        '[API /admin/question-bank/:id PUT] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '更新题目失败' }, 500);
+    }
+  },
+);
+
+app.delete(
+  '/admin/question-bank/:id',
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    console.log(`[API /admin/question-bank/:id DELETE] user=${user.id} id=${id}`);
+
+    try {
+      await db.delete(questionBank).where(eq(questionBank.id, id));
+      console.log(
+        `[API /admin/question-bank/:id DELETE] exit duration=${Date.now() - startedAt}ms`,
+      );
+      return c.json({ success: true });
+    } catch (err) {
+      console.error(
+        '[API /admin/question-bank/:id DELETE] error:',
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: '删除题目失败' }, 500);
+    }
+  },
+);
+
+// ========== Admin: Scoring Config (read-only) ==========
+app.get('/admin/scoring-config', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+  const user = c.get('user');
+  const startedAt = Date.now();
+  console.log(`[API /admin/scoring-config] user=${user.id}`);
+  const data = {
+    scoringWeights: SCORING_WEIGHTS,
+    scoreTiers: SCORE_TIERS,
+    deductionRules: DEDUCTION_RULES,
+  };
+  console.log(`[API /admin/scoring-config] exit duration=${Date.now() - startedAt}ms`);
+  return c.json({ success: true, data });
 });
 
 export type AppType = typeof app;

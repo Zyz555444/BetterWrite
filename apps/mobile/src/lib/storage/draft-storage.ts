@@ -75,3 +75,68 @@ export async function listLocalDrafts(): Promise<LocalDraft[]> {
     return [];
   }
 }
+
+export async function syncDraftToCloud(taskId: string): Promise<boolean> {
+  try {
+    const local = await getLocalDraft(taskId);
+    if (!local) {
+      console.log(`[DraftStorage] syncDraftToCloud no local draft taskId=${taskId}`);
+      return false;
+    }
+    const { fetcher } = await import('../api/fetcher');
+    const res = await fetcher.saveDraft(taskId, {
+      content: local.content,
+      wordCount: local.wordCount,
+      durationMs: local.durationMs,
+    });
+    if (res.success) {
+      console.log(`[DraftStorage] synced to cloud taskId=${taskId}`);
+      return true;
+    }
+    console.warn(`[DraftStorage] sync failed taskId=${taskId}:`, res.error);
+    return false;
+  } catch (err) {
+    console.warn(`[DraftStorage] syncDraftToCloud error taskId=${taskId}`, err);
+    return false;
+  }
+}
+
+export async function loadDraftWithSync(taskId: string): Promise<LocalDraft | null> {
+  try {
+    const { fetcher } = await import('../api/fetcher');
+    const cloudRes = await fetcher.getDraft(taskId);
+    if (cloudRes.success && cloudRes.data) {
+      console.log(`[DraftStorage] cloud draft loaded taskId=${taskId}`);
+      const cloud = cloudRes.data;
+      const local = await getLocalDraft(taskId);
+      if (local && local.savedAt > cloud.updatedAt) {
+        console.log(`[DraftStorage] local draft newer, using local taskId=${taskId}`);
+        return local;
+      }
+      return {
+        taskId,
+        content: cloud.content,
+        wordCount: cloud.wordCount ?? 0,
+        durationMs: cloud.durationMs ?? 0,
+        savedAt: cloud.updatedAt,
+      };
+    }
+    return getLocalDraft(taskId);
+  } catch (err) {
+    console.warn(`[DraftStorage] loadDraftWithSync error taskId=${taskId}`, err);
+    return getLocalDraft(taskId);
+  }
+}
+
+export async function syncAllDrafts(): Promise<{ synced: number; failed: number }> {
+  const drafts = await listLocalDrafts();
+  let synced = 0;
+  let failed = 0;
+  for (const draft of drafts) {
+    const ok = await syncDraftToCloud(draft.taskId);
+    if (ok) synced++;
+    else failed++;
+  }
+  console.log(`[DraftStorage] syncAllDrafts synced=${synced} failed=${failed}`);
+  return { synced, failed };
+}

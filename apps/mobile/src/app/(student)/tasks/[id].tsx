@@ -1,6 +1,6 @@
 import { countWords, getTopicTypeLabel } from '@betterwrite/shared';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -15,7 +15,8 @@ import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { Loading } from '../../../components/ui/Loading';
 import { type EssayTask, fetcher } from '../../../lib/api/fetcher';
-import { saveLocalDraft } from '../../../lib/storage/draft-storage';
+import { OcrCameraModal, type OcrResult } from '../../../lib/camera/ocr-camera';
+import { loadDraftWithSync, saveLocalDraft } from '../../../lib/storage/draft-storage';
 import { useTheme } from '../../../theme/dark-mode';
 
 const STANDALONE_ID = 'standalone';
@@ -36,6 +37,10 @@ export default function TaskWritePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  const [showOcr, setShowOcr] = useState(false);
+  const [ocrWarning, setOcrWarning] = useState<string | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wordLimitMin = task?.wordLimitMin ?? DEFAULT_MIN;
   const wordLimitMax = task?.wordLimitMax ?? DEFAULT_MAX;
@@ -59,6 +64,32 @@ export default function TaskWritePage() {
       .catch((err) => setTaskError(err instanceof Error ? err.message : '获取任务失败'))
       .finally(() => setTaskLoading(false));
   }, [id, isStandalone]);
+
+  useEffect(() => {
+    if (draftRestored) return;
+    loadDraftWithSync(id)
+      .then((draft) => {
+        if (draft?.content) {
+          setContent(draft.content);
+          console.log(`[TaskWrite] draft restored taskId=${id} words=${draft.wordCount}`);
+        }
+      })
+      .catch((err) => console.warn('[TaskWrite] draft restore error:', err))
+      .finally(() => setDraftRestored(true));
+  }, [id, draftRestored]);
+
+  useEffect(() => {
+    if (!draftRestored || !content) return;
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(() => {
+      saveLocalDraft(id, { content, wordCount, durationMs }).catch((err) =>
+        console.warn('[TaskWrite] auto-save error:', err),
+      );
+    }, 5000);
+    return () => {
+      if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    };
+  }, [content, id, wordCount, draftRestored]);
 
   const handleSaveDraft = async () => {
     setIsSaving(true);
@@ -98,6 +129,20 @@ export default function TaskWritePage() {
       setIsSubmitting(false);
     }
   };
+
+  const handleOcrResult = useCallback((result: OcrResult) => {
+    if (!result.content || result.content.trim().length === 0) {
+      setOcrWarning('未识别到有效文字，请重新拍照或手动输入');
+      return;
+    }
+    setContent((prev) => {
+      const merged =
+        prev && prev.trim().length > 0 ? `${prev}\n\n${result.content}` : result.content;
+      return merged;
+    });
+    setOcrWarning(null);
+    console.log(`[TaskWrite] OCR content applied length=${result.content.length}`);
+  }, []);
 
   if (taskLoading) return <Loading fullScreen colors={colors} />;
   if (taskError) return <Loading fullScreen colors={colors} />;
@@ -181,6 +226,12 @@ export default function TaskWritePage() {
           <Text style={[styles.errorText, { color: colors.error }]}>{submitError}</Text>
         ) : null}
 
+        {ocrWarning ? (
+          <View style={[styles.ocrWarningBox, { backgroundColor: colors.accentLight }]}>
+            <Text style={[styles.ocrWarningText, { color: colors.warning }]}>{ocrWarning}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.actions}>
           <Button
             title={isSaving ? '保存中...' : justSaved ? '已保存' : '保存草稿'}
@@ -197,7 +248,25 @@ export default function TaskWritePage() {
             colors={colors}
           />
         </View>
+
+        <Button
+          title="拍照识别手写"
+          variant="outline"
+          onPress={() => {
+            setOcrWarning(null);
+            setShowOcr(true);
+          }}
+          colors={colors}
+        />
       </ScrollView>
+
+      <OcrCameraModal
+        visible={showOcr}
+        taskId={isStandalone ? undefined : id}
+        colors={colors}
+        onClose={() => setShowOcr(false)}
+        onResult={handleOcrResult}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -272,6 +341,15 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     textAlign: 'center',
+  },
+  ocrWarningBox: {
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  ocrWarningText: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   actions: {
     flexDirection: 'row',

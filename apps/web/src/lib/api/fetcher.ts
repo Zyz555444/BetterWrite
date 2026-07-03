@@ -1,16 +1,46 @@
-import type { ClassAnalytics, StudentAnalytics, TeachingResource } from '@betterwrite/shared';
+import type { ClassAnalytics, StudentAnalytics } from '@betterwrite/shared';
 import type {
   Achievement,
+  AdminDashboardStats,
   AiAssistantResult,
   AiConversation,
+  AnnouncementItem,
+  ApiCallLogItem,
+  ApiConfigItem,
   DailyQuote,
   ErrorBookGroup,
   ErrorBookItem,
   EssayDraft,
   PracticeExercise,
   QuestionBankItem,
+  SchoolStats,
+  SchoolWithStats,
   StudentProgress,
 } from '@betterwrite/shared';
+import type {
+  ApiResponse,
+  AuthUserResponse,
+  CorrectionDetail,
+  Essay,
+  EssayTask,
+  ImportResult,
+  StudentDetail,
+  StudentListItem,
+  TeachingResourceWithCreator,
+} from './fetcher-types';
+
+export type {
+  ApiResponse,
+  AuthUserResponse,
+  Correction,
+  CorrectionDetail,
+  Essay,
+  EssayTask,
+  ImportResult,
+  StudentDetail,
+  StudentListItem,
+  TeachingResourceWithCreator,
+} from './fetcher-types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -34,157 +64,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   const data = (await res.json()) as T;
   return data;
-}
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-export interface AuthUserResponse {
-  userId: string;
-  name: string;
-  email: string;
-  role: string;
-  schoolId: string | null;
-}
-
-export interface Essay {
-  id: string;
-  taskId: string | null;
-  studentId: string;
-  title: string | null;
-  content: string;
-  wordCount: number;
-  submitType: 'typed' | 'ocr';
-  status: 'pending' | 'correcting' | 'completed' | 'failed';
-  totalScore: number | null;
-  scoreTier: string | null;
-  correctionId: string | null;
-  submittedAt: string;
-  correctedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  task?: EssayTask | null;
-  correction?: Correction | null;
-  student?: { id: string; name: string; studentNo: string | null } | null;
-}
-
-export interface EssayTask {
-  id: string;
-  classId: string;
-  createdBy: string;
-  title: string;
-  topicType: string;
-  topicCategory: string | null;
-  requirements: string;
-  keyPoints: string;
-  referenceEssay: string | null;
-  wordLimitMin: number;
-  wordLimitMax: number;
-  timeLimitMinutes: number;
-  status: 'draft' | 'published' | 'closed';
-  dueDate: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Correction {
-  id: string;
-  essayId: string;
-  contentScore: number | null;
-  languageScore: number | null;
-  structureScore: number | null;
-  presentationScore: number | null;
-  totalScore: number | null;
-  scoreTier: string | null;
-  errors: string;
-  errorStats: string;
-  highlights: string;
-  sentenceAnalysis: string;
-  revisedEssay: string | null;
-  suggestions: string;
-  aiProvider: string | null;
-  aiModel: string | null;
-  correctionTimeMs: number | null;
-  createdAt: string;
-}
-
-export interface CorrectionDetail {
-  id: string;
-  essayId: string;
-  contentScore: number;
-  languageScore: number;
-  structureScore: number;
-  presentationScore: number;
-  totalScore: number;
-  scoreTier: string;
-  errors: Array<{
-    type: string;
-    original: string;
-    corrected: string;
-    explanation: string;
-    position: { start: number; end: number };
-  }>;
-  errorStats: Record<string, number>;
-  highlights: Array<{ sentence: string; type: string; comment: string }>;
-  sentenceAnalysis: unknown[];
-  revisedEssay: string;
-  suggestions: Array<{ priority: 'high' | 'medium' | 'low'; category: string; suggestion: string }>;
-  aiProvider: string;
-  aiModel: string;
-  correctionTimeMs: number;
-  createdAt: string;
-}
-
-export interface StudentListItem {
-  id: string;
-  name: string;
-  email: string;
-  studentNo: string | null;
-  classId: string;
-  className: string;
-  grade: string;
-  tag: string | null;
-  essayCount: number;
-  averageScore: number | null;
-}
-
-export interface StudentDetail {
-  id: string;
-  name: string;
-  email: string;
-  studentNo: string | null;
-  classes: Array<{ id: string; name: string | null; grade: string | null }>;
-  tag: string | null;
-  averageScore: number | null;
-  essayCount: number;
-  recentEssays: Array<{
-    id: string;
-    title: string;
-    status: string;
-    totalScore: number | null;
-    wordCount: number;
-    submittedAt: string;
-    topicType: string | null;
-  }>;
-}
-
-export interface ImportResult {
-  successCount: number;
-  totalCount: number;
-  results: Array<{
-    line: number;
-    name: string;
-    email: string;
-    success: boolean;
-    error?: string;
-  }>;
-}
-
-export interface TeachingResourceWithCreator extends TeachingResource {
-  creator?: { id: string; name: string } | null;
 }
 
 export const fetcher = {
@@ -503,4 +382,205 @@ export const fetcher = {
     }),
   deleteDraft: (taskId: string) =>
     request<ApiResponse<null>>(`/api/student/drafts/${taskId}`, { method: 'DELETE' }),
+
+  // Admin: Dashboard
+  getAdminDashboardStats: () =>
+    request<ApiResponse<AdminDashboardStats>>('/api/admin/dashboard/stats'),
+
+  // Admin: Schools
+  listAdminSchools: (params?: { region?: string; offset?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.region) query.set('region', params.region);
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<ApiResponse<SchoolWithStats[]>>(`/api/admin/schools${qs ? `?${qs}` : ''}`);
+  },
+  createAdminSchool: (body: {
+    code: string;
+    name: string;
+    region: string;
+    contactName?: string;
+    contactPhone?: string;
+  }) =>
+    request<ApiResponse<{ id: string }>>('/api/admin/schools', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateAdminSchool: (
+    id: string,
+    body: {
+      code?: string;
+      name?: string;
+      region?: string;
+      contactName?: string;
+      contactPhone?: string;
+      isActive?: boolean;
+    },
+  ) =>
+    request<ApiResponse<null>>(`/api/admin/schools/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteAdminSchool: (id: string) =>
+    request<ApiResponse<null>>(`/api/admin/schools/${id}`, { method: 'DELETE' }),
+  getAdminSchoolStats: (id: string) =>
+    request<ApiResponse<SchoolStats>>(`/api/admin/schools/${id}/stats`),
+
+  // Admin: API Configs
+  listAdminApiConfigs: () => request<ApiResponse<ApiConfigItem[]>>('/api/admin/api-configs'),
+  createAdminApiConfig: (body: {
+    provider: string;
+    apiKey: string;
+    baseUrl?: string;
+    model?: string;
+    isActive?: boolean;
+    priority?: number;
+    maxTokens?: number;
+    temperature?: number;
+    rateLimitPerMin?: number;
+  }) =>
+    request<ApiResponse<{ id: string }>>('/api/admin/api-configs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateAdminApiConfig: (
+    id: string,
+    body: {
+      provider?: string;
+      apiKey?: string;
+      baseUrl?: string;
+      model?: string;
+      isActive?: boolean;
+      priority?: number;
+      maxTokens?: number;
+      temperature?: number;
+      rateLimitPerMin?: number;
+    },
+  ) =>
+    request<ApiResponse<null>>(`/api/admin/api-configs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteAdminApiConfig: (id: string) =>
+    request<ApiResponse<null>>(`/api/admin/api-configs/${id}`, { method: 'DELETE' }),
+
+  // Admin: API Logs
+  listAdminApiLogs: (params?: {
+    provider?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    offset?: number;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.provider) query.set('provider', params.provider);
+    if (params?.dateFrom) query.set('dateFrom', params.dateFrom);
+    if (params?.dateTo) query.set('dateTo', params.dateTo);
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<ApiResponse<ApiCallLogItem[]>>(`/api/admin/api-logs${qs ? `?${qs}` : ''}`);
+  },
+
+  // Admin: Announcements
+  listAdminAnnouncements: () =>
+    request<ApiResponse<AnnouncementItem[]>>('/api/admin/announcements'),
+  createAdminAnnouncement: (body: {
+    title: string;
+    content: string;
+    targetRole?: string;
+    isActive?: boolean;
+  }) =>
+    request<ApiResponse<{ id: string }>>('/api/admin/announcements', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateAdminAnnouncement: (
+    id: string,
+    body: {
+      title?: string;
+      content?: string;
+      targetRole?: string;
+      isActive?: boolean;
+    },
+  ) =>
+    request<ApiResponse<null>>(`/api/admin/announcements/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteAdminAnnouncement: (id: string) =>
+    request<ApiResponse<null>>(`/api/admin/announcements/${id}`, { method: 'DELETE' }),
+
+  // Admin: Question Bank
+  listAdminQuestionBank: (params?: {
+    topicType?: string;
+    difficulty?: string;
+    offset?: number;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.topicType) query.set('topicType', params.topicType);
+    if (params?.difficulty) query.set('difficulty', params.difficulty);
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<ApiResponse<QuestionBankItem[]>>(
+      `/api/admin/question-bank${qs ? `?${qs}` : ''}`,
+    );
+  },
+  createAdminQuestion: (body: {
+    topicType: string;
+    title: string;
+    requirements: string;
+    topicCategory?: string;
+    keyPoints?: string[];
+    referenceEssay?: string;
+    wordLimitMin?: number;
+    wordLimitMax?: number;
+    timeLimitMinutes?: number;
+    difficulty?: string;
+    source?: string;
+  }) =>
+    request<ApiResponse<{ id: string }>>('/api/admin/question-bank', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  updateAdminQuestion: (
+    id: string,
+    body: {
+      topicType?: string;
+      title?: string;
+      requirements?: string;
+      topicCategory?: string;
+      keyPoints?: string[];
+      referenceEssay?: string;
+      wordLimitMin?: number;
+      wordLimitMax?: number;
+      timeLimitMinutes?: number;
+      difficulty?: string;
+      source?: string;
+    },
+  ) =>
+    request<ApiResponse<null>>(`/api/admin/question-bank/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  deleteAdminQuestion: (id: string) =>
+    request<ApiResponse<null>>(`/api/admin/question-bank/${id}`, { method: 'DELETE' }),
+
+  // Admin: Scoring Config (read-only)
+  getAdminScoringConfig: () =>
+    request<
+      ApiResponse<{
+        scoringWeights: {
+          content: number;
+          language: number;
+          structure: number;
+          presentation: number;
+        };
+        scoreTiers: Array<{ tier: string; label: string; min: number; max: number }>;
+        deductionRules: Record<string, unknown>;
+      }>
+    >('/api/admin/scoring-config'),
 };

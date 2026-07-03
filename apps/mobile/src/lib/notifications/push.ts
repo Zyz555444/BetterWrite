@@ -64,3 +64,41 @@ export async function sendTestNotification(): Promise<void> {
     console.warn(`[Push] test send failed: ${result.error ?? 'unknown'}`);
   }
 }
+
+let receivedSubscription: Notifications.EventSubscription | null = null;
+let responseSubscription: Notifications.EventSubscription | null = null;
+
+export function setupNotificationListeners(
+  onReceived?: (notification: Notifications.Notification) => void,
+  onOpened?: (response: Notifications.NotificationResponse) => void,
+): void {
+  clearNotificationListeners();
+
+  if (onReceived) {
+    receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      console.log('[Push] notification received in foreground');
+      onReceived(notification);
+    });
+  }
+
+  if (onOpened) {
+    responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      console.log('[Push] notification opened by user');
+      onOpened(response);
+    });
+  }
+
+  console.log('[Push] listeners set up');
+}
+
+export function clearNotificationListeners(): void {
+  if (receivedSubscription) {
+    receivedSubscription.remove();
+    receivedSubscription = null;
+  }
+  if (responseSubscription) {
+    responseSubscription.remove();
+    responseSubscription = null;
+  }
+  console.log('[Push] listeners cleared');
+}

@@ -29,6 +29,13 @@
       "when": 1783046268013,
       "tag": "0003_black_gabe_jones",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1783081018143,
+      "tag": "0004_small_moonstone",
+      "breakpoints": true
     }
   ]
 }

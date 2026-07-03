@@ -10,7 +10,9 @@ import {
   BookOpen,
   FileText,
   LayoutDashboard,
+  Library,
   LogOut,
+  Megaphone,
   Menu,
   PenLine,
   School,
@@ -22,7 +24,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface NavItem {
   href: string;
@@ -48,6 +50,18 @@ const navItems: NavItem[] = [
     href: '/admin/apis',
     label: 'API 管理',
     icon: <Settings className="w-4 h-4" />,
+    roles: [UserRole.SUPER_ADMIN],
+  },
+  {
+    href: '/admin/announcements',
+    label: '公告管理',
+    icon: <Megaphone className="w-4 h-4" />,
+    roles: [UserRole.SUPER_ADMIN],
+  },
+  {
+    href: '/admin/question-bank',
+    label: '题库管理',
+    icon: <Library className="w-4 h-4" />,
     roles: [UserRole.SUPER_ADMIN],
   },
   {
@@ -155,11 +169,22 @@ const roleLabels: Record<UserRoleType, string> = {
   [UserRole.STUDENT]: '学生',
 };
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+  user?: AuthUser | null;
+}
+
+export function DashboardLayout({ children, user: userProp }: DashboardLayoutProps) {
+  const { user: storeUser, logout, setUser } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const user = userProp ?? storeUser;
+
+  useEffect(() => {
+    if (userProp && !storeUser) setUser(userProp);
+  }, [userProp, storeUser, setUser]);
 
   const visibleNav = navItems.filter((item) => user && item.roles.includes(user.role));
 

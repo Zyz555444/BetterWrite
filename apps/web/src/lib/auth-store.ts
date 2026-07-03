@@ -2,7 +2,7 @@ import type { UserRoleType } from '@betterwrite/shared';
 import { create } from 'zustand';
 import { fetcher } from './api/fetcher';
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   name: string;
   email: string;

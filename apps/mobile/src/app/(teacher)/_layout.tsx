@@ -41,7 +41,7 @@ export default function TeacherLayout() {
         }}
       />
       <Tabs.Screen
-        name="grading"
+        name="essays"
         options={{
           title: '批改',
           tabBarIcon: ({ color, size }) => <Ionicons name="clipboard" color={color} size={size} />,
@@ -54,6 +54,7 @@ export default function TeacherLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} />,
         }}
       />
+      <Tabs.Screen name="students" options={{ href: null, headerShown: false }} />
     </Tabs>
   );
 }

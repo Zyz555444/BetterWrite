@@ -15,3 +15,4 @@ export * from './achievements.js';
 export * from './essay-drafts.js';
 export * from './api-tokens.js';
 export * from './device-tokens.js';
+export * from './announcements.js';

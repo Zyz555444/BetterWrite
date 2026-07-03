@@ -60,10 +60,13 @@ export default function StudentPracticeItemPage() {
       .finally(() => setIsLoading(false));
   }, [questionId]);
 
+  const hasSubmitted = feedbackErrors !== null;
+
   useEffect(() => {
+    if (hasSubmitted) return;
     const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [hasSubmitted]);
 
   const wordCount = countWords(content);
 
@@ -131,7 +134,7 @@ export default function StudentPracticeItemPage() {
       <DashboardLayout>
         <div className="max-w-4xl mx-auto space-y-6">
           {isLoading ? (
-            <p className="text-text-secondary">加载中...</p>
+            <p className="text-neutral-8">加载中...</p>
           ) : error && !question ? (
             <p className="text-error">{error}</p>
           ) : question ? (
@@ -140,21 +143,21 @@ export default function StudentPracticeItemPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <Badge variant="secondary">{getTopicTypeLabel(question.topicType)}</Badge>
-                    <span className="text-sm text-text-secondary flex items-center gap-1">
+                    <span className="text-copy-14 text-neutral-8 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {formatTime(elapsed)}
                     </span>
                   </div>
-                  <h1 className="text-2xl font-serif font-bold text-text-primary">
+                  <h1 className="text-title-24 font-serif font-medium text-neutral-10">
                     {question.title}
                   </h1>
-                  <p className="text-text-secondary mt-2 whitespace-pre-wrap">
+                  <p className="text-neutral-8 mt-2 whitespace-pre-wrap">
                     {question.requirements}
                   </p>
                 </div>
                 <div className="text-right ml-4 shrink-0">
-                  <p className="text-3xl font-bold text-text-primary">{wordCount}</p>
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-title-28 font-medium text-neutral-10">{wordCount}</p>
+                  <p className="text-copy-14 text-neutral-8">
                     词 / {question.wordLimitMin}-{question.wordLimitMax}
                   </p>
                 </div>
@@ -163,13 +166,13 @@ export default function StudentPracticeItemPage() {
               {question.keyPoints && question.keyPoints.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
+                    <CardTitle className="text-title-20 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4 text-accent" />
                       写作要点
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ul className="space-y-1.5 list-disc list-inside text-sm text-text-secondary">
+                    <ul className="space-y-1.5 list-disc list-inside text-copy-14 text-neutral-8">
                       {question.keyPoints.map((kp) => (
                         <li key={kp}>{kp}</li>
                       ))}
@@ -184,13 +187,13 @@ export default function StudentPracticeItemPage() {
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="在此输入你的英语作文..."
-                    className="w-full min-h-[360px] resize-y rounded-md border border-border bg-bg-primary p-4 text-base leading-relaxed text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20 transition-all"
+                    className="w-full min-h-[360px] resize-y rounded-md ring-1 ring-border bg-paper p-4 text-copy-16 leading-relaxed text-neutral-10 placeholder:text-neutral-7 focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20 transition-all"
                     spellCheck={false}
                   />
                 </CardContent>
               </Card>
 
-              {error && <p className="text-error text-sm">{error}</p>}
+              {error && <p className="text-error text-copy-14">{error}</p>}
 
               <div className="flex justify-end gap-2">
                 <Button size="lg" onClick={handleSubmit} disabled={isSubmitting || wordCount < 10}>
@@ -202,39 +205,39 @@ export default function StudentPracticeItemPage() {
               {feedbackErrors !== null && (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
+                    <CardTitle className="text-title-20 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-accent" />
                       即时反馈
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {feedbackErrors.length === 0 ? (
-                      <p className="text-sm text-success">很棒，未发现语法错误</p>
+                      <p className="text-copy-14 text-success">很棒，未发现语法错误</p>
                     ) : (
                       <>
-                        <p className="text-sm text-text-secondary">
+                        <p className="text-copy-14 text-neutral-8">
                           发现 {feedbackErrors.length} 处可改进，以下为修改建议：
                         </p>
                         <ul className="space-y-3">
                           {feedbackErrors.map((err) => (
                             <li
                               key={`${err.original}-${err.corrected}`}
-                              className="rounded-md border border-border bg-bg-secondary p-3"
+                              className="rounded-md ring-1 ring-border bg-neutral-2 p-3"
                             >
-                              <div className="flex items-center gap-2 flex-wrap text-sm">
+                              <div className="flex items-center gap-2 flex-wrap text-copy-14">
                                 <span className="text-error line-through">{err.original}</span>
-                                <ArrowRight className="w-3.5 h-3.5 text-text-tertiary" />
+                                <ArrowRight className="w-3.5 h-3.5 text-neutral-7" />
                                 <span className="text-success font-medium">{err.corrected}</span>
                                 <Badge variant="outline">{err.type}</Badge>
                               </div>
-                              <p className="text-xs text-text-tertiary mt-2">{err.explanation}</p>
+                              <p className="text-label-12 text-neutral-7 mt-2">{err.explanation}</p>
                             </li>
                           ))}
                         </ul>
                       </>
                     )}
                     <div className="pt-2 border-t border-border">
-                      <p className="text-xs text-text-tertiary mb-2">
+                      <p className="text-label-12 text-neutral-7 mb-2">
                         需要更详细的评分与建议？尝试深度批改，将由 AI 给出完整四维度评分。
                       </p>
                       <Button

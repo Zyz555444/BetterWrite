@@ -66,19 +66,19 @@ export default function FreeWritingPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="secondary">自由写作</Badge>
-                <span className="text-sm text-text-secondary flex items-center gap-1">
+                <span className="text-copy-14 text-neutral-8 flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" />
                   {formatDuration(draft.durationMs)}
                 </span>
-                {draft.isSaving && <span className="text-xs text-text-tertiary">保存中...</span>}
-                {justSaved && <span className="text-xs text-success">已保存</span>}
+                {draft.isSaving && <span className="text-label-12 text-neutral-7">保存中...</span>}
+                {justSaved && <span className="text-label-12 text-success">已保存</span>}
               </div>
-              <h1 className="text-2xl font-serif font-bold text-text-primary">自由写作</h1>
-              <p className="text-text-secondary mt-2">请根据自己想练习的主题完成一篇英语作文。</p>
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10">自由写作</h1>
+              <p className="text-neutral-8 mt-2">请根据自己想练习的主题完成一篇英语作文。</p>
             </div>
             <div className="text-right">
-              <p className="text-3xl font-bold text-text-primary">{draft.wordCount}</p>
-              <p className="text-sm text-text-secondary">
+              <p className="text-title-28 font-medium text-neutral-10">{draft.wordCount}</p>
+              <p className="text-copy-14 text-neutral-8">
                 词 / {WORD_LIMIT_MIN}-{WORD_LIMIT_MAX}
               </p>
             </div>
@@ -90,7 +90,7 @@ export default function FreeWritingPage() {
                 value={draft.content}
                 onChange={(e) => draft.setContent(e.target.value)}
                 placeholder="在此输入你的英语作文..."
-                className="w-full min-h-[360px] resize-y rounded-md border border-border bg-bg-primary p-4 text-base leading-relaxed text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20 transition-all"
+                className="w-full min-h-[360px] resize-y rounded-md ring-1 ring-border bg-paper p-4 text-copy-16 leading-relaxed text-neutral-10 placeholder:text-neutral-7 focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20 transition-all"
                 spellCheck={false}
               />
             </CardContent>
@@ -108,16 +108,16 @@ export default function FreeWritingPage() {
 
             <Card>
               <CardContent className="pt-6 space-y-2">
-                <div className="flex items-center gap-2 text-text-primary font-medium">
+                <div className="flex items-center gap-2 text-neutral-10 font-medium">
                   <AlertCircle className="w-4 h-4 text-accent" />
                   字数提示
                 </div>
-                <p className="text-sm text-text-secondary">
+                <p className="text-copy-14 text-neutral-8">
                   深圳中考英语作文建议词数为{' '}
-                  <span className="font-medium text-text-primary">100-125</span> 词，
+                  <span className="font-medium text-neutral-10">100-125</span> 词，
                   {WORD_LIMIT_MIN} 词为底线。
                 </p>
-                <div className="h-2 bg-bg-secondary rounded-full overflow-hidden">
+                <div className="h-2 bg-neutral-2 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
                       draft.wordCount < WORD_LIMIT_MIN
@@ -129,7 +129,7 @@ export default function FreeWritingPage() {
                     style={{ width: `${Math.min(100, (draft.wordCount / 150) * 100)}%` }}
                   />
                 </div>
-                <p className="text-xs text-text-tertiary">
+                <p className="text-label-12 text-neutral-7">
                   {draft.wordCount < WORD_LIMIT_MIN && '字数偏少，建议补充内容'}
                   {draft.wordCount >= WORD_LIMIT_MIN &&
                     draft.wordCount <= WORD_LIMIT_MAX &&
@@ -140,7 +140,7 @@ export default function FreeWritingPage() {
             </Card>
           </div>
 
-          {submitError && <p className="text-error text-sm">{submitError}</p>}
+          {submitError && <p className="text-error text-copy-14">{submitError}</p>}
 
           <div className="flex justify-between items-center">
             <Button variant="secondary" onClick={handleManualSave} disabled={draft.isSaving}>

@@ -213,7 +213,7 @@ export default function StudentAiAssistantPage() {
     <RoleGuard allowedRoles={[UserRole.STUDENT]}>
       <DashboardLayout>
         <div className="space-y-6">
-          <h1 className="text-2xl font-serif font-bold text-text-primary">AI 写作助手</h1>
+          <h1 className="text-title-24 font-serif font-medium text-neutral-10">AI 写作助手</h1>
 
           <div className="flex flex-wrap gap-2">
             {modeOrder.map((m) => (
@@ -245,47 +245,47 @@ export default function StudentAiAssistantPage() {
 
             <Card className="self-start">
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <History className="w-4 h-4" />
                   历史记录
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {historyLoading ? <p className="text-sm text-text-secondary">加载中...</p> : null}
-                {historyError ? <p className="text-sm text-error">{historyError}</p> : null}
+                {historyLoading ? <p className="text-copy-14 text-neutral-8">加载中...</p> : null}
+                {historyError ? <p className="text-copy-14 text-error">{historyError}</p> : null}
                 {!historyLoading && !historyError && history.length === 0 ? (
-                  <p className="text-sm text-text-secondary">暂无历史记录</p>
+                  <p className="text-copy-14 text-neutral-8">暂无历史记录</p>
                 ) : null}
                 {history.map((item) => {
                   const isOpen = expandedId === item.id;
                   return (
-                    <div key={item.id} className="border border-border rounded-md p-3">
+                    <div key={item.id} className="ring-1 ring-border rounded-md p-3">
                       <button
                         type="button"
                         className="w-full flex items-start gap-2 text-left"
                         onClick={() => setExpandedId(isOpen ? null : item.id)}
                       >
                         {isOpen ? (
-                          <ChevronDown className="w-4 h-4 mt-0.5 flex-shrink-0 text-text-tertiary" />
+                          <ChevronDown className="w-4 h-4 mt-0.5 flex-shrink-0 text-neutral-7" />
                         ) : (
-                          <ChevronRight className="w-4 h-4 mt-0.5 flex-shrink-0 text-text-tertiary" />
+                          <ChevronRight className="w-4 h-4 mt-0.5 flex-shrink-0 text-neutral-7" />
                         )}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <Badge variant="secondary">{item.mode}</Badge>
-                            <span className="text-xs text-text-tertiary">
+                            <span className="text-label-12 text-neutral-7">
                               {new Date(item.createdAt).toLocaleString()}
                             </span>
                           </div>
-                          <p className="text-sm text-text-primary truncate">
+                          <p className="text-copy-14 text-neutral-10 truncate">
                             {truncate(item.inputText, 40)}
                           </p>
                         </div>
                       </button>
                       {isOpen ? (
                         <div className="mt-2 pl-6 space-y-1">
-                          <p className="text-xs text-text-tertiary">输出</p>
-                          <p className="text-sm text-text-primary whitespace-pre-wrap break-words">
+                          <p className="text-label-12 text-neutral-7">输出</p>
+                          <p className="text-copy-14 text-neutral-10 whitespace-pre-wrap break-words">
                             {item.outputText}
                           </p>
                         </div>

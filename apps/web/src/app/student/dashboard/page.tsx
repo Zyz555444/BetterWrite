@@ -24,19 +24,38 @@ export default function StudentDashboardPage() {
   const [essays, setEssays] = useState<Essay[]>([]);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('[StudentDashboard] loading dashboard, tasks, essays');
-    Promise.all([fetcher.getStudentDashboard(), fetcher.listTasks(), fetcher.listMyEssays()])
+    Promise.allSettled([fetcher.getStudentDashboard(), fetcher.listTasks(), fetcher.listMyEssays()])
       .then(([dashboardRes, tasksRes, essaysRes]) => {
-        if (dashboardRes.success && dashboardRes.data) {
-          setDashboard(dashboardRes.data);
+        const errors: string[] = [];
+        if (
+          dashboardRes.status === 'fulfilled' &&
+          dashboardRes.value.success &&
+          dashboardRes.value.data
+        ) {
+          setDashboard(dashboardRes.value.data);
           console.log(
-            `[StudentDashboard] dashboard loaded pendingTasks=${dashboardRes.data.pendingTasks} correctedEssays=${dashboardRes.data.correctedEssays} hasQuote=${dashboardRes.data.quote ? 'true' : 'false'}`,
+            `[StudentDashboard] dashboard loaded pendingTasks=${dashboardRes.value.data.pendingTasks} correctedEssays=${dashboardRes.value.data.correctedEssays} hasQuote=${dashboardRes.value.data.quote ? 'true' : 'false'}`,
+          );
+        } else if (dashboardRes.status === 'rejected') {
+          errors.push(
+            dashboardRes.reason instanceof Error ? dashboardRes.reason.message : '仪表盘加载失败',
           );
         }
-        if (tasksRes.success && tasksRes.data) setTasks(tasksRes.data);
-        if (essaysRes.success && essaysRes.data) setEssays(essaysRes.data);
+        if (tasksRes.status === 'fulfilled' && tasksRes.value.success && tasksRes.value.data) {
+          setTasks(tasksRes.value.data);
+        } else if (tasksRes.status === 'rejected') {
+          errors.push('任务列表加载失败');
+        }
+        if (essaysRes.status === 'fulfilled' && essaysRes.value.success && essaysRes.value.data) {
+          setEssays(essaysRes.value.data);
+        } else if (essaysRes.status === 'rejected') {
+          errors.push('作文列表加载失败');
+        }
+        if (errors.length > 0) setError(errors.join('；'));
       })
       .finally(() => setIsLoading(false));
   }, []);
@@ -66,8 +85,13 @@ export default function StudentDashboardPage() {
     <RoleGuard allowedRoles={[UserRole.STUDENT]}>
       <DashboardLayout>
         <div className="space-y-6">
+          {error && (
+            <div className="rounded-md ring-1 ring-error/30 bg-error/10 p-3 text-copy-14 text-error">
+              {error}
+            </div>
+          )}
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-serif font-bold text-text-primary">学习首页</h1>
+            <h1 className="text-title-24 font-serif font-medium text-neutral-10">学习首页</h1>
             <Link href="/student/tasks">
               <Button>去写作文</Button>
             </Link>
@@ -76,12 +100,12 @@ export default function StudentDashboardPage() {
             {stats.map((stat) => (
               <Card key={stat.label}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-text-secondary">
+                  <CardTitle className="text-copy-14 font-medium text-neutral-8">
                     {stat.label}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-text-primary">{stat.value}</p>
+                  <p className="text-title-28 font-medium text-neutral-10">{stat.value}</p>
                 </CardContent>
               </Card>
             ))}
@@ -91,11 +115,11 @@ export default function StudentDashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">成绩分布</CardTitle>
+              <CardTitle className="text-title-20">成绩分布</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
-                <p className="text-text-secondary text-sm">加载中...</p>
+                <p className="text-neutral-8 text-copy-14">加载中...</p>
               ) : (
                 <BarChart data={scoreDistData} height={220} color="var(--accent)" />
               )}
@@ -105,16 +129,16 @@ export default function StudentDashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">最近任务</CardTitle>
+                <CardTitle className="text-title-20">最近任务</CardTitle>
               </CardHeader>
               <CardContent>
                 {tasks.slice(0, 3).length === 0 ? (
-                  <p className="text-text-secondary text-sm">暂无任务</p>
+                  <p className="text-neutral-8 text-copy-14">暂无任务</p>
                 ) : (
                   <ul className="space-y-3">
                     {tasks.slice(0, 3).map((task) => (
                       <li key={task.id} className="flex items-center justify-between">
-                        <span className="text-text-primary text-sm truncate">{task.title}</span>
+                        <span className="text-neutral-10 text-copy-14 truncate">{task.title}</span>
                         <Link href={`/student/tasks/${task.id}/write`}>
                           <Button variant="ghost" size="sm">
                             写作
@@ -129,11 +153,11 @@ export default function StudentDashboardPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">最近批改</CardTitle>
+                <CardTitle className="text-title-20">最近批改</CardTitle>
               </CardHeader>
               <CardContent>
                 {essays.filter((e) => e.status === 'completed').slice(0, 3).length === 0 ? (
-                  <p className="text-text-secondary text-sm">暂无批改结果</p>
+                  <p className="text-neutral-8 text-copy-14">暂无批改结果</p>
                 ) : (
                   <ul className="space-y-3">
                     {essays
@@ -141,7 +165,7 @@ export default function StudentDashboardPage() {
                       .slice(0, 3)
                       .map((essay) => (
                         <li key={essay.id} className="flex items-center justify-between">
-                          <span className="text-text-primary text-sm truncate">
+                          <span className="text-neutral-10 text-copy-14 truncate">
                             {essay.title ?? essay.task?.title ?? '未命名作文'}
                           </span>
                           <Link href={`/student/essays/${essay.id}`}>

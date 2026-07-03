@@ -50,7 +50,7 @@ export default function StudentEssaysPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-serif font-bold text-text-primary">我的作文</h1>
+            <h1 className="text-title-24 font-serif font-medium text-neutral-10">我的作文</h1>
             <Link href="/student/tasks">
               <Button variant="secondary">
                 <BookOpen className="w-4 h-4 mr-2" />
@@ -59,13 +59,13 @@ export default function StudentEssaysPage() {
             </Link>
           </div>
 
-          {isLoading && <p className="text-text-secondary">加载中...</p>}
+          {isLoading && <p className="text-neutral-8">加载中...</p>}
           {error && <p className="text-error">{error}</p>}
 
           {!isLoading && essays.length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
-                <p className="text-text-secondary">还没有提交过作文</p>
+                <p className="text-neutral-8">还没有提交过作文</p>
                 <Link href="/student/tasks" className="inline-block mt-4">
                   <Button>开始写作</Button>
                 </Link>
@@ -84,24 +84,24 @@ export default function StudentEssaysPage() {
                           <Badge variant={statusVariants[essay.status] ?? 'secondary'}>
                             {statusLabels[essay.status] ?? essay.status}
                           </Badge>
-                          <span className="text-xs text-text-tertiary">
+                          <span className="text-label-12 text-neutral-7">
                             {new Date(essay.submittedAt).toLocaleDateString()}
                           </span>
                         </div>
-                        <h3 className="font-medium text-text-primary truncate">
+                        <h3 className="font-medium text-neutral-10 truncate">
                           {essay.title ?? essay.task?.title ?? '未命名作文'}
                         </h3>
-                        <p className="text-sm text-text-secondary mt-1 line-clamp-1">
+                        <p className="text-copy-14 text-neutral-8 mt-1 line-clamp-1">
                           {essay.content}
                         </p>
                       </div>
                       <div className="ml-4 text-right">
-                        <p className="text-2xl font-bold text-text-primary">
+                        <p className="text-title-24 font-medium text-neutral-10">
                           {formatScore(essay.totalScore)}
                         </p>
-                        <p className="text-xs text-text-tertiary">/ 15</p>
+                        <p className="text-label-12 text-neutral-7">/ 15</p>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-text-tertiary ml-4 group-hover:text-accent transition-colors" />
+                      <ChevronRight className="w-5 h-5 text-neutral-7 ml-4 group-hover:text-accent transition-colors" />
                     </div>
                   </CardContent>
                 </Card>

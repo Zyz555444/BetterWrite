@@ -99,7 +99,7 @@ export default function StudentPracticePage() {
     <RoleGuard allowedRoles={[UserRole.STUDENT]}>
       <DashboardLayout>
         <div className="space-y-6">
-          <h1 className="text-2xl font-serif font-bold text-text-primary">自主练习</h1>
+          <h1 className="text-title-24 font-serif font-medium text-neutral-10">自主练习</h1>
 
           <div className="flex items-center gap-2 border-b border-border">
             {tabs.map((t) => (
@@ -107,10 +107,10 @@ export default function StudentPracticePage() {
                 key={t.key}
                 type="button"
                 onClick={() => setTab(t.key)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                className={`flex items-center gap-2 px-4 py-2 text-copy-14 font-medium transition-colors border-b-2 -mb-px ${
                   tab === t.key
                     ? 'border-accent text-accent'
-                    : 'border-transparent text-text-secondary hover:text-text-primary'
+                    : 'border-transparent text-neutral-8 hover:text-neutral-10'
                 }`}
               >
                 {t.icon}
@@ -123,14 +123,14 @@ export default function StudentPracticePage() {
             <div className="space-y-4">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="topic-filter" className="text-xs text-text-tertiary">
+                  <label htmlFor="topic-filter" className="text-label-12 text-neutral-7">
                     话题类型
                   </label>
                   <select
                     id="topic-filter"
                     value={topicType}
                     onChange={(e) => setTopicType(e.target.value)}
-                    className="h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                   >
                     <option value="">全部</option>
                     {Object.entries(TopicTypeLabels).map(([value, label]) => (
@@ -141,14 +141,14 @@ export default function StudentPracticePage() {
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="diff-filter" className="text-xs text-text-tertiary">
+                  <label htmlFor="diff-filter" className="text-label-12 text-neutral-7">
                     难度
                   </label>
                   <select
                     id="diff-filter"
                     value={difficulty}
                     onChange={(e) => setDifficulty(e.target.value)}
-                    className="h-10 rounded-md border border-border bg-bg-primary px-3 text-sm text-text-primary"
+                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
                   >
                     <option value="">全部</option>
                     {Object.entries(PracticeDifficultyLabels).map(([value, label]) => (
@@ -160,13 +160,13 @@ export default function StudentPracticePage() {
                 </div>
               </div>
 
-              {isLoadingBank && <p className="text-text-secondary">加载中...</p>}
+              {isLoadingBank && <p className="text-neutral-8">加载中...</p>}
               {bankError && <p className="text-error">{bankError}</p>}
 
               {!isLoadingBank && questions.length === 0 && (
                 <Card>
                   <CardContent className="py-12 text-center">
-                    <p className="text-text-secondary">题库中暂无符合条件的题目</p>
+                    <p className="text-neutral-8">题库中暂无符合条件的题目</p>
                   </CardContent>
                 </Card>
               )}
@@ -182,17 +182,17 @@ export default function StudentPracticePage() {
           {tab === 'mock' && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="text-title-20 flex items-center gap-2">
                   <Timer className="w-4 h-4 text-accent" />
                   限时模拟
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-text-secondary leading-relaxed">
+                <p className="text-copy-14 text-neutral-8 leading-relaxed">
                   系统将从题库中随机抽取一道题目，你需要在 15
                   分钟内完成写作，模拟真实考场环境。倒计时结束将自动提交。
                 </p>
-                <div className="flex items-center gap-2 text-sm text-text-tertiary">
+                <div className="flex items-center gap-2 text-copy-14 text-neutral-7">
                   <Clock className="w-4 h-4" />
                   <span>限时 15 分钟</span>
                 </div>
@@ -208,13 +208,13 @@ export default function StudentPracticePage() {
 
           {tab === 'history' && (
             <div className="space-y-3">
-              {isLoadingHistory && <p className="text-text-secondary">加载中...</p>}
+              {isLoadingHistory && <p className="text-neutral-8">加载中...</p>}
               {historyError && <p className="text-error">{historyError}</p>}
 
               {!isLoadingHistory && history.length === 0 && (
                 <Card>
                   <CardContent className="py-12 text-center">
-                    <p className="text-text-secondary">还没有练习记录</p>
+                    <p className="text-neutral-8">还没有练习记录</p>
                   </CardContent>
                 </Card>
               )}
@@ -234,24 +234,24 @@ export default function StudentPracticePage() {
                           <Badge variant="outline">
                             {item.exerciseType === 'timed_mock' ? '限时模拟' : '题库练习'}
                           </Badge>
-                          <span className="text-xs text-text-tertiary">
+                          <span className="text-label-12 text-neutral-7">
                             {item.submittedAt
                               ? new Date(item.submittedAt).toLocaleString()
                               : new Date(item.createdAt).toLocaleString()}
                           </span>
                         </div>
-                        <h3 className="font-medium text-text-primary truncate">
+                        <h3 className="font-medium text-neutral-10 truncate">
                           {item.title ?? '未命名练习'}
                         </h3>
-                        <p className="text-sm text-text-secondary mt-1 line-clamp-1">
+                        <p className="text-copy-14 text-neutral-8 mt-1 line-clamp-1">
                           {item.content}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-2xl font-bold text-text-primary">
+                        <p className="text-title-24 font-medium text-neutral-10">
                           {formatScore(item.score)}
                         </p>
-                        <p className="text-xs text-text-tertiary">{item.wordCount ?? '-'} 词</p>
+                        <p className="text-label-12 text-neutral-7">{item.wordCount ?? '-'} 词</p>
                       </div>
                     </div>
                   </CardContent>

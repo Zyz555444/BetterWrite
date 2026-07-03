@@ -41,7 +41,7 @@ export default function StudentTasksPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-serif font-bold text-text-primary">作文任务</h1>
+            <h1 className="text-title-24 font-serif font-medium text-neutral-10">作文任务</h1>
             <Link href="/student/write">
               <Button variant="secondary">
                 <PenLine className="w-4 h-4 mr-2" />
@@ -50,13 +50,13 @@ export default function StudentTasksPage() {
             </Link>
           </div>
 
-          {isLoading && <p className="text-text-secondary">加载中...</p>}
+          {isLoading && <p className="text-neutral-8">加载中...</p>}
           {error && <p className="text-error">{error}</p>}
 
           {!isLoading && tasks.length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
-                <p className="text-text-secondary">暂无作文任务，去写一篇文章吧</p>
+                <p className="text-neutral-8">暂无作文任务，去写一篇文章吧</p>
                 <Link href="/student/write" className="inline-block mt-4">
                   <Button>自由写作</Button>
                 </Link>
@@ -73,16 +73,16 @@ export default function StudentTasksPage() {
                       <Badge variant="secondary" className="mb-2">
                         {getTopicTypeLabel(task.topicType)}
                       </Badge>
-                      <CardTitle className="text-lg">{task.title}</CardTitle>
+                      <CardTitle className="text-title-20">{task.title}</CardTitle>
                     </div>
                     <Badge>{statusLabels[task.status] ?? task.status}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-text-secondary text-sm line-clamp-2 mb-4">
+                  <p className="text-neutral-8 text-copy-14 line-clamp-2 mb-4">
                     {task.requirements}
                   </p>
-                  <div className="flex items-center gap-4 text-xs text-text-tertiary mb-4">
+                  <div className="flex items-center gap-4 text-label-12 text-neutral-7 mb-4">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {task.wordLimitMin}-{task.wordLimitMax} 词

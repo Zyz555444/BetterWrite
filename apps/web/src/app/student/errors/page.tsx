@@ -69,8 +69,8 @@ export default function StudentErrorBookPage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-serif font-bold text-text-primary">我的错题本</h1>
-              <p className="text-sm text-text-secondary mt-1">
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10">我的错题本</h1>
+              <p className="text-copy-14 text-neutral-8 mt-1">
                 按错误类型查看与消灭错题，持续提升写作能力
               </p>
             </div>
@@ -80,14 +80,14 @@ export default function StudentErrorBookPage() {
             </Button>
           </div>
 
-          {error && <p className="text-error text-sm">{error}</p>}
+          {error && <p className="text-error text-copy-14">{error}</p>}
 
           {isLoading ? (
-            <p className="text-text-secondary text-sm">加载中...</p>
+            <p className="text-neutral-8 text-copy-14">加载中...</p>
           ) : groups.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <p className="text-text-secondary">暂无错题，完成作文批改后自动汇总</p>
+                <p className="text-neutral-8">暂无错题，完成作文批改后自动汇总</p>
               </CardContent>
             </Card>
           ) : (
@@ -102,34 +102,34 @@ export default function StudentErrorBookPage() {
                       <CardContent className="p-5 space-y-4">
                         <div className="flex items-center justify-between">
                           <Badge variant="destructive">{label}</Badge>
-                          <span className="text-xs text-text-tertiary">共 {group.total} 条</span>
+                          <span className="text-label-12 text-neutral-7">共 {group.total} 条</span>
                         </div>
 
                         <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-text-secondary">
+                          <div className="flex items-center justify-between text-label-12">
+                            <span className="text-neutral-8">
                               已消灭 {group.mastered} / {group.total}
                             </span>
                             <span className="text-success font-medium">{percent}%</span>
                           </div>
-                          <div className="h-2 w-full rounded-full bg-bg-tertiary overflow-hidden">
+                          <div className="h-2 w-full rounded-full bg-neutral-3 overflow-hidden">
                             <div
                               className="h-full rounded-full bg-success transition-all"
                               style={{ width: `${percent}%` }}
                             />
                           </div>
                           {group.unresolved > 0 && (
-                            <p className="text-xs text-text-tertiary">
+                            <p className="text-label-12 text-neutral-7">
                               待消灭 {group.unresolved} 条
                             </p>
                           )}
                         </div>
 
-                        <div className="rounded-md bg-bg-secondary p-3">
-                          <p className="text-xs text-text-tertiary mb-1">最近一条</p>
-                          <p className="text-sm text-text-primary leading-relaxed truncate">
+                        <div className="rounded-md bg-neutral-2 p-3">
+                          <p className="text-label-12 text-neutral-7 mb-1">最近一条</p>
+                          <p className="text-copy-14 text-neutral-10 leading-relaxed truncate">
                             <span className="line-through text-error">{group.latestOriginal}</span>
-                            <ArrowRight className="inline-block w-3.5 h-3.5 mx-1.5 text-text-tertiary align-middle" />
+                            <ArrowRight className="inline-block w-3.5 h-3.5 mx-1.5 text-neutral-7 align-middle" />
                             <span className="text-success font-medium">
                               {group.latestCorrected}
                             </span>

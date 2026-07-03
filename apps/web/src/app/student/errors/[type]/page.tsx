@@ -84,10 +84,10 @@ export default function StudentErrorBookTypePage() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-serif font-bold text-text-primary">
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10">
                 错题详情 - {typeLabel}
               </h1>
-              <p className="text-sm text-text-secondary mt-1">
+              <p className="text-copy-14 text-neutral-8 mt-1">
                 共 {errors.length} 条错题，消灭后可标记掌握
               </p>
             </div>
@@ -99,14 +99,14 @@ export default function StudentErrorBookTypePage() {
             </Link>
           </div>
 
-          {error && <p className="text-error text-sm">{error}</p>}
+          {error && <p className="text-error text-copy-14">{error}</p>}
 
           {isLoading ? (
-            <p className="text-text-secondary text-sm">加载中...</p>
+            <p className="text-neutral-8 text-copy-14">加载中...</p>
           ) : errors.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <p className="text-text-secondary">该类型暂无错题</p>
+                <p className="text-neutral-8">该类型暂无错题</p>
                 <Link href="/student/errors" className="inline-block mt-4">
                   <Button variant="outline">返回错题本</Button>
                 </Link>

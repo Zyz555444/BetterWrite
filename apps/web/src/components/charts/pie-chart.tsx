@@ -5,15 +5,13 @@ interface PieChartProps {
   size?: number;
 }
 
+// Yohaku 和色 series palette — 5 colors cycle for >5 slices
 const DEFAULT_COLORS = [
-  'var(--accent)',
-  'var(--info)',
-  'var(--success)',
-  'var(--warning)',
-  'var(--error)',
-  '#8b5cf6',
-  '#ec4899',
-  '#14b8a6',
+  'var(--color-accent)',  // 梅 ume
+  'var(--color-info)',    // 縹 hanada
+  'var(--color-success)', // 若竹 wakatake
+  'var(--color-warning)', // 朽葉 kuchiba
+  'var(--color-error)',   // 蘇芳 suoh
 ];
 
 export function PieChart({ data, size = 200 }: PieChartProps) {
@@ -22,7 +20,7 @@ export function PieChart({ data, size = 200 }: PieChartProps) {
   if (!data || data.length === 0 || total <= 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-text-tertiary"
+        className="flex items-center justify-center text-copy-14 text-neutral-7"
         style={{ width: '100%', minHeight: size }}
       >
         暂无数据
@@ -90,7 +88,7 @@ export function PieChart({ data, size = 200 }: PieChartProps) {
       >
         {slices.map((s) => (
           <g key={`slice-${s.label}`}>
-            <path d={s.path} fill={s.color} stroke="var(--bg-elevated)" strokeWidth={1.5}>
+            <path d={s.path} fill={s.color} stroke="var(--color-neutral-1)" strokeWidth={1.5}>
               <title>{`${s.label}: ${s.value} (${s.percentage}%)`}</title>
             </path>
             {s.percentage >= 8 && (
@@ -100,7 +98,7 @@ export function PieChart({ data, size = 200 }: PieChartProps) {
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fontSize={11}
-                fill="white"
+                fill="var(--color-paper)"
                 fontWeight={600}
               >
                 {s.percentage}%
@@ -110,15 +108,15 @@ export function PieChart({ data, size = 200 }: PieChartProps) {
         ))}
       </svg>
 
-      <ul className="flex flex-col gap-1.5 text-sm min-w-0 flex-1">
+      <ul className="flex flex-col gap-1.5 text-copy-14 min-w-0 flex-1">
         {slices.map((s) => (
           <li key={`legend-${s.label}`} className="flex items-center gap-2">
             <span
               className="inline-block w-3 h-3 rounded-sm shrink-0"
               style={{ backgroundColor: s.color }}
             />
-            <span className="text-text-primary truncate flex-1">{s.label}</span>
-            <span className="text-text-secondary tabular-nums">
+            <span className="text-neutral-10 truncate flex-1">{s.label}</span>
+            <span className="text-neutral-8 tabular-nums">
               {s.value} · {s.percentage}%
             </span>
           </li>

@@ -9,7 +9,7 @@ export function RadarChart({ data, size = 240 }: RadarChartProps) {
   if (!data || data.length < 3) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-text-tertiary"
+        className="flex items-center justify-center text-copy-14 text-neutral-7"
         style={{ width: size, height: size }}
       >
         暂无数据
@@ -66,7 +66,7 @@ export function RadarChart({ data, size = 240 }: RadarChartProps) {
           key={`grid-${levels[i]}`}
           points={pts}
           fill="none"
-          stroke="var(--border)"
+          stroke="var(--color-border)"
           strokeWidth={1}
           opacity={0.6}
         />
@@ -80,7 +80,7 @@ export function RadarChart({ data, size = 240 }: RadarChartProps) {
           y1={line.y1}
           x2={line.x2}
           y2={line.y2}
-          stroke="var(--border)"
+          stroke="var(--color-border)"
           strokeWidth={1}
           opacity={0.6}
         />
@@ -89,16 +89,16 @@ export function RadarChart({ data, size = 240 }: RadarChartProps) {
       {/* Data polygon */}
       <polygon
         points={dataPolygon}
-        fill="var(--accent)"
+        fill="var(--color-accent)"
         fillOpacity={0.18}
-        stroke="var(--accent)"
+        stroke="var(--color-accent)"
         strokeWidth={2}
         strokeLinejoin="round"
       />
 
       {/* Data points + labels */}
       {dataPoints.map((p, i) => (
-        <circle key={`dp-${data[i].label}`} cx={p.x} cy={p.y} r={3} fill="var(--accent)">
+        <circle key={`dp-${data[i].label}`} cx={p.x} cy={p.y} r={3} fill="var(--color-accent)">
           <title>{`${data[i].label}: ${data[i].value.toFixed(1)}`}</title>
         </circle>
       ))}
@@ -114,7 +114,7 @@ export function RadarChart({ data, size = 240 }: RadarChartProps) {
             textAnchor="middle"
             dominantBaseline="middle"
             fontSize={11}
-            fill="var(--text-secondary)"
+            fill="var(--color-neutral-8)"
           >
             {d.label}
           </text>

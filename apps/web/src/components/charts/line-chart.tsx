@@ -16,7 +16,7 @@ export function LineChart({ data, height = 200, color = 'currentColor' }: LineCh
   if (!data || data.length === 0) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-text-tertiary"
+        className="flex items-center justify-center text-copy-14 text-neutral-7"
         style={{ height }}
       >
         暂无数据
@@ -66,7 +66,6 @@ export function LineChart({ data, height = 200, color = 'currentColor' }: LineCh
       viewBox={`0 0 ${VIEWBOX_WIDTH} ${height}`}
       width="100%"
       height={height}
-      preserveAspectRatio="none"
       role="img"
       aria-label="折线图"
     >
@@ -78,7 +77,7 @@ export function LineChart({ data, height = 200, color = 'currentColor' }: LineCh
             y1={tick.y}
             x2={VIEWBOX_WIDTH - PADDING_RIGHT}
             y2={tick.y}
-            stroke="var(--border)"
+            stroke="var(--color-border)"
             strokeWidth={1}
             strokeDasharray="3 3"
             opacity={0.6}
@@ -88,7 +87,7 @@ export function LineChart({ data, height = 200, color = 'currentColor' }: LineCh
             y={tick.y + 3}
             textAnchor="end"
             fontSize={10}
-            fill="var(--text-tertiary)"
+            fill="var(--color-neutral-7)"
           >
             {tick.val.toFixed(1)}
           </text>
@@ -101,7 +100,7 @@ export function LineChart({ data, height = 200, color = 'currentColor' }: LineCh
         y1={PADDING_TOP + chartHeight}
         x2={VIEWBOX_WIDTH - PADDING_RIGHT}
         y2={PADDING_TOP + chartHeight}
-        stroke="var(--border)"
+        stroke="var(--color-border)"
         strokeWidth={1}
       />
 
@@ -130,7 +129,7 @@ export function LineChart({ data, height = 200, color = 'currentColor' }: LineCh
               y={PADDING_TOP + chartHeight + 14}
               textAnchor="middle"
               fontSize={10}
-              fill="var(--text-secondary)"
+              fill="var(--color-neutral-8)"
             >
               {p.label.length > 8 ? `${p.label.slice(0, 7)}…` : p.label}
             </text>

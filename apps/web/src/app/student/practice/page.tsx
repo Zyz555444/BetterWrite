@@ -130,7 +130,7 @@ export default function StudentPracticePage() {
                     id="topic-filter"
                     value={topicType}
                     onChange={(e) => setTopicType(e.target.value)}
-                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                   >
                     <option value="">全部</option>
                     {Object.entries(TopicTypeLabels).map(([value, label]) => (
@@ -148,7 +148,7 @@ export default function StudentPracticePage() {
                     id="diff-filter"
                     value={difficulty}
                     onChange={(e) => setDifficulty(e.target.value)}
-                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                   >
                     <option value="">全部</option>
                     {Object.entries(PracticeDifficultyLabels).map(([value, label]) => (

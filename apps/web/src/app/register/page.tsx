@@ -99,7 +99,7 @@ export default function RegisterPage() {
                 onChange={(e) =>
                   setForm({ ...form, role: e.target.value as typeof UserRole.STUDENT })
                 }
-                className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
               >
                 <option value={UserRole.STUDENT}>学生</option>
                 <option value={UserRole.TEACHER}>教师</option>

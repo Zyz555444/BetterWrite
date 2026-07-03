@@ -128,7 +128,7 @@ export default function TeacherEssaysPage() {
                   <select
                     value={statusFilter}
                     onChange={(e) => handleStatusChange(e.target.value)}
-                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                   >
                     <option value="all">全部状态</option>
                     <option value="pending">等待批改</option>

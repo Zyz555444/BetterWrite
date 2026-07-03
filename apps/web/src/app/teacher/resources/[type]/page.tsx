@@ -372,7 +372,7 @@ export default function TeacherResourcesListPage() {
                       console.log(`[TeacherResourcesList] topicType filter=${e.target.value}`);
                       setTopicTypeFilter(e.target.value);
                     }}
-                    className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                    className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                   >
                     <option value="all">全部体裁</option>
                     {Object.entries(TopicTypeLabels).map(([value, label]) => (
@@ -396,7 +396,7 @@ export default function TeacherResourcesListPage() {
                       console.log(`[TeacherResourcesList] difficulty filter=${e.target.value}`);
                       setDifficultyFilter(e.target.value);
                     }}
-                    className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                    className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                   >
                     <option value="all">全部难度</option>
                     {Object.entries(TeachingResourceDifficultyLabels).map(([value, label]) => (
@@ -668,7 +668,7 @@ export default function TeacherResourcesListPage() {
                       id="topicType"
                       value={form.topicType}
                       onChange={(e) => setForm((prev) => ({ ...prev, topicType: e.target.value }))}
-                      className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                      className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                     >
                       <option value="">不限体裁</option>
                       {Object.entries(TopicTypeLabels).map(([value, label]) => (
@@ -689,7 +689,7 @@ export default function TeacherResourcesListPage() {
                       id="difficulty"
                       value={form.difficulty}
                       onChange={(e) => setForm((prev) => ({ ...prev, difficulty: e.target.value }))}
-                      className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                      className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                     >
                       {Object.entries(TeachingResourceDifficultyLabels).map(([value, label]) => (
                         <option key={value} value={value}>
@@ -709,7 +709,7 @@ export default function TeacherResourcesListPage() {
                     value={form.content}
                     onChange={(e) => setForm((prev) => ({ ...prev, content: e.target.value }))}
                     placeholder="范文正文 / 句型模板 / 连接词列表 / 错误案例..."
-                    className="w-full min-h-[160px] px-3 py-2 rounded-md bg-paper text-neutral-10 text-copy-14 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="w-full min-h-[160px] px-3 py-2 rounded-md bg-paper text-neutral-10 text-copy-14 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                     required
                   />
                 </div>
@@ -723,7 +723,7 @@ export default function TeacherResourcesListPage() {
                     value={form.highlights}
                     onChange={(e) => setForm((prev) => ({ ...prev, highlights: e.target.value }))}
                     placeholder="对该资源的亮点、用法或教学建议..."
-                    className="w-full min-h-[80px] px-3 py-2 rounded-md bg-paper text-neutral-10 text-copy-14 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="w-full min-h-[80px] px-3 py-2 rounded-md bg-paper text-neutral-10 text-copy-14 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                   />
                 </div>
 

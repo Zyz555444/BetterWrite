@@ -249,7 +249,7 @@ function ImportModal({
                 id="targetClassId"
                 value={targetClassId}
                 onChange={(e) => setTargetClassId(e.target.value)}
-                className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
               >
                 <option value="">选择班级</option>
                 {classes.map((cls) => (
@@ -275,7 +275,7 @@ function ImportModal({
                 value={csv}
                 onChange={(e) => setCsv(e.target.value)}
                 placeholder={TEMPLATE_CSV}
-                className="w-full min-h-[180px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent font-mono"
+                className="w-full min-h-[180px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku font-mono"
               />
               <p className="text-label-12 text-neutral-8">
                 CSV 格式：<code className="text-neutral-10">name,email,studentNo</code>
@@ -424,7 +424,7 @@ export default function TeacherStudentsPage() {
                   <select
                     value={classId}
                     onChange={(e) => setClassId(e.target.value)}
-                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                   >
                     <option value="">全部班级</option>
                     {!isLoadingClasses &&

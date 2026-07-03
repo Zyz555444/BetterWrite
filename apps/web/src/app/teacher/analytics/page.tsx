@@ -219,7 +219,7 @@ export default function TeacherAnalyticsPage() {
                   value={selectedClassId}
                   onChange={(e) => handleClassChange(e.target.value)}
                   disabled={isLoadingClasses}
-                  className="h-10 flex-1 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="h-10 flex-1 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                 >
                   {isLoadingClasses ? (
                     <option value="">加载中...</option>

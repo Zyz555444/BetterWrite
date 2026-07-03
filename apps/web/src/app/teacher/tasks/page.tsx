@@ -206,7 +206,7 @@ export default function TeacherTasksPage() {
                         value={form.classId}
                         onChange={(e) => handleChange('classId', e.target.value)}
                         required
-                        className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                        className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                       >
                         <option value="">选择班级</option>
                         {classes.map((cls) => (
@@ -230,7 +230,7 @@ export default function TeacherTasksPage() {
                         id="topicType"
                         value={form.topicType}
                         onChange={(e) => handleChange('topicType', e.target.value)}
-                        className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10"
+                        className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                       >
                         {Object.entries(TopicTypeLabels).map(([value, label]) => (
                           <option key={value} value={value}>
@@ -285,7 +285,7 @@ export default function TeacherTasksPage() {
                       value={form.requirements}
                       onChange={(e) => handleChange('requirements', e.target.value)}
                       placeholder="描述题目背景、写作要点和评分标准..."
-                      className="w-full min-h-[100px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      className="w-full min-h-[100px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                       required
                     />
                   </div>
@@ -299,7 +299,7 @@ export default function TeacherTasksPage() {
                       value={form.keyPoints}
                       onChange={(e) => handleChange('keyPoints', e.target.value)}
                       placeholder="例如：&#10;包含至少两个季节特点&#10;使用恰当的连接词"
-                      className="w-full min-h-[80px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                      className="w-full min-h-[80px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                     />
                   </div>
 

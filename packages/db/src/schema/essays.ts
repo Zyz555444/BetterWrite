@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm';
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { corrections } from './corrections.js';
+import { errorBooks } from './error-books.js';
 import { users } from './users.js';
 
 export const essayTasks = sqliteTable('essay_tasks', {
@@ -71,4 +72,5 @@ export const essaysRelations = relations(essays, ({ one, many }) => ({
     references: [corrections.id],
   }),
   corrections: many(corrections),
+  errorBooks: many(errorBooks),
 }));

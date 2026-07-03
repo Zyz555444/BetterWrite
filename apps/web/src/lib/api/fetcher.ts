@@ -1,7 +1,15 @@
+import type { ClassAnalytics, StudentAnalytics, TeachingResource } from '@betterwrite/shared';
 import type {
-  ClassAnalytics,
-  StudentAnalytics,
-  TeachingResource,
+  Achievement,
+  AiAssistantResult,
+  AiConversation,
+  DailyQuote,
+  ErrorBookGroup,
+  ErrorBookItem,
+  EssayDraft,
+  PracticeExercise,
+  QuestionBankItem,
+  StudentProgress,
 } from '@betterwrite/shared';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -278,9 +286,7 @@ export const fetcher = {
     if (params?.classId) query.set('classId', params.classId);
     if (params?.keyword) query.set('keyword', params.keyword);
     const qs = query.toString();
-    return request<ApiResponse<StudentListItem[]>>(
-      `/api/teacher/students${qs ? `?${qs}` : ''}`,
-    );
+    return request<ApiResponse<StudentListItem[]>>(`/api/teacher/students${qs ? `?${qs}` : ''}`);
   },
 
   getStudentDetail: (id: string) =>
@@ -299,7 +305,12 @@ export const fetcher = {
     }),
 
   // Teaching Resources
-  listResources: (params?: { type?: string; topicType?: string; difficulty?: string; limit?: number }) => {
+  listResources: (params?: {
+    type?: string;
+    topicType?: string;
+    difficulty?: string;
+    limit?: number;
+  }) => {
     const query = new URLSearchParams();
     if (params?.type) query.set('type', params.type);
     if (params?.topicType) query.set('topicType', params.topicType);
@@ -328,14 +339,17 @@ export const fetcher = {
       body: JSON.stringify(body),
     }),
 
-  updateResource: (id: string, body: {
-    title?: string;
-    topicType?: string;
-    difficulty?: string;
-    content?: string;
-    highlights?: string;
-    tags?: string[];
-  }) =>
+  updateResource: (
+    id: string,
+    body: {
+      title?: string;
+      topicType?: string;
+      difficulty?: string;
+      content?: string;
+      highlights?: string;
+      tags?: string[];
+    },
+  ) =>
     request<ApiResponse<TeachingResourceWithCreator>>(`/api/teacher/resources/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
@@ -343,4 +357,138 @@ export const fetcher = {
 
   deleteResource: (id: string) =>
     request<ApiResponse<null>>(`/api/teacher/resources/${id}`, { method: 'DELETE' }),
+
+  getErrorBookGroups: () => request<ApiResponse<ErrorBookGroup[]>>('/api/student/errors'),
+  syncErrorBook: () =>
+    request<ApiResponse<{ synced: number }>>('/api/student/errors/sync', { method: 'POST' }),
+  generateErrorPractice: (errorType: string) =>
+    request<ApiResponse<{ exercises: string[] }>>('/api/student/errors/practice', {
+      method: 'POST',
+      body: JSON.stringify({ errorType }),
+    }),
+  getErrorBookByType: (type: string, params?: { offset?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<ApiResponse<ErrorBookItem[]>>(
+      `/api/student/errors/${type}${qs ? `?${qs}` : ''}`,
+    );
+  },
+  masterError: (id: string) =>
+    request<ApiResponse<{ studentId: string; id: string; status: string }>>(
+      `/api/student/errors/${id}/master`,
+      { method: 'POST' },
+    ),
+
+  getStudentProgress: () => request<ApiResponse<StudentProgress>>('/api/student/progress'),
+  getAchievements: () => request<ApiResponse<Achievement[]>>('/api/student/achievements'),
+
+  aiPolish: (text: string) =>
+    request<ApiResponse<AiAssistantResult>>('/api/student/ai/polish', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  aiUpgrade: (text: string) =>
+    request<ApiResponse<AiAssistantResult>>('/api/student/ai/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  aiSynonym: (word: string, context: string) =>
+    request<ApiResponse<AiAssistantResult>>('/api/student/ai/synonym', {
+      method: 'POST',
+      body: JSON.stringify({ word, context }),
+    }),
+  aiGrammar: (text: string) =>
+    request<ApiResponse<AiAssistantResult>>('/api/student/ai/grammar', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  getAiHistory: (params?: { offset?: number; limit?: number; mode?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    if (params?.mode) query.set('mode', params.mode);
+    const qs = query.toString();
+    return request<ApiResponse<AiConversation[]>>(`/api/student/ai/history${qs ? `?${qs}` : ''}`);
+  },
+
+  getQuestionBank: (params?: {
+    topicType?: string;
+    difficulty?: string;
+    offset?: number;
+    limit?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.topicType) query.set('topicType', params.topicType);
+    if (params?.difficulty) query.set('difficulty', params.difficulty);
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<ApiResponse<QuestionBankItem[]>>(
+      `/api/student/question-bank${qs ? `?${qs}` : ''}`,
+    );
+  },
+  getQuestion: (id: string) =>
+    request<ApiResponse<QuestionBankItem>>(`/api/student/question-bank/${id}`),
+  submitPractice: (body: {
+    questionId?: string;
+    content: string;
+    durationMs?: number;
+    exerciseType: string;
+  }) =>
+    request<
+      ApiResponse<{
+        exercise: PracticeExercise;
+        feedback: {
+          errors: Array<{
+            original: string;
+            corrected: string;
+            type: string;
+            explanation: string;
+          }>;
+        };
+      }>
+    >('/api/student/practice', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  submitPracticeDeep: (body: {
+    questionId?: string;
+    content: string;
+    durationMs?: number;
+    exerciseType: string;
+  }) =>
+    request<ApiResponse<{ essayId: string }>>('/api/student/practice/deep', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  getPracticeHistory: (params?: { offset?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return request<ApiResponse<PracticeExercise[]>>(
+      `/api/student/practice/history${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  getStudentDashboard: () =>
+    request<
+      ApiResponse<{
+        pendingTasks: number;
+        correctedEssays: number;
+        averageScore: number | null;
+        quote: DailyQuote | null;
+      }>
+    >('/api/student/dashboard'),
+  getDraft: (taskId: string) =>
+    request<ApiResponse<EssayDraft | null>>(`/api/student/drafts/${taskId}`),
+  saveDraft: (taskId: string, body: { content: string; wordCount: number; durationMs: number }) =>
+    request<ApiResponse<EssayDraft>>(`/api/student/drafts/${taskId}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  deleteDraft: (taskId: string) =>
+    request<ApiResponse<null>>(`/api/student/drafts/${taskId}`, { method: 'DELETE' }),
 };

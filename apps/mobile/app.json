@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "BetterWrite",
+    "slug": "betterwrite",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "betterwrite",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#fefefb"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.betterwrite.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "BetterWrite 需要相机权限以拍照识别手写作文",
+        "NSPhotoLibraryUsageDescription": "BetterWrite 需要相册权限以选择作文照片"
+      }
+    },
+    "android": {
+      "package": "com.betterwrite.app",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+    },
+    "plugins": ["expo-router", "expo-camera", "expo-notifications"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "http://localhost:3000"
+    }
+  }
+}

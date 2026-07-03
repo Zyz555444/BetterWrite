@@ -3,19 +3,11 @@
 import { LineChart, PieChart, RadarChart } from '@/components/charts';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { RoleGuard } from '@/components/layout/role-guard';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { formatScore, type StudentAnalytics, UserRole } from '@betterwrite/shared';
-import {
-  AlertCircle,
-  ArrowLeft,
-  Award,
-  FileText,
-  PenLine,
-  Target,
-} from 'lucide-react';
+import { type StudentAnalytics, UserRole, formatScore } from '@betterwrite/shared';
+import { AlertCircle, ArrowLeft, Award, FileText, PenLine, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -296,9 +288,7 @@ export default function TeacherStudentAnalyticsPage() {
                             </span>
                           )}
                           <span>{essay.wordCount} 词</span>
-                          <span>
-                            提交于 {new Date(essay.submittedAt).toLocaleDateString()}
-                          </span>
+                          <span>提交于 {new Date(essay.submittedAt).toLocaleDateString()}</span>
                         </div>
                       </li>
                     ))}

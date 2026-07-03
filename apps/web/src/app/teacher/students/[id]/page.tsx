@@ -141,9 +141,7 @@ export default function TeacherStudentDetailPage() {
       console.log(`[TeacherStudentDetail] loading student id=${studentId}`);
       const res = await fetcher.getStudentDetail(studentId);
       if (res.success && res.data) {
-        console.log(
-          `[TeacherStudentDetail] loaded student essayCount=${res.data.essayCount}`,
-        );
+        console.log(`[TeacherStudentDetail] loaded student essayCount=${res.data.essayCount}`);
         setStudent(res.data);
       } else {
         console.warn('[TeacherStudentDetail] failed to load:', res.error);
@@ -186,15 +184,9 @@ export default function TeacherStudentDetailPage() {
                   <h1 className="text-2xl font-serif font-bold text-text-primary">
                     {student.name}
                   </h1>
-                  <p className="text-sm text-text-secondary mt-1">
-                    学生详情
-                  </p>
+                  <p className="text-sm text-text-secondary mt-1">学生详情</p>
                 </div>
-                <TagEditor
-                  studentId={student.id}
-                  tag={student.tag}
-                  onUpdated={handleTagUpdated}
-                />
+                <TagEditor studentId={student.id} tag={student.tag} onUpdated={handleTagUpdated} />
               </div>
 
               <Card>
@@ -232,7 +224,7 @@ export default function TeacherStudentDetailPage() {
                         {student.classes.length > 0
                           ? student.classes
                               .map((c) =>
-                                c.name ? `${c.grade ?? ''} · ${c.name}` : c.grade ?? '-',
+                                c.name ? `${c.grade ?? ''} · ${c.name}` : (c.grade ?? '-'),
                               )
                               .join('，')
                           : '-'}
@@ -313,7 +305,7 @@ export default function TeacherStudentDetailPage() {
                               </td>
                               <td className="px-2 py-3 text-text-secondary">
                                 {essay.topicType
-                                  ? topicTypeLabels[essay.topicType] ?? essay.topicType
+                                  ? (topicTypeLabels[essay.topicType] ?? essay.topicType)
                                   : '-'}
                               </td>
                               <td className="px-2 py-3">

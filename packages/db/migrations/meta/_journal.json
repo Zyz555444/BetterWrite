@@ -15,6 +15,20 @@
       "when": 1782991988559,
       "tag": "0001_sharp_nick_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783040808115,
+      "tag": "0002_rich_james_howlett",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1783046268013,
+      "tag": "0003_black_gabe_jones",
+      "breakpoints": true
     }
   ]
 }

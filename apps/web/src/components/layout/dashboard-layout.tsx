@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-store';
 import { UserRole, type UserRoleType } from '@betterwrite/shared';
 import {
+  AlertCircle,
   BarChart3,
   BookOpen,
   FileText,
@@ -13,6 +14,8 @@ import {
   PenLine,
   School,
   Settings,
+  Sparkles,
+  Target,
   Users,
   X,
 } from 'lucide-react';
@@ -116,6 +119,24 @@ const navItems: NavItem[] = [
     href: '/student/essays',
     label: '我的作文',
     icon: <BookOpen className="w-4 h-4" />,
+    roles: [UserRole.STUDENT],
+  },
+  {
+    href: '/student/errors',
+    label: '错题本',
+    icon: <AlertCircle className="w-4 h-4" />,
+    roles: [UserRole.STUDENT],
+  },
+  {
+    href: '/student/assistant',
+    label: 'AI 助手',
+    icon: <Sparkles className="w-4 h-4" />,
+    roles: [UserRole.STUDENT],
+  },
+  {
+    href: '/student/practice',
+    label: '自主练习',
+    icon: <Target className="w-4 h-4" />,
     roles: [UserRole.STUDENT],
   },
   {

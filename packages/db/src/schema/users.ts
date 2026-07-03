@@ -1,5 +1,12 @@
 import { relations } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { achievements } from './achievements.js';
+import { aiConversations } from './ai-conversations.js';
+import { apiTokens } from './api-tokens.js';
+import { deviceTokens } from './device-tokens.js';
+import { errorBooks } from './error-books.js';
+import { essayDrafts } from './essay-drafts.js';
+import { practiceExercises } from './practice-exercises.js';
 import { schools } from './schools.js';
 import { studentTags } from './student_tags.js';
 import { teachingResources } from './teaching_resources.js';
@@ -26,4 +33,11 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   }),
   teachingResources: many(teachingResources),
   studentTags: many(studentTags),
+  errorBooks: many(errorBooks),
+  practiceExercises: many(practiceExercises),
+  aiConversations: many(aiConversations),
+  achievements: many(achievements),
+  essayDrafts: many(essayDrafts),
+  apiTokens: many(apiTokens),
+  deviceTokens: many(deviceTokens),
 }));

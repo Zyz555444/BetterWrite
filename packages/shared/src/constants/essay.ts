@@ -42,7 +42,8 @@ export const TeachingResourceType = {
   ERROR_CASE: 'errorcase',
 } as const;
 
-export type TeachingResourceTypeValue = (typeof TeachingResourceType)[keyof typeof TeachingResourceType];
+export type TeachingResourceTypeValue =
+  (typeof TeachingResourceType)[keyof typeof TeachingResourceType];
 
 export const TeachingResourceDifficulty = {
   EASY: 'easy',
@@ -61,3 +62,43 @@ export const StudentTag = {
 } as const;
 
 export type StudentTagValue = (typeof StudentTag)[keyof typeof StudentTag];
+
+export const PracticeDifficulty = {
+  EASY: 'easy',
+  MEDIUM: 'medium',
+  HARD: 'hard',
+} as const;
+
+export type PracticeDifficultyValue = (typeof PracticeDifficulty)[keyof typeof PracticeDifficulty];
+
+export const ExerciseType = {
+  QUESTION_BANK: 'question_bank',
+  TIMED_MOCK: 'timed_mock',
+} as const;
+
+export type ExerciseTypeValue = (typeof ExerciseType)[keyof typeof ExerciseType];
+
+export const AchievementTier = {
+  BRONZE: 'bronze',
+  SILVER: 'silver',
+  GOLD: 'gold',
+  PLATINUM: 'platinum',
+} as const;
+
+export type AchievementTierValue = (typeof AchievementTier)[keyof typeof AchievementTier];
+
+export const AiAssistantMode = {
+  POLISH: 'polish',
+  UPGRADE: 'upgrade',
+  SYNONYM: 'synonym',
+  GRAMMAR: 'grammar',
+} as const;
+
+export type AiAssistantModeValue = (typeof AiAssistantMode)[keyof typeof AiAssistantMode];
+
+export const ErrorBookStatus = {
+  UNRESOLVED: 'unresolved',
+  MASTERED: 'mastered',
+} as const;
+
+export type ErrorBookStatusValue = (typeof ErrorBookStatus)[keyof typeof ErrorBookStatus];

@@ -4,6 +4,8 @@ import { corrections, db, essays } from '@betterwrite/db';
 import { getScoreTier } from '@betterwrite/shared';
 import { eq } from 'drizzle-orm';
 
+export { performOcr, type OcrResult } from './ocr.js';
+
 export interface CorrectionJob {
   essayId: string;
 }

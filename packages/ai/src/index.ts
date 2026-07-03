@@ -6,3 +6,5 @@ export {
   type CorrectionType,
   type RouterEnv,
 } from './router.js';
+export * from './assistant.js';
+export * from './assistants/schemas.js';

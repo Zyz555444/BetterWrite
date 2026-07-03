@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
-import { formatScore, type ClassAnalytics, UserRole } from '@betterwrite/shared';
+import { type ClassAnalytics, UserRole, formatScore } from '@betterwrite/shared';
 import {
   AlertCircle,
   BarChart3,
@@ -199,9 +199,7 @@ export default function TeacherAnalyticsPage() {
       },
       {
         label: '平均分',
-        value: isLoadingAnalytics
-          ? '-'
-          : formatScore(analytics?.averageScore ?? null),
+        value: isLoadingAnalytics ? '-' : formatScore(analytics?.averageScore ?? null),
         icon: <BarChart3 className="w-4 h-4" />,
       },
       {
@@ -260,9 +258,7 @@ export default function TeacherAnalyticsPage() {
                   )}
                 </select>
               </div>
-              {exportError && (
-                <p className="text-error text-xs mt-3">{exportError}</p>
-              )}
+              {exportError && <p className="text-error text-xs mt-3">{exportError}</p>}
             </CardContent>
           </Card>
 

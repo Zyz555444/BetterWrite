@@ -1,31 +1,65 @@
 import { randomUUID } from 'node:crypto';
 import { lucia } from '@/lib/auth';
 import {
+  type GrammarResult,
+  checkGrammar,
+  getSynonyms,
+  polishEssay,
+  upgradeSentences,
+} from '@betterwrite/ai';
+import {
+  achievements,
+  aiConversations,
+  apiTokens,
   classEnrollments,
   classes,
   db,
+  deviceTokens,
+  errorBooks,
+  essayDrafts,
   essayTasks,
   essays,
+  practiceExercises,
+  questionBank,
   schools,
   studentTags,
   teachingResources,
   users,
 } from '@betterwrite/db';
 import {
+  AchievementTier,
+  AiAssistantMode,
+  ExerciseType,
   StudentTag,
   TeachingResourceType,
   UserRole,
+  calculateAbilityRadar,
+  calculateClassRank,
   calculateErrorStats,
+  calculateProgressCurve,
   calculateScoreDistribution,
+  checkAchievements,
   countWords,
 } from '@betterwrite/shared';
-import { processCorrection } from '@betterwrite/worker';
+import type {
+  Achievement,
+  AiAssistantResult,
+  AiConversation,
+  DailyQuote,
+  ErrorBookGroup,
+  EssayDraft,
+  PracticeExercise,
+  QuestionBankItem,
+  StudentProgress,
+} from '@betterwrite/shared';
+import { performOcr, processCorrection } from '@betterwrite/worker';
 import { zValidator } from '@hono/zod-validator';
 import bcrypt from 'bcryptjs';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
+import { getAiRouter } from '../ai/router';
 import { authMiddleware, requireRole } from './middleware';
 import type { AuthVariables } from './middleware';
 
@@ -189,6 +223,185 @@ app.get('/auth/me', authMiddleware, async (c) => {
       schoolId: user.schoolId,
     },
   });
+});
+
+// ========== Mobile Auth (Bearer Token) ==========
+const tokenLoginSchema = z.object({
+  email: z.string().email('请输入有效邮箱'),
+  password: z.string().min(1, '请输入密码'),
+  platform: z.enum(['ios', 'android']),
+  deviceName: z.string().optional(),
+});
+
+app.post('/auth/token', zValidator('json', tokenLoginSchema), async (c) => {
+  const { email, password, platform, deviceName } = c.req.valid('json');
+  console.log(`[API /auth/token] email=${email} platform=${platform}`);
+
+  const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+  if (!user || !user.isActive) {
+    return c.json({ success: false, error: '邮箱或密码错误' }, 401);
+  }
+
+  const valid = await bcrypt.compare(password, user.passwordHash);
+  if (!valid) {
+    return c.json({ success: false, error: '邮箱或密码错误' }, 401);
+  }
+
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+  const token = randomUUID();
+
+  await db.insert(apiTokens).values({
+    id: randomUUID(),
+    userId: user.id,
+    token,
+    platform,
+    deviceName: deviceName ?? null,
+    expiresAt,
+    lastUsedAt: now,
+    createdAt: now,
+  });
+
+  await db.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id));
+
+  console.log(`[API /auth/token] login success userId=${user.id}`);
+  return c.json({
+    success: true,
+    data: {
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        schoolId: user.schoolId,
+      },
+    },
+  });
+});
+
+app.get('/auth/tokens', authMiddleware, async (c) => {
+  const user = c.get('user');
+  console.log(`[API /auth/tokens] user=${user.id}`);
+  const list = await db.query.apiTokens.findMany({
+    where: and(eq(apiTokens.userId, user.id), gt(apiTokens.expiresAt, new Date().toISOString())),
+    columns: {
+      id: true,
+      platform: true,
+      deviceName: true,
+      lastUsedAt: true,
+      createdAt: true,
+      expiresAt: true,
+    },
+    orderBy: desc(apiTokens.createdAt),
+  });
+  return c.json({ success: true, data: list });
+});
+
+const deviceTokenSchema = z.object({
+  token: z.string().min(1),
+  platform: z.enum(['ios', 'android']),
+});
+
+app.post('/auth/device-token', authMiddleware, zValidator('json', deviceTokenSchema), async (c) => {
+  const user = c.get('user');
+  const { token, platform } = c.req.valid('json');
+  console.log(`[API /auth/device-token] user=${user.id} platform=${platform}`);
+  const now = new Date().toISOString();
+
+  const existing = await db.query.deviceTokens.findFirst({
+    where: and(eq(deviceTokens.userId, user.id), eq(deviceTokens.token, token)),
+  });
+
+  if (existing) {
+    await db.update(deviceTokens).set({ updatedAt: now }).where(eq(deviceTokens.id, existing.id));
+  } else {
+    await db.insert(deviceTokens).values({
+      id: randomUUID(),
+      userId: user.id,
+      token,
+      platform,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return c.json({ success: true });
+});
+
+// ========== OCR ==========
+const ocrSchema = z.object({
+  imageBase64: z.string().min(1),
+  taskId: z.string().optional(),
+});
+
+app.post(
+  '/essays/ocr',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', ocrSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { imageBase64, taskId } = c.req.valid('json');
+    console.log(`[API /essays/ocr] user=${user.id} taskId=${taskId ?? 'none'}`);
+
+    try {
+      const result = await performOcr(imageBase64);
+      console.log(
+        `[API /essays/ocr] user=${user.id} confidence=${result.confidence} contentLength=${result.content.length}`,
+      );
+      return c.json({ success: true, data: result });
+    } catch (err) {
+      console.error(
+        `[API /essays/ocr] user=${user.id} error:`,
+        err instanceof Error ? err.message : 'unknown',
+      );
+      return c.json({ success: false, error: 'OCR 识别失败' }, 500);
+    }
+  },
+);
+
+// ========== Notifications ==========
+app.post('/notifications/test', authMiddleware, async (c) => {
+  const user = c.get('user');
+  console.log(`[API /notifications/test] user=${user.id}`);
+
+  const tokens = await db.query.deviceTokens.findMany({
+    where: eq(deviceTokens.userId, user.id),
+  });
+
+  if (tokens.length === 0) {
+    return c.json({ success: false, error: '未注册推送设备' }, 400);
+  }
+
+  const expoAccessToken = process.env.EXPO_ACCESS_TOKEN;
+  if (!expoAccessToken) {
+    return c.json({ success: false, error: '推送服务未配置' }, 503);
+  }
+
+  const messages = tokens.map((t) => ({
+    to: t.token,
+    title: 'BetterWrite 测试推送',
+    body: '这是一条测试推送通知',
+    sound: 'default' as const,
+  }));
+
+  const res = await fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${expoAccessToken}`,
+    },
+    body: JSON.stringify(messages),
+  });
+
+  if (!res.ok) {
+    console.error(`[API /notifications/test] push failed status=${res.status}`);
+    return c.json({ success: false, error: '推送发送失败' }, 500);
+  }
+
+  console.log(`[API /notifications/test] user=${user.id} sent=${messages.length}`);
+  return c.json({ success: true, data: { sent: messages.length } });
 });
 
 // ========== Essays ==========
@@ -1316,6 +1529,1057 @@ app.delete(
     return c.json({ success: true });
   },
 );
+
+// ========== Student Helpers ==========
+function safeJsonArray(s: string | null | undefined): string[] {
+  try {
+    const parsed = JSON.parse(s ?? '[]');
+    return Array.isArray(parsed) ? parsed.map((v) => String(v)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function safeJsonObject(s: string | null | undefined): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(s ?? '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+async function syncStudentErrorBook(studentId: string): Promise<number> {
+  const completedEssays = await db.query.essays.findMany({
+    where: and(eq(essays.studentId, studentId), eq(essays.status, 'completed')),
+    with: { correction: true },
+  });
+  const existing = await db.query.errorBooks.findMany({
+    where: eq(errorBooks.studentId, studentId),
+    columns: { correctionId: true, original: true },
+  });
+  const seen = new Set<string>();
+  for (const e of existing) {
+    if (e.correctionId) seen.add(`${e.correctionId}::${e.original}`);
+  }
+  const now = new Date().toISOString();
+  let synced = 0;
+  for (const essay of completedEssays) {
+    const correction = essay.correction;
+    if (!correction) continue;
+    let errors: unknown[] = [];
+    try {
+      const parsed = JSON.parse(correction.errors ?? '[]');
+      if (Array.isArray(parsed)) errors = parsed;
+    } catch {
+      continue;
+    }
+    for (const raw of errors) {
+      const err = raw as {
+        type?: string;
+        original?: string;
+        corrected?: string;
+        explanation?: string;
+      };
+      if (!err.type || !err.original || !err.corrected) continue;
+      const key = `${correction.id}::${err.original}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      await db.insert(errorBooks).values({
+        id: randomUUID(),
+        studentId,
+        essayId: essay.id,
+        correctionId: correction.id,
+        errorType: String(err.type),
+        original: String(err.original),
+        corrected: String(err.corrected),
+        explanation: err.explanation ? String(err.explanation) : null,
+        status: 'unresolved',
+        createdAt: now,
+        updatedAt: now,
+      });
+      synced++;
+    }
+  }
+  return synced;
+}
+
+const ACHIEVEMENT_CATALOG = [
+  {
+    code: 'essay_10',
+    tier: AchievementTier.BRONZE,
+    title: '初出茅庐',
+    description: '完成10篇作文',
+    icon: 'medal-bronze',
+  },
+  {
+    code: 'essay_50',
+    tier: AchievementTier.SILVER,
+    title: '笔耕不辍',
+    description: '完成50篇作文',
+    icon: 'medal-silver',
+  },
+  {
+    code: 'essay_100',
+    tier: AchievementTier.GOLD,
+    title: '百篇达人',
+    description: '完成100篇作文',
+    icon: 'medal-gold',
+  },
+  {
+    code: 'perfect_score',
+    tier: AchievementTier.GOLD,
+    title: '满分佳作',
+    description: '获得一篇满分作文',
+    icon: 'star',
+  },
+  {
+    code: 'progress_streak',
+    tier: AchievementTier.SILVER,
+    title: '稳步提升',
+    description: '连续3次作文进步',
+    icon: 'trend-up',
+  },
+  {
+    code: 'first_tier_regular',
+    tier: AchievementTier.PLATINUM,
+    title: '一等常客',
+    description: '平均分达到13分',
+    icon: 'crown',
+  },
+  {
+    code: 'grammar_master',
+    tier: AchievementTier.GOLD,
+    title: '语法大师',
+    description: '5篇作文无语法错误',
+    icon: 'shield',
+  },
+];
+
+// ========== Student Error Book ==========
+app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const start = Date.now();
+  console.log(`[API /student/errors] user=${user.id}`);
+  await syncStudentErrorBook(user.id);
+  const all = await db.query.errorBooks.findMany({
+    where: eq(errorBooks.studentId, user.id),
+    orderBy: desc(errorBooks.createdAt),
+  });
+  const groupMap = new Map<
+    string,
+    {
+      total: number;
+      unresolved: number;
+      mastered: number;
+      latestOriginal: string;
+      latestCorrected: string;
+      latestCreatedAt: string;
+    }
+  >();
+  for (const e of all) {
+    let g = groupMap.get(e.errorType);
+    if (!g) {
+      g = {
+        total: 0,
+        unresolved: 0,
+        mastered: 0,
+        latestOriginal: '',
+        latestCorrected: '',
+        latestCreatedAt: '',
+      };
+      groupMap.set(e.errorType, g);
+    }
+    g.total++;
+    if (e.status === 'mastered') g.mastered++;
+    else g.unresolved++;
+    if (e.createdAt > g.latestCreatedAt) {
+      g.latestCreatedAt = e.createdAt;
+      g.latestOriginal = e.original;
+      g.latestCorrected = e.corrected;
+    }
+  }
+  const groups: ErrorBookGroup[] = Array.from(groupMap.entries()).map(([errorType, g]) => ({
+    errorType,
+    total: g.total,
+    unresolved: g.unresolved,
+    mastered: g.mastered,
+    latestOriginal: g.latestOriginal,
+    latestCorrected: g.latestCorrected,
+  }));
+  const duration = Date.now() - start;
+  console.log(
+    `[API /student/errors] user=${user.id} groups=${groups.length} duration=${duration}ms`,
+  );
+  return c.json({ success: true, data: groups });
+});
+
+app.post('/student/errors/sync', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const start = Date.now();
+  console.log(`[API /student/errors/sync] user=${user.id}`);
+  const synced = await syncStudentErrorBook(user.id);
+  const duration = Date.now() - start;
+  console.log(`[API /student/errors/sync] user=${user.id} synced=${synced} duration=${duration}ms`);
+  return c.json({ success: true, data: { synced } });
+});
+
+const errorPracticeBodySchema = z.object({ errorType: z.string().min(1) });
+
+app.post(
+  '/student/errors/practice',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', errorPracticeBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { errorType } = c.req.valid('json');
+    const start = Date.now();
+    console.log(`[API /student/errors/practice] user=${user.id} errorType=${errorType}`);
+    const router = getAiRouter();
+    if (router.availableNames().length === 0) {
+      return c.json({ success: false, error: 'AI 服务未配置' }, 503);
+    }
+    try {
+      const prompt = `You are an English writing tutor for Chinese middle school students. Generate 3 targeted grammar practice exercises for the error type "${errorType}". Each exercise must be a single line starting with a number (1. 2. 3.) containing a short sentence with a gap or an error to fix. Return ONLY the 3 lines, no preamble.`;
+      const raw = await router.executeWithFallback('language', (provider) =>
+        provider.complete(prompt, { maxOutputTokens: 512 }),
+      );
+      const exercises = raw
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0)
+        .slice(0, 3);
+      const duration = Date.now() - start;
+      console.log(
+        `[API /student/errors/practice] user=${user.id} generated=${exercises.length} duration=${duration}ms`,
+      );
+      return c.json({ success: true, data: { exercises } });
+    } catch (err) {
+      console.warn(
+        `[API /student/errors/practice] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      );
+      return c.json(
+        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
+        500,
+      );
+    }
+  },
+);
+
+app.get('/student/errors/:type', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const type = c.req.param('type');
+  const offset = Number(c.req.query('offset') ?? '0');
+  const limit = Number(c.req.query('limit') ?? '20');
+  console.log(
+    `[API /student/errors/:type] user=${user.id} type=${type} offset=${offset} limit=${limit}`,
+  );
+  const list = await db.query.errorBooks.findMany({
+    where: and(eq(errorBooks.studentId, user.id), eq(errorBooks.errorType, type)),
+    orderBy: desc(errorBooks.createdAt),
+    offset,
+    limit,
+  });
+  return c.json({ success: true, data: list });
+});
+
+app.post('/student/errors/:id/master', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  const now = new Date().toISOString();
+  console.log(`[API /student/errors/:id/master] user=${user.id} id=${id}`);
+  const existing = await db.query.errorBooks.findFirst({
+    where: and(eq(errorBooks.id, id), eq(errorBooks.studentId, user.id)),
+  });
+  if (!existing) return c.json({ success: false, error: '错题不存在' }, 404);
+  await db
+    .update(errorBooks)
+    .set({ status: 'mastered', masteredAt: now, updatedAt: now })
+    .where(eq(errorBooks.id, id));
+  return c.json({ success: true, data: { studentId: user.id, id, status: 'mastered' } });
+});
+
+// ========== Student AI Assistant ==========
+const aiPolishBodySchema = z.object({ text: z.string().min(1) });
+
+app.post(
+  '/student/ai/polish',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', aiPolishBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { text } = c.req.valid('json');
+    const start = Date.now();
+    console.log(`[API /student/ai/polish] user=${user.id}`);
+    const router = getAiRouter();
+    if (router.availableNames().length === 0) {
+      return c.json({ success: false, error: 'AI 服务未配置' }, 503);
+    }
+    let result: Awaited<ReturnType<typeof polishEssay>>;
+    try {
+      result = await polishEssay(router, text);
+    } catch (err) {
+      console.warn(
+        `[API /student/ai/polish] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      );
+      return c.json(
+        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
+        500,
+      );
+    }
+    const now = new Date().toISOString();
+    await db.insert(aiConversations).values({
+      id: randomUUID(),
+      studentId: user.id,
+      mode: AiAssistantMode.POLISH,
+      inputText: text,
+      outputText: result.polished,
+      metadata: JSON.stringify({ changes: result.changes }),
+      aiProvider: null,
+      aiModel: null,
+      tokensUsed: null,
+      createdAt: now,
+    });
+    const duration = Date.now() - start;
+    console.log(`[API /student/ai/polish] user=${user.id} duration=${duration}ms`);
+    const data: AiAssistantResult = {
+      mode: AiAssistantMode.POLISH,
+      input: text,
+      output: result.polished,
+      details: { changes: result.changes },
+      provider: null,
+      model: null,
+    };
+    return c.json({ success: true, data });
+  },
+);
+
+const aiUpgradeBodySchema = z.object({ text: z.string().min(1) });
+
+app.post(
+  '/student/ai/upgrade',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', aiUpgradeBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { text } = c.req.valid('json');
+    const start = Date.now();
+    console.log(`[API /student/ai/upgrade] user=${user.id}`);
+    const router = getAiRouter();
+    if (router.availableNames().length === 0) {
+      return c.json({ success: false, error: 'AI 服务未配置' }, 503);
+    }
+    let result: Awaited<ReturnType<typeof upgradeSentences>>;
+    try {
+      result = await upgradeSentences(router, text);
+    } catch (err) {
+      console.warn(
+        `[API /student/ai/upgrade] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      );
+      return c.json(
+        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
+        500,
+      );
+    }
+    const now = new Date().toISOString();
+    const outputText = result.sentences.map((s) => s.upgraded).join('\n');
+    await db.insert(aiConversations).values({
+      id: randomUUID(),
+      studentId: user.id,
+      mode: AiAssistantMode.UPGRADE,
+      inputText: text,
+      outputText,
+      metadata: JSON.stringify({ sentences: result.sentences }),
+      aiProvider: null,
+      aiModel: null,
+      tokensUsed: null,
+      createdAt: now,
+    });
+    const duration = Date.now() - start;
+    console.log(`[API /student/ai/upgrade] user=${user.id} duration=${duration}ms`);
+    const data: AiAssistantResult = {
+      mode: AiAssistantMode.UPGRADE,
+      input: text,
+      output: outputText,
+      details: { sentences: result.sentences },
+      provider: null,
+      model: null,
+    };
+    return c.json({ success: true, data });
+  },
+);
+
+const aiSynonymBodySchema = z.object({
+  word: z.string().min(1),
+  context: z.string().default(''),
+});
+
+app.post(
+  '/student/ai/synonym',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', aiSynonymBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { word, context } = c.req.valid('json');
+    const start = Date.now();
+    console.log(`[API /student/ai/synonym] user=${user.id} word=${word}`);
+    const router = getAiRouter();
+    if (router.availableNames().length === 0) {
+      return c.json({ success: false, error: 'AI 服务未配置' }, 503);
+    }
+    let result: Awaited<ReturnType<typeof getSynonyms>>;
+    try {
+      result = await getSynonyms(router, word, context);
+    } catch (err) {
+      console.warn(
+        `[API /student/ai/synonym] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      );
+      return c.json(
+        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
+        500,
+      );
+    }
+    const now = new Date().toISOString();
+    const outputText = result.synonyms.map((s) => s.word).join(', ');
+    await db.insert(aiConversations).values({
+      id: randomUUID(),
+      studentId: user.id,
+      mode: AiAssistantMode.SYNONYM,
+      inputText: `${word}\n${context}`,
+      outputText,
+      metadata: JSON.stringify({ word, synonyms: result.synonyms }),
+      aiProvider: null,
+      aiModel: null,
+      tokensUsed: null,
+      createdAt: now,
+    });
+    const duration = Date.now() - start;
+    console.log(`[API /student/ai/synonym] user=${user.id} duration=${duration}ms`);
+    const data: AiAssistantResult = {
+      mode: AiAssistantMode.SYNONYM,
+      input: word,
+      output: outputText,
+      details: { word, synonyms: result.synonyms },
+      provider: null,
+      model: null,
+    };
+    return c.json({ success: true, data });
+  },
+);
+
+const aiGrammarBodySchema = z.object({ text: z.string().min(1) });
+
+app.post(
+  '/student/ai/grammar',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', aiGrammarBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { text } = c.req.valid('json');
+    const start = Date.now();
+    console.log(`[API /student/ai/grammar] user=${user.id}`);
+    const router = getAiRouter();
+    if (router.availableNames().length === 0) {
+      return c.json({ success: false, error: 'AI 服务未配置' }, 503);
+    }
+    let result: Awaited<ReturnType<typeof checkGrammar>>;
+    try {
+      result = await checkGrammar(router, text);
+    } catch (err) {
+      console.warn(
+        `[API /student/ai/grammar] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      );
+      return c.json(
+        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
+        500,
+      );
+    }
+    const now = new Date().toISOString();
+    const outputText = `${result.errors.length} errors found`;
+    await db.insert(aiConversations).values({
+      id: randomUUID(),
+      studentId: user.id,
+      mode: AiAssistantMode.GRAMMAR,
+      inputText: text,
+      outputText,
+      metadata: JSON.stringify({ errors: result.errors }),
+      aiProvider: null,
+      aiModel: null,
+      tokensUsed: null,
+      createdAt: now,
+    });
+    const duration = Date.now() - start;
+    console.log(`[API /student/ai/grammar] user=${user.id} duration=${duration}ms`);
+    const data: AiAssistantResult = {
+      mode: AiAssistantMode.GRAMMAR,
+      input: text,
+      output: outputText,
+      details: { errors: result.errors },
+      provider: null,
+      model: null,
+    };
+    return c.json({ success: true, data });
+  },
+);
+
+app.get('/student/ai/history', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const offset = Number(c.req.query('offset') ?? '0');
+  const limit = Number(c.req.query('limit') ?? '20');
+  const mode = c.req.query('mode');
+  console.log(
+    `[API /student/ai/history] user=${user.id} offset=${offset} limit=${limit} mode=${mode ?? 'all'}`,
+  );
+  const conditions = [eq(aiConversations.studentId, user.id)];
+  if (mode) conditions.push(eq(aiConversations.mode, mode));
+  const rows = await db.query.aiConversations.findMany({
+    where: and(...conditions),
+    orderBy: desc(aiConversations.createdAt),
+    offset,
+    limit,
+  });
+  const data: AiConversation[] = rows.map((r) => ({
+    id: r.id,
+    studentId: r.studentId,
+    mode: r.mode as AiConversation['mode'],
+    inputText: r.inputText,
+    outputText: r.outputText,
+    metadata: safeJsonObject(r.metadata),
+    aiProvider: r.aiProvider,
+    aiModel: r.aiModel,
+    tokensUsed: r.tokensUsed,
+    createdAt: r.createdAt,
+  }));
+  return c.json({ success: true, data });
+});
+
+// ========== Student Practice ==========
+app.get('/student/question-bank', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const topicType = c.req.query('topicType');
+  const difficulty = c.req.query('difficulty');
+  const offset = Number(c.req.query('offset') ?? '0');
+  const limit = Number(c.req.query('limit') ?? '20');
+  console.log(
+    `[API /student/question-bank] user=${user.id} topicType=${topicType ?? 'all'} difficulty=${difficulty ?? 'all'}`,
+  );
+  const conditions = [eq(questionBank.isPublic, 1)];
+  if (topicType) conditions.push(eq(questionBank.topicType, topicType));
+  if (difficulty) conditions.push(eq(questionBank.difficulty, difficulty));
+  const rows = await db.query.questionBank.findMany({
+    where: and(...conditions),
+    orderBy: desc(questionBank.createdAt),
+    offset,
+    limit,
+  });
+  const data: QuestionBankItem[] = rows.map((r) => ({
+    id: r.id,
+    topicType: r.topicType,
+    topicCategory: r.topicCategory,
+    title: r.title,
+    requirements: r.requirements,
+    keyPoints: safeJsonArray(r.keyPoints),
+    referenceEssay: r.referenceEssay,
+    wordLimitMin: r.wordLimitMin,
+    wordLimitMax: r.wordLimitMax,
+    timeLimitMinutes: r.timeLimitMinutes,
+    difficulty: r.difficulty as QuestionBankItem['difficulty'],
+    source: r.source,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }));
+  return c.json({ success: true, data });
+});
+
+app.get('/student/question-bank/:id', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  console.log(`[API /student/question-bank/:id] user=${user.id} id=${id}`);
+  const r = await db.query.questionBank.findFirst({ where: eq(questionBank.id, id) });
+  if (!r) return c.json({ success: false, error: '题目不存在' }, 404);
+  const data: QuestionBankItem = {
+    id: r.id,
+    topicType: r.topicType,
+    topicCategory: r.topicCategory,
+    title: r.title,
+    requirements: r.requirements,
+    keyPoints: safeJsonArray(r.keyPoints),
+    referenceEssay: r.referenceEssay,
+    wordLimitMin: r.wordLimitMin,
+    wordLimitMax: r.wordLimitMax,
+    timeLimitMinutes: r.timeLimitMinutes,
+    difficulty: r.difficulty as QuestionBankItem['difficulty'],
+    source: r.source,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+  return c.json({ success: true, data });
+});
+
+const practiceBodySchema = z.object({
+  questionId: z.string().optional(),
+  content: z.string().min(1),
+  durationMs: z.number().optional(),
+  exerciseType: z.string().default(ExerciseType.QUESTION_BANK),
+});
+
+app.post(
+  '/student/practice',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', practiceBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { questionId, content, durationMs, exerciseType } = c.req.valid('json');
+    const start = Date.now();
+    console.log(`[API /student/practice] user=${user.id} questionId=${questionId ?? 'none'}`);
+    const wordCount = countWords(content);
+    const now = new Date().toISOString();
+    let question = null;
+    if (questionId) {
+      question = await db.query.questionBank.findFirst({
+        where: eq(questionBank.id, questionId),
+      });
+    }
+    const router = getAiRouter();
+    let feedback: GrammarResult = { errors: [] };
+    if (router.availableNames().length > 0) {
+      try {
+        feedback = await checkGrammar(router, content);
+      } catch (err) {
+        console.warn(
+          `[API /student/practice] grammar check failed user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+        );
+      }
+    }
+    const [exercise] = await db
+      .insert(practiceExercises)
+      .values({
+        id: randomUUID(),
+        studentId: user.id,
+        exerciseType,
+        questionId: questionId ?? null,
+        topicType: question?.topicType ?? null,
+        title: question?.title ?? null,
+        content,
+        wordCount,
+        score: null,
+        scoreTier: null,
+        aiFeedback: JSON.stringify({ errors: feedback.errors }),
+        durationMs: durationMs ?? null,
+        status: 'completed',
+        submittedAt: now,
+        createdAt: now,
+      })
+      .returning();
+    const duration = Date.now() - start;
+    console.log(
+      `[API /student/practice] user=${user.id} exerciseId=${exercise.id} duration=${duration}ms`,
+    );
+    return c.json({ success: true, data: { exercise, feedback } });
+  },
+);
+
+app.post(
+  '/student/practice/deep',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', practiceBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { content } = c.req.valid('json');
+    const start = Date.now();
+    console.log(`[API /student/practice/deep] user=${user.id}`);
+    const wordCount = countWords(content);
+    const now = new Date().toISOString();
+    const essayId = randomUUID();
+    await db.insert(essays).values({
+      id: essayId,
+      studentId: user.id,
+      taskId: null,
+      title: null,
+      content,
+      wordCount,
+      status: 'pending',
+      submittedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    });
+    processCorrection({ essayId }).catch((err) => console.error('Correction failed:', err));
+    const duration = Date.now() - start;
+    console.log(
+      `[API /student/practice/deep] user=${user.id} essayId=${essayId} duration=${duration}ms`,
+    );
+    return c.json({ success: true, data: { essayId } });
+  },
+);
+
+app.get('/student/practice/history', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const offset = Number(c.req.query('offset') ?? '0');
+  const limit = Number(c.req.query('limit') ?? '20');
+  console.log(`[API /student/practice/history] user=${user.id} offset=${offset} limit=${limit}`);
+  const rows = await db.query.practiceExercises.findMany({
+    where: eq(practiceExercises.studentId, user.id),
+    orderBy: desc(practiceExercises.createdAt),
+    offset,
+    limit,
+  });
+  const data: PracticeExercise[] = rows.map((r) => ({
+    id: r.id,
+    studentId: r.studentId,
+    exerciseType: r.exerciseType as PracticeExercise['exerciseType'],
+    questionId: r.questionId,
+    topicType: r.topicType,
+    title: r.title,
+    content: r.content,
+    wordCount: r.wordCount,
+    score: r.score,
+    scoreTier: r.scoreTier,
+    aiFeedback: safeJsonObject(r.aiFeedback),
+    durationMs: r.durationMs,
+    status: r.status,
+    startedAt: r.startedAt,
+    submittedAt: r.submittedAt,
+    createdAt: r.createdAt,
+  }));
+  return c.json({ success: true, data });
+});
+
+// ========== Student Progress ==========
+app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const start = Date.now();
+  console.log(`[API /student/progress] user=${user.id}`);
+  const studentEssays = await db.query.essays.findMany({
+    where: eq(essays.studentId, user.id),
+    with: { correction: true },
+    orderBy: desc(essays.createdAt),
+    limit: 200,
+  });
+  const completedEssays = studentEssays.filter((e) => e.status === 'completed');
+  const allScores = completedEssays.map((e) => e.totalScore).filter((s): s is number => s !== null);
+  const averageScore =
+    allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
+  const radarData = calculateAbilityRadar(
+    completedEssays.map((e) => ({
+      contentScore: e.correction?.contentScore ?? null,
+      languageScore: e.correction?.languageScore ?? null,
+      structureScore: e.correction?.structureScore ?? null,
+      presentationScore: e.correction?.presentationScore ?? null,
+    })),
+  );
+  const progressCurve = calculateProgressCurve(
+    completedEssays.map((e) => ({
+      totalScore: e.totalScore,
+      submittedAt: e.submittedAt,
+    })),
+  );
+  const earnedAchievements = await db.query.achievements.findMany({
+    where: eq(achievements.studentId, user.id),
+  });
+  let rank: { classRank: number; total: number; percentile: number } | null = null;
+  const myEnrollments = await db.query.classEnrollments.findMany({
+    where: and(eq(classEnrollments.userId, user.id), eq(classEnrollments.role, 'student')),
+    columns: { classId: true },
+  });
+  if (myEnrollments.length > 0 && averageScore !== null) {
+    const classId = myEnrollments[0].classId;
+    const peerEnrollments = await db.query.classEnrollments.findMany({
+      where: and(eq(classEnrollments.classId, classId), eq(classEnrollments.role, 'student')),
+      columns: { userId: true },
+    });
+    const peerIds = peerEnrollments.map((e) => e.userId).filter((id) => id !== user.id);
+    if (peerIds.length > 0) {
+      const peerEssays = await db.query.essays.findMany({
+        where: and(inArray(essays.studentId, peerIds), eq(essays.status, 'completed')),
+        columns: { studentId: true, totalScore: true },
+      });
+      const peerAvgMap = new Map<string, number[]>();
+      for (const e of peerEssays) {
+        if (e.totalScore === null) continue;
+        let arr = peerAvgMap.get(e.studentId);
+        if (!arr) {
+          arr = [];
+          peerAvgMap.set(e.studentId, arr);
+        }
+        arr.push(e.totalScore);
+      }
+      const peerAverages = Array.from(peerAvgMap.values()).map(
+        (arr) => arr.reduce((a, b) => a + b, 0) / arr.length,
+      );
+      rank = calculateClassRank(averageScore, peerAverages);
+    }
+  }
+  const level: StudentProgress['level'] =
+    averageScore === null
+      ? 'basic'
+      : averageScore < 9
+        ? 'basic'
+        : averageScore < 12
+          ? 'improving'
+          : 'advanced';
+  const data: StudentProgress = {
+    studentId: user.id,
+    totalEssays: completedEssays.length,
+    averageScore,
+    radarData,
+    progressCurve,
+    achievements: earnedAchievements.map((a) => ({
+      id: a.id,
+      studentId: a.studentId,
+      code: a.code,
+      tier: a.tier as Achievement['tier'],
+      title: a.title,
+      description: a.description,
+      icon: a.icon,
+      earnedAt: a.earnedAt,
+      isUnlocked: true,
+    })),
+    rank,
+    level,
+  };
+  const duration = Date.now() - start;
+  console.log(
+    `[API /student/progress] user=${user.id} essays=${completedEssays.length} duration=${duration}ms`,
+  );
+  return c.json({ success: true, data });
+});
+
+app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const start = Date.now();
+  console.log(`[API /student/achievements] user=${user.id}`);
+  const earned = await db.query.achievements.findMany({
+    where: eq(achievements.studentId, user.id),
+  });
+  const earnedMap = new Map(earned.map((a) => [a.code, a]));
+  const earnedCodes = new Set(earned.map((a) => a.code));
+  const studentEssays = await db.query.essays.findMany({
+    where: eq(essays.studentId, user.id),
+    with: { correction: true },
+    orderBy: desc(essays.createdAt),
+    limit: 200,
+  });
+  const completedEssays = studentEssays.filter((e) => e.status === 'completed');
+  const allScores = completedEssays.map((e) => e.totalScore).filter((s): s is number => s !== null);
+  const averageScore =
+    allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
+  const perfectScores = allScores.filter((s) => s >= 15).length;
+  const asc = completedEssays.slice().sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+  let streak = 0;
+  let maxStreak = 0;
+  let prev: number | null = null;
+  for (const e of asc) {
+    if (e.totalScore === null) {
+      streak = 0;
+      prev = null;
+      continue;
+    }
+    if (prev !== null && e.totalScore > prev) {
+      streak++;
+      if (streak > maxStreak) maxStreak = streak;
+    } else {
+      streak = 0;
+    }
+    prev = e.totalScore;
+  }
+  let errorFreeEssays = 0;
+  for (const e of completedEssays) {
+    try {
+      const errs = JSON.parse(e.correction?.errors ?? '[]');
+      if (Array.isArray(errs) && errs.length === 0) errorFreeEssays++;
+    } catch {}
+  }
+  const expectedCodes = checkAchievements({
+    totalEssays: completedEssays.length,
+    averageScore,
+    perfectScores,
+    consecutiveProgress: maxStreak,
+    errorFreeEssays,
+  });
+  const unlockedNotRecorded = expectedCodes.filter((code) => !earnedCodes.has(code));
+  if (unlockedNotRecorded.length > 0) {
+    console.log(
+      `[API /student/achievements] user=${user.id} unlocked-but-not-recorded=${unlockedNotRecorded.join(',')}`,
+    );
+  }
+  const list: Achievement[] = ACHIEVEMENT_CATALOG.map((item) => {
+    const rec = earnedMap.get(item.code);
+    if (rec) {
+      return {
+        id: rec.id,
+        studentId: rec.studentId,
+        code: rec.code,
+        tier: rec.tier as Achievement['tier'],
+        title: rec.title,
+        description: rec.description,
+        icon: rec.icon,
+        earnedAt: rec.earnedAt,
+        isUnlocked: true,
+      };
+    }
+    return {
+      id: '',
+      studentId: user.id,
+      code: item.code,
+      tier: item.tier,
+      title: item.title,
+      description: item.description,
+      icon: item.icon,
+      earnedAt: '',
+      isUnlocked: false,
+    };
+  });
+  const duration = Date.now() - start;
+  console.log(
+    `[API /student/achievements] user=${user.id} earned=${earned.length} duration=${duration}ms`,
+  );
+  return c.json({ success: true, data: list });
+});
+
+// ========== Student Dashboard & Drafts ==========
+app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const start = Date.now();
+  console.log(`[API /student/dashboard] user=${user.id}`);
+  const enrollments = await db.query.classEnrollments.findMany({
+    where: and(eq(classEnrollments.userId, user.id), eq(classEnrollments.role, 'student')),
+    columns: { classId: true },
+  });
+  const classIds = enrollments.map((e) => e.classId);
+  const [pendingTasksRows, studentEssays, sentenceResources] = await Promise.all([
+    classIds.length > 0
+      ? db.query.essayTasks.findMany({
+          where: and(inArray(essayTasks.classId, classIds), eq(essayTasks.status, 'published')),
+          columns: { id: true },
+        })
+      : Promise.resolve([]),
+    db.query.essays.findMany({
+      where: eq(essays.studentId, user.id),
+      columns: { status: true, totalScore: true },
+    }),
+    db.query.teachingResources.findMany({
+      where: eq(teachingResources.type, TeachingResourceType.SENTENCE),
+      limit: 100,
+    }),
+  ]);
+  const pendingTasks = pendingTasksRows.length;
+  const completedEssays = studentEssays.filter((e) => e.status === 'completed');
+  const correctedEssays = completedEssays.length;
+  const allScores = completedEssays.map((e) => e.totalScore).filter((s): s is number => s !== null);
+  const averageScore =
+    allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
+  let quote: DailyQuote | null = null;
+  if (sentenceResources.length > 0) {
+    const pick = sentenceResources[Math.floor(Math.random() * sentenceResources.length)];
+    quote = { id: pick.id, text: pick.content, translation: null, source: pick.title };
+  }
+  const duration = Date.now() - start;
+  console.log(
+    `[API /student/dashboard] user=${user.id} pending=${pendingTasks} corrected=${correctedEssays} duration=${duration}ms`,
+  );
+  return c.json({
+    success: true,
+    data: { pendingTasks, correctedEssays, averageScore, quote },
+  });
+});
+
+app.get('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const taskId = c.req.param('taskId');
+  console.log(`[API /student/drafts/:taskId GET] user=${user.id} taskId=${taskId}`);
+  const draft = await db.query.essayDrafts.findFirst({
+    where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
+  });
+  if (!draft) return c.json({ success: true, data: null });
+  const data: EssayDraft = {
+    id: draft.id,
+    studentId: draft.studentId,
+    taskId: draft.taskId,
+    content: draft.content,
+    wordCount: draft.wordCount,
+    durationMs: draft.durationMs,
+    updatedAt: draft.updatedAt,
+  };
+  return c.json({ success: true, data });
+});
+
+const draftBodySchema = z.object({
+  content: z.string().min(1),
+  wordCount: z.number().optional(),
+  durationMs: z.number().optional(),
+});
+
+app.post(
+  '/student/drafts/:taskId',
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  zValidator('json', draftBodySchema),
+  async (c) => {
+    const user = c.get('user');
+    const taskId = c.req.param('taskId');
+    const { content, wordCount, durationMs } = c.req.valid('json');
+    const now = new Date().toISOString();
+    console.log(`[API /student/drafts/:taskId POST] user=${user.id} taskId=${taskId}`);
+    const existing = await db.query.essayDrafts.findFirst({
+      where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
+    });
+    let row: typeof essayDrafts.$inferSelect;
+    if (existing) {
+      [row] = await db
+        .update(essayDrafts)
+        .set({
+          content,
+          wordCount: wordCount ?? null,
+          durationMs: durationMs ?? null,
+          updatedAt: now,
+        })
+        .where(eq(essayDrafts.id, existing.id))
+        .returning();
+    } else {
+      [row] = await db
+        .insert(essayDrafts)
+        .values({
+          id: randomUUID(),
+          studentId: user.id,
+          taskId,
+          content,
+          wordCount: wordCount ?? null,
+          durationMs: durationMs ?? null,
+          updatedAt: now,
+        })
+        .returning();
+    }
+    const data: EssayDraft = {
+      id: row.id,
+      studentId: row.studentId,
+      taskId: row.taskId,
+      content: row.content,
+      wordCount: row.wordCount,
+      durationMs: row.durationMs,
+      updatedAt: row.updatedAt,
+    };
+    return c.json({ success: true, data });
+  },
+);
+
+app.delete('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+  const user = c.get('user');
+  const taskId = c.req.param('taskId');
+  console.log(`[API /student/drafts/:taskId DELETE] user=${user.id} taskId=${taskId}`);
+  await db
+    .delete(essayDrafts)
+    .where(and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)));
+  return c.json({ success: true });
+});
 
 export type AppType = typeof app;
 

@@ -202,7 +202,9 @@ function ImportModal({
 
             {failedResults.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-error">失败明细（{failedResults.length} 条）</p>
+                <p className="text-sm font-medium text-error">
+                  失败明细（{failedResults.length} 条）
+                </p>
                 <div className="overflow-x-auto rounded-md border border-border">
                   <table className="w-full text-sm">
                     <thead className="bg-bg-secondary text-text-secondary">
@@ -382,9 +384,7 @@ export default function TeacherStudentsPage() {
   };
 
   const handleTagUpdated = (studentId: string, newTag: string) => {
-    setStudents((prev) =>
-      prev.map((s) => (s.id === studentId ? { ...s, tag: newTag } : s)),
-    );
+    setStudents((prev) => prev.map((s) => (s.id === studentId ? { ...s, tag: newTag } : s)));
   };
 
   const handleOpenImport = () => {
@@ -404,7 +404,9 @@ export default function TeacherStudentsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-serif font-bold text-text-primary">学生管理</h1>
-              <p className="text-sm text-text-secondary mt-1">查看班级学生、维护学生标签与批量导入</p>
+              <p className="text-sm text-text-secondary mt-1">
+                查看班级学生、维护学生标签与批量导入
+              </p>
             </div>
             <Button onClick={handleOpenImport}>
               <Upload className="w-4 h-4 mr-2" />

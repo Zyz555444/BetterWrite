@@ -1,37 +1,60 @@
 'use client';
 
+import { BarChart } from '@/components/charts';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { RoleGuard } from '@/components/layout/role-guard';
+import { DailyQuote } from '@/components/student';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type Essay, type EssayTask, fetcher } from '@/lib/api/fetcher';
-import { UserRole } from '@betterwrite/shared';
-import { formatScore } from '@betterwrite/shared';
+import type { DailyQuote as DailyQuoteData } from '@betterwrite/shared';
+import { UserRole, calculateScoreDistribution, formatScore } from '@betterwrite/shared';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+interface DashboardData {
+  pendingTasks: number;
+  correctedEssays: number;
+  averageScore: number | null;
+  quote: DailyQuoteData | null;
+}
 
 export default function StudentDashboardPage() {
   const [tasks, setTasks] = useState<EssayTask[]>([]);
   const [essays, setEssays] = useState<Essay[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetcher.listTasks(), fetcher.listMyEssays()])
-      .then(([tasksRes, essaysRes]) => {
+    console.log('[StudentDashboard] loading dashboard, tasks, essays');
+    Promise.all([fetcher.getStudentDashboard(), fetcher.listTasks(), fetcher.listMyEssays()])
+      .then(([dashboardRes, tasksRes, essaysRes]) => {
+        if (dashboardRes.success && dashboardRes.data) {
+          setDashboard(dashboardRes.data);
+          console.log(
+            `[StudentDashboard] dashboard loaded pendingTasks=${dashboardRes.data.pendingTasks} correctedEssays=${dashboardRes.data.correctedEssays} hasQuote=${dashboardRes.data.quote ? 'true' : 'false'}`,
+          );
+        }
         if (tasksRes.success && tasksRes.data) setTasks(tasksRes.data);
         if (essaysRes.success && essaysRes.data) setEssays(essaysRes.data);
       })
       .finally(() => setIsLoading(false));
   }, []);
 
-  const pendingTasks = tasks.filter((t) => t.status === 'published').length;
-  const correctedEssays = essays.filter((e) => e.status === 'completed').length;
-  const averageScore =
-    correctedEssays > 0
-      ? essays
-          .filter((e) => e.totalScore !== null)
-          .reduce((sum, e) => sum + (e.totalScore ?? 0), 0) / correctedEssays
-      : null;
+  const scoreDistData = useMemo(
+    () =>
+      calculateScoreDistribution(
+        essays
+          .filter((e) => e.status === 'completed')
+          .map((e) => e.totalScore)
+          .filter((s): s is number => s !== null),
+      ).map((item) => ({ label: item.range, value: item.count })),
+    [essays],
+  );
+
+  const pendingTasks = dashboard?.pendingTasks ?? 0;
+  const correctedEssays = dashboard?.correctedEssays ?? 0;
+  const averageScore = dashboard?.averageScore ?? null;
 
   const stats = [
     { label: '待完成任务', value: isLoading ? '-' : pendingTasks.toString() },
@@ -63,6 +86,21 @@ export default function StudentDashboardPage() {
               </Card>
             ))}
           </div>
+
+          <DailyQuote quote={dashboard?.quote ?? null} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">成绩分布</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <p className="text-text-secondary text-sm">加载中...</p>
+              ) : (
+                <BarChart data={scoreDistData} height={220} color="var(--accent)" />
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>

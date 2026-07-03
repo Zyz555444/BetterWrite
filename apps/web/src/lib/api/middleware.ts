@@ -1,5 +1,7 @@
 import { lucia } from '@/lib/auth';
+import { apiTokens, db } from '@betterwrite/db';
 import { type UserRoleType, hasRequiredRole } from '@betterwrite/shared';
+import { and, eq, gt } from 'drizzle-orm';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import { cookies } from 'next/headers';
@@ -17,6 +19,31 @@ export interface AuthVariables {
 }
 
 export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
+  const authHeader = c.req.header('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const now = new Date().toISOString();
+    const record = await db.query.apiTokens.findFirst({
+      where: and(eq(apiTokens.token, token), gt(apiTokens.expiresAt, now)),
+      with: { user: true },
+    });
+    if (!record || !record.user || !record.user.isActive) {
+      throw new HTTPException(401, { message: 'Token 无效或已过期' });
+    }
+    await db.update(apiTokens).set({ lastUsedAt: now }).where(eq(apiTokens.id, record.id));
+    c.set('user', {
+      id: record.user.id,
+      email: record.user.email,
+      name: record.user.name,
+      role: record.user.role as UserRoleType,
+      schoolId: record.user.schoolId,
+      studentNo: record.user.studentNo,
+      avatarUrl: record.user.avatarUrl,
+    });
+    await next();
+    return;
+  }
+
   const sessionId = (await cookies()).get(lucia.sessionCookieName)?.value ?? null;
   if (!sessionId) {
     throw new HTTPException(401, { message: '请先登录' });

@@ -77,6 +77,34 @@ app.onError((err, c) => {
 
 app.notFound((c) => c.json({ success: false, error: '接口不存在' }, 404));
 
+// ========== Access Control Helpers ==========
+// 防止 IDOR：教师只能访问自己所教班级/学生，学校管理员只能访问本校数据。
+type AuthUser = AuthVariables['user'];
+
+async function assertClassAccess(user: AuthUser, classId: string): Promise<boolean> {
+  if (user.role === UserRole.SUPER_ADMIN) return true;
+  const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
+  if (!cls) return false;
+  if (user.role === UserRole.SCHOOL_ADMIN) return cls.schoolId === user.schoolId;
+  if (user.role === UserRole.TEACHER) return cls.teacherId === user.id;
+  return false;
+}
+
+async function assertStudentAccess(user: AuthUser, studentId: string): Promise<boolean> {
+  if (user.role === UserRole.SUPER_ADMIN) return true;
+  const student = await db.query.users.findFirst({ where: eq(users.id, studentId) });
+  if (!student) return false;
+  if (user.role === UserRole.SCHOOL_ADMIN) return student.schoolId === user.schoolId;
+  if (user.role === UserRole.TEACHER) {
+    const enrollments = await db.query.classEnrollments.findMany({
+      where: and(eq(classEnrollments.userId, studentId), eq(classEnrollments.role, 'student')),
+      with: { class: true },
+    });
+    return enrollments.some((en) => en.class?.teacherId === user.id);
+  }
+  return false;
+}
+
 // ========== Health ==========
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
@@ -127,7 +155,7 @@ app.post('/auth/login', rateLimit(10, 60_000), zValidator('json', loginSchema), 
 
 const registerSchema = z.object({
   email: z.string().email('请输入有效邮箱'),
-  password: z.string().min(6, '密码至少6位'),
+  password: z.string().min(8, '密码至少8位'),
   name: z.string().min(1, '请输入姓名'),
   role: z.enum([UserRole.TEACHER, UserRole.STUDENT]).default(UserRole.STUDENT),
   schoolCode: z.string().optional(),
@@ -332,7 +360,10 @@ app.post('/auth/device-token', authMiddleware, zValidator('json', deviceTokenSch
 
 // ========== OCR ==========
 const ocrSchema = z.object({
-  imageBase64: z.string().min(1),
+  imageBase64: z
+    .string()
+    .min(1)
+    .max(10 * 1024 * 1024, '图片过大，请小于 10MB'),
   taskId: z.string().optional(),
 });
 
@@ -582,9 +613,19 @@ app.get('/tasks', authMiddleware, async (c) => {
 });
 
 app.get('/tasks/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
   const id = c.req.param('id');
   const task = await db.query.essayTasks.findFirst({ where: eq(essayTasks.id, id) });
   if (!task) return c.json({ success: false, error: 'Not found' }, 404);
+  // 学生只能查看自己所在班级的任务；教师/管理员需有该班级访问权。
+  if (user.role === UserRole.STUDENT) {
+    const enrolled = await db.query.classEnrollments.findFirst({
+      where: and(eq(classEnrollments.classId, task.classId), eq(classEnrollments.userId, user.id)),
+    });
+    if (!enrolled) return c.json({ success: false, error: '无权访问' }, 403);
+  } else if (!(await assertClassAccess(user, task.classId))) {
+    return c.json({ success: false, error: '无权访问' }, 403);
+  }
   return c.json({ success: true, data: task });
 });
 
@@ -732,6 +773,9 @@ app.get(
     // 1. 校验班级存在
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
     if (!cls) return c.json({ success: false, error: '班级不存在' }, 404);
+    if (!(await assertClassAccess(user, classId))) {
+      return c.json({ success: false, error: '无权访问该班级' }, 403);
+    }
 
     // 2. 获取班级学生 IDs
     const enrollments = await db.query.classEnrollments.findMany({
@@ -842,6 +886,9 @@ app.get(
 
     const student = await db.query.users.findFirst({ where: eq(users.id, studentId) });
     if (!student) return c.json({ success: false, error: '学生不存在' }, 404);
+    if (!(await assertStudentAccess(user, studentId))) {
+      return c.json({ success: false, error: '无权访问该学生' }, 403);
+    }
 
     const studentEssays = await db.query.essays.findMany({
       where: eq(essays.studentId, studentId),
@@ -938,6 +985,9 @@ app.get(
 
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
     if (!cls) return c.json({ success: false, error: '班级不存在' }, 404);
+    if (!(await assertClassAccess(user, classId))) {
+      return c.json({ success: false, error: '无权访问该班级' }, 403);
+    }
 
     const enrollments = await db.query.classEnrollments.findMany({
       where: and(eq(classEnrollments.classId, classId), eq(classEnrollments.role, 'student')),
@@ -1009,9 +1059,12 @@ app.get(
       `[API /teacher/students] user=${user.id} classId=${classId ?? 'all'} keyword=${keyword ?? ''}`,
     );
 
-    // 确定查询的班级范围
+    // 确定查询的班级范围（按角色隔离，防止跨校/跨班 IDOR）
     let targetClassIds: string[] = [];
     if (classId) {
+      if (!(await assertClassAccess(user, classId))) {
+        return c.json({ success: false, error: '无权访问该班级' }, 403);
+      }
       targetClassIds = [classId];
     } else if (user.role === UserRole.TEACHER) {
       const myClasses = await db.query.classes.findMany({
@@ -1019,7 +1072,14 @@ app.get(
         columns: { id: true },
       });
       targetClassIds = myClasses.map((c) => c.id);
+    } else if (user.role === UserRole.SCHOOL_ADMIN && user.schoolId) {
+      const schoolClasses = await db.query.classes.findMany({
+        where: eq(classes.schoolId, user.schoolId),
+        columns: { id: true },
+      });
+      targetClassIds = schoolClasses.map((c) => c.id);
     }
+    // SUPER_ADMIN 且未指定 classId 时 targetClassIds 为空，下方查询全部学生。
 
     // 获取 enrollments
     const enrollments =
@@ -1031,11 +1091,13 @@ app.get(
             ),
             with: { class: { columns: { id: true, name: true, grade: true } } },
           })
-        : await db.query.classEnrollments.findMany({
-            where: eq(classEnrollments.role, 'student'),
-            with: { class: { columns: { id: true, name: true, grade: true } } },
-            limit: 200,
-          });
+        : user.role === UserRole.SUPER_ADMIN
+          ? await db.query.classEnrollments.findMany({
+              where: eq(classEnrollments.role, 'student'),
+              with: { class: { columns: { id: true, name: true, grade: true } } },
+              limit: 200,
+            })
+          : [];
 
     // 获取学生用户信息
     const studentIds = enrollments.map((e) => e.userId);
@@ -1125,6 +1187,9 @@ app.get(
 
     const student = await db.query.users.findFirst({ where: eq(users.id, studentId) });
     if (!student) return c.json({ success: false, error: '学生不存在' }, 404);
+    if (!(await assertStudentAccess(user, studentId))) {
+      return c.json({ success: false, error: '无权访问该学生' }, 403);
+    }
 
     const enrollments = await db.query.classEnrollments.findMany({
       where: eq(classEnrollments.userId, studentId),
@@ -1201,6 +1266,9 @@ app.post(
 
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
     if (!cls) return c.json({ success: false, error: '班级不存在' }, 404);
+    if (!(await assertClassAccess(user, classId))) {
+      return c.json({ success: false, error: '无权操作该班级' }, 403);
+    }
 
     // 解析 CSV
     const lines = csv.trim().split(/\r?\n/);
@@ -1223,10 +1291,18 @@ app.post(
       name: string;
       email: string;
       success: boolean;
+      password?: string;
       error?: string;
     }> = [];
     let successCount = 0;
     const now = new Date().toISOString();
+
+    // 为每个学生生成 8 位随机密码（避免共享默认密码 123456 的安全风险）。
+    const generateRandomPassword = (): string =>
+      Array.from({ length: 8 }, () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+        return chars[Math.floor(Math.random() * chars.length)];
+      }).join('');
 
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -1262,8 +1338,8 @@ app.post(
         }
 
         const userId = randomUUID();
-        const defaultPassword = process.env.DEFAULT_STUDENT_PASSWORD ?? '123456';
-        const passwordHash = await bcrypt.hash(defaultPassword, 10);
+        const password = generateRandomPassword();
+        const passwordHash = await bcrypt.hash(password, 10);
         await db.insert(users).values({
           id: userId,
           email,
@@ -1282,7 +1358,7 @@ app.post(
           role: 'student',
           createdAt: now,
         });
-        results.push({ line: i + 1, name, email, success: true });
+        results.push({ line: i + 1, name, email, success: true, password });
         successCount++;
       } catch (err) {
         results.push({
@@ -1327,6 +1403,9 @@ app.patch(
 
     const student = await db.query.users.findFirst({ where: eq(users.id, studentId) });
     if (!student) return c.json({ success: false, error: '学生不存在' }, 404);
+    if (!(await assertStudentAccess(user, studentId))) {
+      return c.json({ success: false, error: '无权操作该学生' }, 403);
+    }
 
     const now = new Date().toISOString();
     const existing = await db.query.studentTags.findFirst({
@@ -1789,10 +1868,7 @@ app.post(
       console.warn(
         `[API /student/errors/practice] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
       );
-      return c.json(
-        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
-        500,
-      );
+      return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
   },
 );
@@ -1837,6 +1913,7 @@ app.post(
   '/student/ai/polish',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  rateLimit(5, 60_000),
   zValidator('json', aiPolishBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -1854,10 +1931,7 @@ app.post(
       console.warn(
         `[API /student/ai/polish] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
       );
-      return c.json(
-        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
-        500,
-      );
+      return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
     const now = new Date().toISOString();
     await db.insert(aiConversations).values({
@@ -1909,10 +1983,7 @@ app.post(
       console.warn(
         `[API /student/ai/upgrade] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
       );
-      return c.json(
-        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
-        500,
-      );
+      return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
     const now = new Date().toISOString();
     const outputText = result.sentences.map((s) => s.upgraded).join('\n');
@@ -1968,10 +2039,7 @@ app.post(
       console.warn(
         `[API /student/ai/synonym] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
       );
-      return c.json(
-        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
-        500,
-      );
+      return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
     const now = new Date().toISOString();
     const outputText = result.synonyms.map((s) => s.word).join(', ');
@@ -2007,6 +2075,7 @@ app.post(
   '/student/ai/grammar',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  rateLimit(5, 60_000),
   zValidator('json', aiGrammarBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -2024,10 +2093,7 @@ app.post(
       console.warn(
         `[API /student/ai/grammar] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
       );
-      return c.json(
-        { success: false, error: err instanceof Error ? err.message : 'AI 调用失败' },
-        500,
-      );
+      return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
     const now = new Date().toISOString();
     const outputText = `${result.errors.length} errors found`;

@@ -20,6 +20,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
     ...options,
   });
+
+  if (!res.ok) {
+    let errorMessage = `请求失败 (${res.status})`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      if (body?.error) errorMessage = body.error;
+    } catch {
+      // 响应体不是 JSON（如网关返回的 HTML 错误页）
+    }
+    throw new Error(errorMessage);
+  }
+
   const data = (await res.json()) as T;
   return data;
 }

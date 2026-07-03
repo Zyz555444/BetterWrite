@@ -11,6 +11,7 @@ export const lucia = new Lucia(adapter, {
   sessionCookie: {
     attributes: {
       secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
     },
   },
   getUserAttributes: (attributes) => {
@@ -22,6 +23,7 @@ export const lucia = new Lucia(adapter, {
       schoolId: attributes.schoolId,
       studentNo: attributes.studentNo,
       avatarUrl: attributes.avatarUrl,
+      isActive: attributes.isActive,
     };
   },
 });
@@ -61,6 +63,7 @@ declare module 'lucia' {
       schoolId: string | null;
       studentNo: string | null;
       avatarUrl: string | null;
+      isActive: boolean;
     };
   }
 }

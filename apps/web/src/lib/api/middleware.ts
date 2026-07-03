@@ -15,6 +15,7 @@ export interface AuthVariables {
     schoolId: string | null;
     studentNo: string | null;
     avatarUrl: string | null;
+    isActive: boolean;
   };
 }
 
@@ -39,6 +40,7 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(asy
       schoolId: record.user.schoolId,
       studentNo: record.user.studentNo,
       avatarUrl: record.user.avatarUrl,
+      isActive: record.user.isActive,
     });
     await next();
     return;
@@ -63,6 +65,12 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(asy
 
   if (!user) {
     throw new HTTPException(401, { message: '请先登录' });
+  }
+
+  // 已被管理员停用的用户即使 session 仍有效也禁止访问。
+  if (!user.isActive) {
+    await lucia.invalidateSession(session.id);
+    throw new HTTPException(403, { message: '账号已停用，请联系管理员' });
   }
 
   c.set('user', user);

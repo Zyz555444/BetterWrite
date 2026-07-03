@@ -45,7 +45,7 @@ function createInitialChecklist(): Record<string, boolean> {
 }
 
 export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftReturn {
-  const { taskId, wordLimitMin } = options;
+  const { taskId, wordLimitMin, wordLimitMax } = options;
 
   const [content, setContentState] = useState('');
   const [durationMs, setDurationMs] = useState(0);
@@ -157,7 +157,7 @@ export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftRetur
   }, []);
 
   const allChecked = ESSAY_CHECKLIST_ITEMS.every((item) => checklist[item.key] === true);
-  const isReady = allChecked && wordCount >= wordLimitMin;
+  const isReady = allChecked && wordCount >= wordLimitMin && wordCount <= wordLimitMax;
 
   return {
     content,

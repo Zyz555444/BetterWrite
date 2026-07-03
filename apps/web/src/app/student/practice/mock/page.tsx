@@ -209,7 +209,7 @@ export default function StudentPracticeMockPage() {
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="在此输入你的英语作文..."
                     disabled={hasSubmitted}
-                    className="w-full min-h-[360px] resize-y rounded-md ring-1 ring-border bg-paper p-4 text-copy-16 leading-relaxed text-neutral-10 placeholder:text-neutral-7 focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20 transition-all disabled:opacity-70"
+                    className="w-full min-h-[360px] resize-y rounded-md ring-1 ring-border bg-paper p-4 text-copy-16 leading-relaxed text-neutral-10 placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku disabled:opacity-70"
                     spellCheck={false}
                   />
                   <div className="mt-3 flex items-center justify-between text-copy-14 text-neutral-8">

@@ -66,7 +66,7 @@ export default function StudentTasksPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {tasks.map((task) => (
-              <Card key={task.id} className="hover:border-accent/30 transition-colors">
+              <Card key={task.id} className="hover:ring-accent/30 transition-colors">
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>

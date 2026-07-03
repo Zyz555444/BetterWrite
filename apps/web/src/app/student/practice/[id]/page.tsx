@@ -185,7 +185,7 @@ export default function StudentPracticeItemPage() {
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder="在此输入你的英语作文..."
-                    className="w-full min-h-[360px] resize-y rounded-md ring-1 ring-border bg-paper p-4 text-copy-16 leading-relaxed text-neutral-10 placeholder:text-neutral-7 focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20 transition-all"
+                    className="w-full min-h-[360px] resize-y rounded-md ring-1 ring-border bg-paper p-4 text-copy-16 leading-relaxed text-neutral-10 placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                     spellCheck={false}
                   />
                 </CardContent>

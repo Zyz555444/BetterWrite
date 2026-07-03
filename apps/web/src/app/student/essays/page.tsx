@@ -76,7 +76,7 @@ export default function StudentEssaysPage() {
           <div className="grid grid-cols-1 gap-4">
             {essays.map((essay) => (
               <Link key={essay.id} href={`/student/essays/${essay.id}`}>
-                <Card className="hover:border-accent/30 transition-colors cursor-pointer group">
+                <Card className="hover:ring-accent/30 transition-colors cursor-pointer group">
                   <CardContent className="p-5">
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">

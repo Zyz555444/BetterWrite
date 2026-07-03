@@ -70,7 +70,7 @@ export default function TeacherResourcesPage() {
             {categories.map((category) => (
               <Card
                 key={category.type}
-                className="hover:border-accent hover:ring-1 ring-border cursor-pointer group"
+                className="hover:ring-accent/30 cursor-pointer group"
                 onClick={() => handleNavigate(category.type)}
               >
                 <CardContent className="p-6">

@@ -2,6 +2,7 @@
 
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Button } from '@/components/ui/button';
+import type { AuthUser } from '@/lib/auth-store';
 import { useAuth } from '@/lib/auth-store';
 import { UserRole, type UserRoleType } from '@betterwrite/shared';
 import {

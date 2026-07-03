@@ -45,8 +45,8 @@ export function AchievementBadge({ achievement, size = 'md' }: AchievementBadgeP
   const isSm = size === 'sm';
   const badgeSize = isSm ? 'w-12 h-12' : 'w-20 h-20';
   const iconClass = isSm ? 'w-5 h-5' : 'w-8 h-8';
-  const charClass = isSm ? 'text-base' : 'text-2xl';
-  const titleClass = isSm ? 'text-xs' : 'text-sm';
+  const charClass = isSm ? 'text-copy-16' : 'text-title-24';
+  const titleClass = isSm ? 'text-label-12' : 'text-copy-14';
   const gradient = tierGradients[achievement.tier] ?? tierGradients.bronze;
 
   const iconName = achievement.icon ? achievement.icon.toLowerCase() : null;
@@ -58,7 +58,7 @@ export function AchievementBadge({ achievement, size = 'md' }: AchievementBadgeP
   return (
     <div className="flex flex-col items-center text-center gap-2">
       <div
-        className={`${badgeSize} rounded-full flex items-center justify-center font-serif font-bold text-white shadow-md ${
+        className={`${badgeSize} rounded-full flex items-center justify-center font-serif font-medium text-white ring-1 ring-neutral-4 ${
           achievement.isUnlocked ? '' : 'grayscale opacity-60'
         }`}
         style={{ backgroundImage: gradient }}
@@ -74,9 +74,9 @@ export function AchievementBadge({ achievement, size = 'md' }: AchievementBadgeP
         )}
       </div>
       <div className="max-w-[160px]">
-        <p className={`${titleClass} font-medium text-text-primary`}>{achievement.title}</p>
+        <p className={`${titleClass} font-medium text-neutral-10`}>{achievement.title}</p>
         {!isSm && achievement.description ? (
-          <p className="text-xs text-text-secondary mt-1">{achievement.description}</p>
+          <p className="text-label-12 text-neutral-8 mt-1">{achievement.description}</p>
         ) : null}
       </div>
     </div>

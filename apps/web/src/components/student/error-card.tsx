@@ -34,16 +34,16 @@ export function ErrorCard({ error, onMaster }: ErrorCardProps) {
         <div className="flex items-center gap-2">
           <Badge variant="destructive">{typeLabel}</Badge>
         </div>
-        <p className="text-text-primary leading-relaxed">
+        <p className="text-neutral-10 leading-relaxed">
           <span className="line-through text-error">{error.original}</span>
-          <ArrowRight className="inline-block w-4 h-4 mx-2 text-text-tertiary align-middle" />
+          <ArrowRight className="inline-block w-4 h-4 mx-2 text-neutral-7 align-middle" />
           <span className="text-success font-medium">{error.corrected}</span>
         </p>
         {error.explanation ? (
-          <p className="text-sm text-text-secondary">{error.explanation}</p>
+          <p className="text-copy-14 text-neutral-8">{error.explanation}</p>
         ) : null}
         <div className="flex items-center justify-between pt-2 border-t border-border">
-          <span className="text-xs text-text-tertiary">
+          <span className="text-label-12 text-neutral-7">
             {new Date(error.createdAt).toLocaleDateString('zh-CN')}
           </span>
           {isMastered ? (

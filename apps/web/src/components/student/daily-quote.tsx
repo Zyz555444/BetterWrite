@@ -24,7 +24,7 @@ export function DailyQuote({ quote }: DailyQuoteProps) {
           <span className="font-serif text-accent text-4xl select-none" aria-hidden>
             &ldquo;
           </span>
-          <p className="text-text-tertiary text-sm mt-2">暂无金句</p>
+          <p className="text-neutral-7 text-copy-14 mt-2">暂无金句</p>
         </CardContent>
       </Card>
     );
@@ -40,13 +40,13 @@ export function DailyQuote({ quote }: DailyQuoteProps) {
           &ldquo;
         </span>
         <div className="flex-1 space-y-2">
-          <p className="font-serif italic text-lg text-text-primary leading-relaxed">
+          <p className="font-serif italic text-title-20 text-neutral-10 leading-relaxed">
             {quote.text}
           </p>
           {quote.translation ? (
-            <p className="text-text-secondary text-sm">{quote.translation}</p>
+            <p className="text-neutral-8 text-copy-14">{quote.translation}</p>
           ) : null}
-          {quote.source ? <p className="text-text-tertiary text-sm">— {quote.source}</p> : null}
+          {quote.source ? <p className="text-neutral-7 text-copy-14">— {quote.source}</p> : null}
         </div>
       </CardContent>
     </Card>

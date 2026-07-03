@@ -47,22 +47,22 @@ export function AiAssistantPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-title-20 flex items-center gap-2">
           <span>{title}</span>
           <Badge variant="secondary">{mode}</Badge>
         </CardTitle>
-        <p className="text-sm text-text-secondary">{description}</p>
+        <p className="text-copy-14 text-neutral-8">{description}</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <textarea
-          className="w-full min-h-32 rounded-md border border-border bg-bg-primary px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus-visible:outline-none focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent/20 transition-all duration-fast ease-yohaku resize-y"
+          className="w-full min-h-32 rounded-md bg-paper px-3 py-2 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku resize-y"
           placeholder={computedPlaceholder}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={isLoading}
         />
         <div className="flex items-center justify-between">
-          <span className="text-xs text-text-tertiary">{input.length} 字符</span>
+          <span className="text-label-12 text-neutral-7">{input.length} 字符</span>
           <Button onClick={handleSubmit} disabled={isLoading || !input.trim()}>
             {isLoading ? (
               <>
@@ -75,25 +75,25 @@ export function AiAssistantPanel({
           </Button>
         </div>
         {error ? (
-          <div className="flex items-start gap-2 p-3 rounded-md bg-error/10 text-error text-sm">
+          <div className="flex items-start gap-2 p-3 rounded-md bg-error/10 text-error text-copy-14">
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         ) : null}
         {result ? (
-          <div className="p-4 bg-bg-secondary rounded-md">
-            <p className="text-xs text-text-tertiary mb-2">结果</p>
-            <p className="whitespace-pre-wrap text-text-primary text-sm leading-relaxed">
+          <div className="p-4 bg-neutral-2 rounded-md">
+            <p className="text-label-12 text-neutral-7 mb-2">结果</p>
+            <p className="whitespace-pre-wrap text-neutral-10 text-copy-14 leading-relaxed">
               {result}
             </p>
           </div>
         ) : null}
         {details && details.length > 0 ? (
-          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-copy-14">
             {details.map((d) => (
               <div key={d.label} className="flex items-baseline gap-2">
-                <dt className="text-text-tertiary">{d.label}:</dt>
-                <dd className="text-text-primary">{d.value}</dd>
+                <dt className="text-neutral-7">{d.label}:</dt>
+                <dd className="text-neutral-10">{d.value}</dd>
               </div>
             ))}
           </dl>

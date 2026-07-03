@@ -46,12 +46,12 @@ export function PracticeCard({ question, onStart }: PracticeCardProps) {
             {diffLabel}
           </Badge>
         </div>
-        <CardTitle className="text-base">{question.title}</CardTitle>
+        <CardTitle className="text-title-20">{question.title}</CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-4">
-        <p className="text-sm text-text-secondary line-clamp-3">{question.requirements}</p>
+        <p className="text-copy-14 text-neutral-8 line-clamp-3">{question.requirements}</p>
         <div className="mt-auto flex items-center justify-between gap-2 pt-3 border-t border-border">
-          <div className="flex flex-col gap-1 text-xs text-text-tertiary">
+          <div className="flex flex-col gap-1 text-label-12 text-neutral-7">
             <span>
               词数：{question.wordLimitMin}-{question.wordLimitMax}
             </span>

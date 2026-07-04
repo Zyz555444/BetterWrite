@@ -304,7 +304,9 @@ async function main(): Promise<void> {
     isShuttingDown = true;
     workerLogger.info({ signal }, 'Shutting down worker');
     await worker.close();
-    healthServer.close();
+    await new Promise<void>((resolve, reject) => {
+      healthServer.close((err) => (err ? reject(err) : resolve()));
+    });
     process.exit(0);
   };
 

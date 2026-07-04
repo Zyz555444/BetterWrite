@@ -96,6 +96,7 @@ app.use(
   '*',
   cors({
     origin: (origin) => {
+      // 浏览器同域请求不携带 Origin 头，返回 null 表示不设置 CORS 头，不会拦截同域请求。
       if (!origin) return null;
       return allowedOrigins.includes(origin) ? origin : null;
     },

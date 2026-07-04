@@ -50,7 +50,6 @@ export function SchoolsClient({ initialSchools, initialRegion, initialError }: S
       const res = await fetcher.listAdminSchools(region ? { region } : undefined);
       if (res.success && res.data) {
         setSchools(res.data);
-        console.log(`[AdminSchools] reloaded ${res.data.length} schools`);
       } else {
         setError(res.error ?? '加载失败');
       }
@@ -103,10 +102,8 @@ export function SchoolsClient({ initialSchools, initialRegion, initialError }: S
         contactPhone: form.contactPhone || undefined,
       };
       if (editingId) {
-        console.log(`[AdminSchools] updating school id=${editingId}`);
         await fetcher.updateAdminSchool(editingId, { ...payload, isActive: form.isActive });
       } else {
-        console.log(`[AdminSchools] creating school code=${form.code}`);
         await fetcher.createAdminSchool(payload);
       }
       setModalOpen(false);
@@ -121,7 +118,6 @@ export function SchoolsClient({ initialSchools, initialRegion, initialError }: S
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`确认停用学校「${name}」？停用后该校用户将无法登录。`)) return;
-    console.log(`[AdminSchools] deleting school id=${id}`);
     try {
       await fetcher.deleteAdminSchool(id);
       await loadSchools(regionFilter);

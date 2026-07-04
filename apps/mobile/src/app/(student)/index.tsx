@@ -26,7 +26,6 @@ export default function StudentHomePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    console.log('[StudentHome] loading dashboard');
     Promise.all([fetcher.getStudentDashboard(), fetcher.listTasks(), fetcher.listMyEssays()])
       .then(([dashboardRes, tasksRes, essaysRes]) => {
         if (dashboardRes.success && dashboardRes.data) setDashboard(dashboardRes.data);

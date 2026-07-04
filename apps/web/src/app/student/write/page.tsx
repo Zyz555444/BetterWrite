@@ -43,7 +43,6 @@ export default function FreeWritingPage() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      console.log(`[StudentWrite] submitEssay standalone wordCount=${draft.wordCount}`);
       const res = await fetcher.submitEssay({ content: draft.content, title: '自由写作' });
       if (res.success && res.data) {
         await draft.clearDraft();

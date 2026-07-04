@@ -44,14 +44,12 @@ export default function AdminAnnouncementsPage() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    console.log('[AdminAnnouncements] loading');
     setLoading(true);
     setError(null);
     try {
       const res = await fetcher.listAdminAnnouncements();
       if (res.success && res.data) {
         setItems(res.data);
-        console.log(`[AdminAnnouncements] loaded ${res.data.length} items`);
       } else {
         setError(res.error ?? '加载失败');
       }
@@ -100,10 +98,8 @@ export default function AdminAnnouncementsPage() {
         isActive: form.isActive,
       };
       if (editingId) {
-        console.log(`[AdminAnnouncements] updating id=${editingId}`);
         await fetcher.updateAdminAnnouncement(editingId, payload);
       } else {
-        console.log(`[AdminAnnouncements] creating title=${form.title}`);
         await fetcher.createAdminAnnouncement(payload);
       }
       setModalOpen(false);
@@ -118,7 +114,6 @@ export default function AdminAnnouncementsPage() {
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`确认删除公告「${title}」？此操作不可恢复。`)) return;
-    console.log(`[AdminAnnouncements] deleting id=${id}`);
     try {
       await fetcher.deleteAdminAnnouncement(id);
       await load();

@@ -47,18 +47,16 @@ function TagEditor({
   const handleSelect = async (newTag: string) => {
     if (loading) return;
     setLoading(true);
-    console.log(`[TeacherStudents] tag update studentId=${studentId} tag=${newTag}`);
     try {
       const res = await fetcher.updateStudentTag(studentId, newTag);
       if (res.success) {
         onUpdated(newTag);
         setEditing(false);
       } else {
-        console.warn('[TeacherStudents] tag update failed:', res.error);
+        // silently ignore; UI does not show tag errors
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '更新失败';
-      console.error('[TeacherStudents] tag update error:', message);
+    } catch {
+      // silently ignore; UI does not show tag errors
     } finally {
       setLoading(false);
     }
@@ -111,7 +109,6 @@ function ImportModal({
   const [error, setError] = useState<string | null>(null);
 
   const handleDownloadTemplate = () => {
-    console.log('[TeacherStudentsImport] download template');
     const blob = new Blob([TEMPLATE_CSV], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -126,37 +123,25 @@ function ImportModal({
   const handleConfirm = async () => {
     setError(null);
     if (!targetClassId) {
-      const msg = '请选择目标班级';
-      console.warn('[TeacherStudentsImport] validation failed:', msg);
-      setError(msg);
+      setError('请选择目标班级');
       return;
     }
     if (!csv.trim()) {
-      const msg = '请粘贴 CSV 内容';
-      console.warn('[TeacherStudentsImport] validation failed:', msg);
-      setError(msg);
+      setError('请粘贴 CSV 内容');
       return;
     }
 
-    console.log(
-      `[TeacherStudentsImport] importing classId=${targetClassId} csvLength=${csv.length}`,
-    );
     setIsImporting(true);
     try {
       const res = await fetcher.importStudents({ classId: targetClassId, csv });
       if (res.success && res.data) {
-        console.log(
-          `[TeacherStudentsImport] import done success=${res.data.successCount}/${res.data.totalCount}`,
-        );
         setResult(res.data);
         onImported();
       } else {
-        console.warn('[TeacherStudentsImport] import failed:', res.error);
         setError(res.error ?? '导入失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '导入失败';
-      console.error('[TeacherStudentsImport] import error:', message);
       setError(message);
     } finally {
       setIsImporting(false);
@@ -310,7 +295,6 @@ export function StudentsClient({
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      console.log(`[TeacherStudents] filter classId=${classId} keyword=${keyword}`);
       loadStudents(classId, keyword);
     }, 300);
     return () => {
@@ -328,16 +312,13 @@ export function StudentsClient({
       if (kw.trim()) params.keyword = kw.trim();
       const res = await fetcher.listStudents(params);
       if (res.success && res.data) {
-        console.log(`[TeacherStudents] loaded ${res.data.length} students`);
         setStudents(res.data);
       } else {
-        console.warn('[TeacherStudents] failed to load students:', res.error);
         setStudents([]);
         setError(res.error ?? '获取学生失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载失败';
-      console.error('[TeacherStudents] loadStudents error:', message);
       setStudents([]);
       setError(message);
     } finally {
@@ -350,12 +331,10 @@ export function StudentsClient({
   };
 
   const handleOpenImport = () => {
-    console.log('[TeacherStudentsImport] open modal');
     setShowImportModal(true);
   };
 
   const handleImported = () => {
-    console.log('[TeacherStudentsImport] import succeeded, reloading students');
     loadStudents(classId, keyword);
   };
 

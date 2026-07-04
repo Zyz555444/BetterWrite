@@ -56,7 +56,6 @@ export default function AdminApisPage() {
       const res = await fetcher.listAdminApiConfigs();
       if (res.success && res.data) {
         setConfigs(res.data);
-        console.log(`[AdminApis] loaded ${res.data.length} configs`);
       } else {
         setError(res.error ?? '加载配置失败');
       }
@@ -79,7 +78,6 @@ export default function AdminApisPage() {
       });
       if (res.success && res.data) {
         setLogs(res.data);
-        console.log(`[AdminApis] loaded ${res.data.length} logs`);
       }
     } catch (err) {
       console.error('[AdminApis] load logs error', err);
@@ -141,10 +139,8 @@ export default function AdminApisPage() {
         rateLimitPerMin: form.rateLimitPerMin,
       };
       if (editingId) {
-        console.log(`[AdminApis] updating config id=${editingId}`);
         await fetcher.updateAdminApiConfig(editingId, payload);
       } else {
-        console.log(`[AdminApis] creating config provider=${form.provider}`);
         await fetcher.createAdminApiConfig({ ...payload, apiKey: form.apiKey });
       }
       setModalOpen(false);
@@ -159,7 +155,6 @@ export default function AdminApisPage() {
 
   const handleDelete = async (id: string, provider: string) => {
     if (!confirm(`确认删除 API 配置「${provider}」？此操作不可恢复。`)) return;
-    console.log(`[AdminApis] deleting config id=${id}`);
     try {
       await fetcher.deleteAdminApiConfig(id);
       await loadConfigs();

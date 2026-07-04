@@ -41,13 +41,9 @@ export default async function TeacherDashboardPage() {
   let error: string | null = null;
 
   try {
-    console.log('[TeacherDashboard] fetching dashboard');
     const res = await serverFetcher.getTeacherDashboard();
     if (res.success && res.data) {
       data = res.data;
-      console.log(
-        `[TeacherDashboard] dashboard loaded classes=${res.data.stats.totalClasses} students=${res.data.stats.totalStudents}`,
-      );
     } else {
       error = res.error ?? '加载失败';
       console.warn('[TeacherDashboard] load failed:', error);

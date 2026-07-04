@@ -22,7 +22,6 @@ export default async function StudentDashboardPage() {
   let essays: Essay[] = [];
   let error: string | null = null;
 
-  console.log('[StudentDashboard] loading dashboard, tasks, essays');
   const [dashboardRes, tasksRes, essaysRes] = await Promise.allSettled([
     serverFetcher.getStudentDashboard(),
     serverFetcher.listTasks(),
@@ -33,9 +32,6 @@ export default async function StudentDashboardPage() {
   if (dashboardRes.status === 'fulfilled') {
     if (dashboardRes.value.success && dashboardRes.value.data) {
       dashboard = dashboardRes.value.data;
-      console.log(
-        `[StudentDashboard] dashboard loaded pendingTasks=${dashboard.pendingTasks} correctedEssays=${dashboard.correctedEssays} hasQuote=${dashboard.quote ? 'true' : 'false'}`,
-      );
     } else {
       errors.push(dashboardRes.value.error ?? '仪表盘加载失败');
     }

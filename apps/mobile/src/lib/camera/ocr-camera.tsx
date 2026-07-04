@@ -52,12 +52,8 @@ export function OcrCameraModal({
     setStage('processing');
     setError(null);
     try {
-      console.log('[OcrCamera] submitting OCR taskId=', taskId ?? 'none');
       const res = await fetcher.submitOcr({ imageBase64: base64, taskId });
       if (res.success && res.data) {
-        console.log(
-          `[OcrCamera] OCR success confidence=${res.data.confidence} length=${res.data.content.length}`,
-        );
         if (res.data.confidence < 0.7) {
           setLastResult(res.data);
           setLowConfidence(true);

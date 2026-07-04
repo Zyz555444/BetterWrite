@@ -71,7 +71,6 @@ export default function TaskWritePage() {
       .then((draft) => {
         if (draft?.content) {
           setContent(draft.content);
-          console.log(`[TaskWrite] draft restored taskId=${id} words=${draft.wordCount}`);
         }
       })
       .catch((err) => console.warn('[TaskWrite] draft restore error:', err))
@@ -141,7 +140,6 @@ export default function TaskWritePage() {
       return merged;
     });
     setOcrWarning(null);
-    console.log(`[TaskWrite] OCR content applied length=${result.content.length}`);
   }, []);
 
   if (taskLoading) return <Loading fullScreen colors={colors} />;

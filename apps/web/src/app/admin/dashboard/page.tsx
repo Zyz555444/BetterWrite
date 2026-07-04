@@ -25,11 +25,9 @@ export default async function AdminDashboardPage() {
   let error: string | null = null;
 
   try {
-    console.log('[AdminDashboard] fetching stats');
     const res = await serverFetcher.getAdminDashboardStats();
     if (res.success && res.data) {
       stats = res.data;
-      console.log('[AdminDashboard] stats loaded', res.data);
     } else {
       error = res.error ?? '加载失败';
     }

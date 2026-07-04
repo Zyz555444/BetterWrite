@@ -16,7 +16,6 @@ export default async function TeacherStudentsPage() {
   let students: StudentListItem[] = [];
   let error: string | null = null;
 
-  console.log('[TeacherStudents] loading classes + students');
   const [classesRes, studentsRes] = await Promise.allSettled([
     serverFetcher.listTeacherClasses(),
     serverFetcher.listStudents(),
@@ -25,7 +24,6 @@ export default async function TeacherStudentsPage() {
   if (classesRes.status === 'fulfilled') {
     if (classesRes.value.success && classesRes.value.data) {
       classes = classesRes.value.data;
-      console.log(`[TeacherStudents] loaded ${classes.length} classes`);
     } else {
       console.warn('[TeacherStudents] failed to load classes:', classesRes.value.error);
     }
@@ -35,7 +33,6 @@ export default async function TeacherStudentsPage() {
   if (studentsRes.status === 'fulfilled') {
     if (studentsRes.value.success && studentsRes.value.data) {
       students = studentsRes.value.data;
-      console.log(`[TeacherStudents] loaded ${students.length} students`);
     } else {
       error = studentsRes.value.error ?? '获取学生失败';
       console.warn('[TeacherStudents] failed to load students:', error);

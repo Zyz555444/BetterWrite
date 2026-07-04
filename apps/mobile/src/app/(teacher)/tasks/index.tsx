@@ -31,7 +31,6 @@ export default function TeacherTasksPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('[TeacherTasks] loading');
     loadData();
   }, []);
 
@@ -45,11 +44,9 @@ export default function TeacherTasksPage() {
       ]);
       if (classesRes.success && classesRes.data) {
         setClasses(classesRes.data);
-        console.log(`[TeacherTasks] loaded ${classesRes.data.length} classes`);
       }
       if (tasksRes.success && tasksRes.data) {
         setTasks(tasksRes.data);
-        console.log(`[TeacherTasks] loaded ${tasksRes.data.length} tasks`);
       } else {
         setError(tasksRes.error ?? '获取任务失败');
         console.warn('[TeacherTasks] failed:', tasksRes.error);

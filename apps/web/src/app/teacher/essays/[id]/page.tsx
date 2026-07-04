@@ -32,13 +32,11 @@ export default function TeacherEssayDetailPage() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey 用于手动触发重新加载
   useEffect(() => {
-    console.log(`[TeacherEssayDetail] page mounted essayId=${essayId}`);
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [essayId, refreshKey]);
 
   const loadData = async () => {
-    console.log(`[TeacherEssayDetail] loading data essayId=${essayId}`);
     setIsLoading(true);
     setError(null);
     try {
@@ -48,7 +46,6 @@ export default function TeacherEssayDetailPage() {
       ]);
 
       if (essayRes.success && essayRes.data) {
-        console.log(`[TeacherEssayDetail] essay loaded status=${essayRes.data.status}`);
         setEssay(essayRes.data);
       } else {
         console.warn('[TeacherEssayDetail] getEssay failed:', essayRes.error);
@@ -56,10 +53,8 @@ export default function TeacherEssayDetailPage() {
       }
 
       if (correctionRes.success && correctionRes.data) {
-        console.log('[TeacherEssayDetail] correction loaded');
         setCorrection(correctionRes.data);
       } else {
-        console.log('[TeacherEssayDetail] no correction available:', correctionRes.error);
         setCorrection(null);
       }
     } catch (err) {
@@ -72,7 +67,6 @@ export default function TeacherEssayDetailPage() {
   };
 
   const handleRefresh = () => {
-    console.log('[TeacherEssayDetail] refresh clicked');
     setRefreshKey((k) => k + 1);
   };
 

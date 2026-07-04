@@ -13,10 +13,6 @@ interface DailyQuoteProps {
 }
 
 export function DailyQuote({ quote }: DailyQuoteProps) {
-  useEffect(() => {
-    console.log(`[StudentDailyQuote] mounted hasQuote=${quote ? 'true' : 'false'}`);
-  }, [quote]);
-
   if (!quote) {
     return (
       <Card>

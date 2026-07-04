@@ -7,10 +7,15 @@ const AUTH_TAG_LEN = 16;
 function getKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw || raw.length !== 64) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[Crypto] ENCRYPTION_KEY 未设置或长度不正确（需要 64 hex 字符 = 256-bit），生产环境必须设置。',
+      );
+    }
     console.warn(
-      '[Crypto] ENCRYPTION_KEY 未设置或长度非 64 hex 字符（256-bit），使用开发兜底密钥。生产环境必须设置。',
+      '[Crypto] ENCRYPTION_KEY 未设置或长度非 64 hex 字符（256-bit），使用随机开发兜底密钥。生产环境必须设置。',
     );
-    return Buffer.alloc(32, 0);
+    return randomBytes(32);
   }
   return Buffer.from(raw, 'hex');
 }

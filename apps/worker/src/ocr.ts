@@ -38,7 +38,7 @@ async function fetchOcrWithRetry(url: string, body: unknown, apiKey: string): Pr
       if (err instanceof Error && err.message.startsWith('OCR API error:')) {
         throw err;
       }
-      if (err instanceof DOMException && err.name === 'AbortError') {
+      if (err instanceof Error && err.name === 'AbortError') {
         console.warn(
           `[OCR] attempt ${attempt}/${OCR_MAX_RETRIES} timed out after ${OCR_TIMEOUT_MS}ms`,
         );

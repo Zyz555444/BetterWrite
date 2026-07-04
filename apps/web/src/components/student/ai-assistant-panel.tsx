@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 interface AiAssistantPanelProps {
   mode: 'polish' | 'upgrade' | 'synonym' | 'grammar';
@@ -30,10 +30,6 @@ export function AiAssistantPanel({
   error,
 }: AiAssistantPanelProps) {
   const [input, setInput] = useState('');
-
-  useEffect(() => {
-    console.log(`[StudentAiAssistantPanel] mounted mode=${mode}`);
-  }, [mode]);
 
   const computedPlaceholder =
     mode === 'synonym' ? `${placeholder}（请输入单词及上下文）` : placeholder;

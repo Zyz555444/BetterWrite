@@ -46,12 +46,9 @@ const categories: ResourceCategory[] = [
 export default function TeacherResourcesPage() {
   const router = useRouter();
 
-  useEffect(() => {
-    console.log('[TeacherResources] page mounted');
-  }, []);
+  useEffect(() => {}, []);
 
   const handleNavigate = (type: string) => {
-    console.log(`[TeacherResources] navigate type=${type}`);
     router.push(`/teacher/resources/${type}`);
   };
 

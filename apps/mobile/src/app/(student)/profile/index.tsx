@@ -34,13 +34,10 @@ export default function StudentProfilePage() {
   const { colors } = useTheme();
   const { user, isHydrated, logout } = useAuth();
 
-  useEffect(() => {
-    console.log('[StudentProfile] page mounted');
-  }, []);
+  useEffect(() => {}, []);
 
   const handleLogout = async () => {
     await logout();
-    console.log('[StudentProfile] logged out');
     router.replace('/(auth)/login');
   };
 

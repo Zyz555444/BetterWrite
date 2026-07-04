@@ -27,7 +27,6 @@ export async function saveLocalDraft(
       savedAt: new Date().toISOString(),
     };
     await AsyncStorage.setItem(key(taskId), JSON.stringify(draft));
-    console.log(`[DraftStorage] saved taskId=${taskId} words=${body.wordCount}`);
   } catch (err) {
     console.warn(`[DraftStorage] saveLocalDraft error taskId=${taskId}`, err);
   }
@@ -47,7 +46,6 @@ export async function getLocalDraft(taskId: string): Promise<LocalDraft | null> 
 export async function removeLocalDraft(taskId: string): Promise<void> {
   try {
     await AsyncStorage.removeItem(key(taskId));
-    console.log(`[DraftStorage] removed taskId=${taskId}`);
   } catch (err) {
     console.warn(`[DraftStorage] removeLocalDraft error taskId=${taskId}`, err);
   }
@@ -80,7 +78,6 @@ export async function syncDraftToCloud(taskId: string): Promise<boolean> {
   try {
     const local = await getLocalDraft(taskId);
     if (!local) {
-      console.log(`[DraftStorage] syncDraftToCloud no local draft taskId=${taskId}`);
       return false;
     }
     const { fetcher } = await import('../api/fetcher');
@@ -90,7 +87,6 @@ export async function syncDraftToCloud(taskId: string): Promise<boolean> {
       durationMs: local.durationMs,
     });
     if (res.success) {
-      console.log(`[DraftStorage] synced to cloud taskId=${taskId}`);
       return true;
     }
     console.warn(`[DraftStorage] sync failed taskId=${taskId}:`, res.error);
@@ -106,11 +102,9 @@ export async function loadDraftWithSync(taskId: string): Promise<LocalDraft | nu
     const { fetcher } = await import('../api/fetcher');
     const cloudRes = await fetcher.getDraft(taskId);
     if (cloudRes.success && cloudRes.data) {
-      console.log(`[DraftStorage] cloud draft loaded taskId=${taskId}`);
       const cloud = cloudRes.data;
       const local = await getLocalDraft(taskId);
       if (local && local.savedAt > cloud.updatedAt) {
-        console.log(`[DraftStorage] local draft newer, using local taskId=${taskId}`);
         return local;
       }
       return {
@@ -137,6 +131,5 @@ export async function syncAllDrafts(): Promise<{ synced: number; failed: number 
     if (ok) synced++;
     else failed++;
   }
-  console.log(`[DraftStorage] syncAllDrafts synced=${synced} failed=${failed}`);
   return { synced, failed };
 }

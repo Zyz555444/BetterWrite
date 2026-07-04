@@ -138,7 +138,6 @@ export default function StudentAiAssistantPage() {
       .then((res) => {
         if (res.success && res.data) {
           setHistory(res.data);
-          console.log(`[StudentAiAssistant] 历史加载 count=${res.data.length}`);
         } else {
           setHistoryError(res.error ?? '获取历史记录失败');
           console.warn(`[StudentAiAssistant] 历史加载失败 error=${res.error ?? 'unknown'}`);
@@ -153,16 +152,11 @@ export default function StudentAiAssistantPage() {
   }, []);
 
   useEffect(() => {
-    console.log(`[StudentAiAssistant] mode切换 mode=${mode}`);
-  }, [mode]);
-
-  useEffect(() => {
     loadHistory();
   }, [loadHistory]);
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
-    console.log(`[StudentAiAssistant] 提交 mode=${mode} inputLength=${input.length}`);
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -192,7 +186,6 @@ export default function StudentAiAssistantPage() {
         setResult(res.data.output);
         setDetails(toDetailRows(mode, res.data.details));
         loadHistory();
-        console.log(`[StudentAiAssistant] 提交成功 mode=${mode}`);
       } else {
         setError(res.error ?? 'AI 调用失败');
         console.warn(`[StudentAiAssistant] 提交失败 error=${res.error ?? 'unknown'}`);

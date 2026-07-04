@@ -83,10 +83,8 @@ export default function TeacherResourcesListPage() {
       const params: { type: string; topicType?: string; difficulty?: string } = { type };
       if (topicTypeFilter !== 'all') params.topicType = topicTypeFilter;
       if (difficultyFilter !== 'all') params.difficulty = difficultyFilter;
-      console.log(`[TeacherResourcesList] loading type=${type}`, params);
       const res = await fetcher.listResources(params);
       if (res.success && res.data) {
-        console.log(`[TeacherResourcesList] loaded ${res.data.length} resources`);
         setList(res.data);
       } else {
         console.warn('[TeacherResourcesList] failed to load:', res.error);
@@ -103,7 +101,6 @@ export default function TeacherResourcesListPage() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadList 内部依赖 topicTypeFilter/difficultyFilter
   useEffect(() => {
-    console.log(`[TeacherResourcesList] page mounted type=${type}`);
     if (!type) {
       setError('缺少资源类型参数');
       setIsLoading(false);
@@ -122,12 +119,10 @@ export default function TeacherResourcesListPage() {
         (item.tags ?? []).some((t) => t.toLowerCase().includes(keyword))
       );
     });
-    console.log(`[TeacherResourcesList] search="${search}" result=${result.length}/${list.length}`);
     return result;
   }, [list, search]);
 
   const handleOpenCreate = () => {
-    console.log(`[TeacherResourcesList] create clicked type=${type}`);
     setEditingId(null);
     setForm(emptyForm);
     setFormError(null);
@@ -135,7 +130,6 @@ export default function TeacherResourcesListPage() {
   };
 
   const handleOpenEdit = (resource: TeachingResourceWithCreator) => {
-    console.log(`[TeacherResourcesList] edit id=${resource.id}`);
     setEditingId(resource.id);
     setForm({
       title: resource.title ?? '',
@@ -150,7 +144,6 @@ export default function TeacherResourcesListPage() {
   };
 
   const handleCloseForm = () => {
-    console.log('[TeacherResourcesList] close form modal');
     setShowFormModal(false);
     setEditingId(null);
     setForm(emptyForm);
@@ -183,9 +176,6 @@ export default function TeacherResourcesListPage() {
       tags,
     };
 
-    console.log(
-      `[TeacherResourcesList] submitting ${editingId ? 'update' : 'create'} id=${editingId ?? '-'}`,
-    );
     setIsSubmitting(true);
     try {
       if (editingId) {
@@ -199,7 +189,6 @@ export default function TeacherResourcesListPage() {
         });
         if (res.success && res.data) {
           const updated = res.data;
-          console.log(`[TeacherResourcesList] updated id=${updated.id}`);
           setList((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
           handleCloseForm();
         } else {
@@ -218,7 +207,6 @@ export default function TeacherResourcesListPage() {
         const res = await fetcher.createResource(payload);
         if (res.success && res.data) {
           const created = res.data;
-          console.log(`[TeacherResourcesList] created id=${created.id}`);
           setList((prev) => [created, ...prev]);
           handleCloseForm();
         } else {
@@ -248,29 +236,24 @@ export default function TeacherResourcesListPage() {
   };
 
   const handleToggleExpand = (id: string) => {
-    console.log(`[TeacherResourcesList] toggle expand id=${id}`);
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
   const handleAskDelete = (id: string) => {
-    console.log(`[TeacherResourcesList] ask delete id=${id}`);
     setShowDeleteConfirm(id);
   };
 
   const handleCancelDelete = () => {
-    console.log('[TeacherResourcesList] cancel delete');
     setShowDeleteConfirm(null);
   };
 
   const handleConfirmDelete = async () => {
     if (!showDeleteConfirm) return;
     const id = showDeleteConfirm;
-    console.log(`[TeacherResourcesList] delete id=${id}`);
     setIsDeleting(true);
     try {
       const res = await fetcher.deleteResource(id);
       if (res.success) {
-        console.log(`[TeacherResourcesList] deleted id=${id}`);
         setList((prev) => prev.filter((item) => item.id !== id));
         if (expandedId === id) setExpandedId(null);
         setShowDeleteConfirm(null);
@@ -369,7 +352,6 @@ export default function TeacherResourcesListPage() {
                     id="topicTypeFilter"
                     value={topicTypeFilter}
                     onChange={(e) => {
-                      console.log(`[TeacherResourcesList] topicType filter=${e.target.value}`);
                       setTopicTypeFilter(e.target.value);
                     }}
                     className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
@@ -393,7 +375,6 @@ export default function TeacherResourcesListPage() {
                     id="difficultyFilter"
                     value={difficultyFilter}
                     onChange={(e) => {
-                      console.log(`[TeacherResourcesList] difficulty filter=${e.target.value}`);
                       setDifficultyFilter(e.target.value);
                     }}
                     className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"

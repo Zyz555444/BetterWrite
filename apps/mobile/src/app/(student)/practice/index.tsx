@@ -46,9 +46,7 @@ export default function StudentPracticePage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  useEffect(() => {
-    console.log('[StudentPractice] mount tab=bank');
-  }, []);
+  useEffect(() => {}, []);
 
   useEffect(() => {
     setIsLoadingBank(true);
@@ -61,7 +59,6 @@ export default function StudentPracticePage() {
       .then((res) => {
         if (res.success && res.data) {
           setQuestions(res.data);
-          console.log(`[StudentPractice] question bank loaded count=${res.data.length}`);
         } else {
           setBankError(res.error ?? '获取题库失败');
         }
@@ -78,7 +75,6 @@ export default function StudentPracticePage() {
       .then((res) => {
         if (res.success && res.data) {
           setHistory(res.data);
-          console.log(`[StudentPractice] history loaded count=${res.data.length}`);
         } else {
           setHistoryError(res.error ?? '获取历史失败');
         }
@@ -94,7 +90,6 @@ export default function StudentPracticePage() {
   }, [tab, hasLoadedHistory, loadHistory]);
 
   const handleStart = (id: string) => {
-    console.log(`[StudentPractice] start question id=${id}`);
     router.push(`/(student)/practice/${id}`);
   };
 

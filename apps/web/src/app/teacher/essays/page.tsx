@@ -33,7 +33,6 @@ export default function TeacherEssaysPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    console.log('[TeacherEssays] page mounted');
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -42,10 +41,8 @@ export default function TeacherEssaysPage() {
     setIsLoading(true);
     setError(null);
     try {
-      console.log('[TeacherEssays] fetching essays');
       const res = await fetcher.listTeacherEssays();
       if (res.success && res.data) {
-        console.log(`[TeacherEssays] loaded ${res.data.length} essays`);
         setEssays(res.data);
       } else {
         console.warn('[TeacherEssays] failed to load essays:', res.error);
@@ -71,25 +68,18 @@ export default function TeacherEssaysPage() {
         (essay.student?.studentNo ?? '').toLowerCase().includes(keyword);
       return matchStatus && matchSearch;
     });
-    console.log(
-      `[TeacherEssays] filtered status=${statusFilter} search="${search}" result=${list.length}/${essays.length}`,
-    );
     return list;
   }, [essays, statusFilter, search]);
 
   const handleStatusChange = (value: string) => {
-    console.log(`[TeacherEssays] status filter changed to ${value}`);
     setStatusFilter(value);
   };
 
   const handleSearchChange = (value: string) => {
-    console.log(`[TeacherEssays] search changed value="${value}"`);
     setSearch(value);
   };
 
-  const handleView = (essayId: string) => {
-    console.log(`[TeacherEssays] navigating to essay detail id=${essayId}`);
-  };
+  const handleView = (essayId: string) => {};
 
   return (
     <RoleGuard allowedRoles={[UserRole.TEACHER]}>
@@ -103,7 +93,6 @@ export default function TeacherEssaysPage() {
             <Button
               variant="secondary"
               onClick={() => {
-                console.log('[TeacherEssays] refresh clicked');
                 loadData();
               }}
             >
@@ -187,7 +176,7 @@ export default function TeacherEssaysPage() {
                           </span>
                         )}
                         <Link href={`/teacher/essays/${essay.id}`}>
-                          <Button variant="ghost" size="sm" onClick={() => handleView(essay.id)}>
+                          <Button variant="ghost" size="sm">
                             查看
                           </Button>
                         </Link>

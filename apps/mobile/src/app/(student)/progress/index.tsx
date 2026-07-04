@@ -33,15 +33,11 @@ export default function StudentProgressPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('[StudentProgress] page mounted');
     setIsLoading(true);
     fetcher
       .getStudentProgress()
       .then((res) => {
         if (res.success && res.data) {
-          console.log(
-            `[StudentProgress] loaded essays=${res.data.totalEssays} level=${res.data.level}`,
-          );
           setProgress(res.data);
         } else {
           console.warn('[StudentProgress] getStudentProgress failed:', res.error);

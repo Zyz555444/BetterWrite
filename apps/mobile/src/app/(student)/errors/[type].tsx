@@ -22,14 +22,12 @@ export default function StudentErrorBookTypePage() {
   const [masteringId, setMasteringId] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log(`[StudentErrorBookType] mounted type=${type}`);
     const load = async () => {
       setIsLoading(true);
       setError(null);
       try {
         const res = await fetcher.getErrorBookByType(type, { offset: 0, limit: 50 });
         if (res.success && res.data) {
-          console.log(`[StudentErrorBookType] loaded ${res.data.length} items`);
           setErrors(res.data);
         } else {
           console.warn('[StudentErrorBookType] load failed:', res.error);
@@ -52,7 +50,6 @@ export default function StudentErrorBookTypePage() {
     try {
       const res = await fetcher.masterError(id);
       if (res.success) {
-        console.log(`[StudentErrorBookType] mastered id=${id}`);
         setErrors((prev) =>
           prev.map((e) =>
             e.id === id

@@ -37,7 +37,6 @@ export default function TeacherEssaysPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    console.log('[TeacherEssays] loading');
     loadData();
   }, []);
 
@@ -48,7 +47,6 @@ export default function TeacherEssaysPage() {
       const res = await fetcher.listTeacherEssays();
       if (res.success && res.data) {
         setEssays(res.data);
-        console.log(`[TeacherEssays] loaded ${res.data.length} essays`);
       } else {
         setError(res.error ?? '获取作文失败');
         console.warn('[TeacherEssays] failed:', res.error);

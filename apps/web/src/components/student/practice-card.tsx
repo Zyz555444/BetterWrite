@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getPracticeDifficultyLabel, getTopicTypeLabel } from '@betterwrite/shared';
 import { Clock, PenLine } from 'lucide-react';
-import { useEffect } from 'react';
 
 interface PracticeCardProps {
   question: {
@@ -29,12 +28,8 @@ const difficultyClass: Record<string, string> = {
 };
 
 export function PracticeCard({ question, onStart }: PracticeCardProps) {
-  useEffect(() => {
-    console.log(`[StudentPracticeCard] mounted id=${question.id}`);
-  }, [question.id]);
-
-  const topicLabel = getTopicTypeLabel(question.topicType);
-  const diffLabel = getPracticeDifficultyLabel(question.difficulty);
+  useEffect(() => {}, [question.id]);
+const diffLabel = getPracticeDifficultyLabel(question.difficulty);
   const diffClass = difficultyClass[question.difficulty] ?? '';
 
   return (

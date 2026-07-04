@@ -34,11 +34,9 @@ export default async function StudentEssaysPage() {
   let error: string | null = null;
 
   try {
-    console.log('[StudentEssays] fetching essays');
     const res = await serverFetcher.listMyEssays();
     if (res.success && res.data) {
       essays = res.data;
-      console.log(`[StudentEssays] loaded ${essays.length} essays`);
     } else {
       error = res.error ?? '获取作文失败';
       console.warn('[StudentEssays] load failed:', error);

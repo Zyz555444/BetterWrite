@@ -46,15 +46,11 @@ export function AnalyticsClient({
 
   const loadAnalytics = useCallback(async (classId: string) => {
     if (!classId) return;
-    console.log(`[TeacherAnalytics] class selected id=${classId}`);
     setIsLoadingAnalytics(true);
     setError(null);
     try {
       const res = await fetcher.getClassAnalytics(classId);
       if (res.success && res.data) {
-        console.log(
-          `[TeacherAnalytics] analytics loaded essays=${res.data.totalEssays} students=${res.data.totalStudents}`,
-        );
         setAnalytics(res.data);
       } else {
         console.warn('[TeacherAnalytics] getClassAnalytics failed:', res.error);
@@ -83,12 +79,10 @@ export function AnalyticsClient({
 
   const handleExport = async () => {
     if (!selectedClassId) return;
-    console.log(`[TeacherAnalytics] export clicked classId=${selectedClassId}`);
     setIsExporting(true);
     setExportError(null);
     try {
       await fetcher.exportClassAnalytics(selectedClassId);
-      console.log(`[TeacherAnalytics] export completed classId=${selectedClassId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : '导出失败';
       console.error('[TeacherAnalytics] export error:', message);

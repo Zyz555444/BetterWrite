@@ -19,7 +19,6 @@ export default function StudentErrorBookPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('[StudentErrorBook] mounted');
     loadGroups();
   }, []);
 
@@ -29,7 +28,6 @@ export default function StudentErrorBookPage() {
     try {
       const res = await fetcher.getErrorBookGroups();
       if (res.success && res.data) {
-        console.log(`[StudentErrorBook] loaded ${res.data.length} groups`);
         setGroups(res.data);
       } else {
         console.warn('[StudentErrorBook] load failed:', res.error);
@@ -49,7 +47,6 @@ export default function StudentErrorBookPage() {
     try {
       const res = await fetcher.syncErrorBook();
       if (res.success && res.data) {
-        console.log(`[StudentErrorBook] synced ${res.data.synced} items`);
         await loadGroups();
       } else {
         console.warn('[StudentErrorBook] sync failed:', res.error);

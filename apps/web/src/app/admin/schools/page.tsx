@@ -21,11 +21,9 @@ export default async function AdminSchoolsPage({ searchParams }: PageProps) {
   let error: string | null = null;
 
   try {
-    console.log('[AdminSchools] loading schools', region ? `region=${region}` : '(no filter)');
     const res = await serverFetcher.listAdminSchools(region ? { region } : undefined);
     if (res.success && res.data) {
       schools = res.data;
-      console.log(`[AdminSchools] loaded ${schools.length} schools`);
     } else {
       error = res.error ?? '加载失败';
       console.warn('[AdminSchools] load failed:', error);

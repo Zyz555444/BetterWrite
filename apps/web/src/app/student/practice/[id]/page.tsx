@@ -40,10 +40,6 @@ export default function StudentPracticeItemPage() {
   const [feedbackErrors, setFeedbackErrors] = useState<FeedbackError[] | null>(null);
 
   useEffect(() => {
-    console.log(`[StudentPracticeItem] mount id=${questionId}`);
-  }, [questionId]);
-
-  useEffect(() => {
     setIsLoading(true);
     setError(null);
     fetcher
@@ -51,7 +47,6 @@ export default function StudentPracticeItemPage() {
       .then((res) => {
         if (res.success && res.data) {
           setQuestion(res.data);
-          console.log(`[StudentPracticeItem] question loaded title=${res.data.title}`);
         } else {
           setError(res.error ?? '获取题目失败');
         }
@@ -94,7 +89,6 @@ export default function StudentPracticeItemPage() {
       });
       if (res.success && res.data) {
         setFeedbackErrors(res.data.feedback.errors);
-        console.log(`[StudentPracticeItem] submit ok errors=${res.data.feedback.errors.length}`);
       } else {
         setError(res.error ?? '提交失败');
       }
@@ -117,7 +111,6 @@ export default function StudentPracticeItemPage() {
         exerciseType: 'question_bank',
       });
       if (res.success && res.data) {
-        console.log(`[StudentPracticeItem] deep submit ok essayId=${res.data.essayId}`);
         router.push(`/student/essays/${res.data.essayId}`);
       } else {
         setError(res.error ?? '深度批改提交失败');

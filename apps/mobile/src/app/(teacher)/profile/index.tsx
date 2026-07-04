@@ -32,13 +32,10 @@ export default function TeacherProfilePage() {
   const { colors } = useTheme();
   const { user, isHydrated, logout } = useAuth();
 
-  useEffect(() => {
-    console.log('[TeacherProfile] page mounted');
-  }, []);
+  useEffect(() => {}, []);
 
   const handleLogout = async () => {
     await logout();
-    console.log('[TeacherProfile] logged out');
     router.replace('/(auth)/login');
   };
 

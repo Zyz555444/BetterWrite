@@ -48,13 +48,11 @@ export default function TeacherTaskCreatePage() {
   });
 
   useEffect(() => {
-    console.log('[TeacherTaskCreate] loading classes');
     fetcher
       .listTeacherClasses()
       .then((res) => {
         if (res.success && res.data) {
           setClasses(res.data);
-          console.log(`[TeacherTaskCreate] loaded ${res.data.length} classes`);
         }
       })
       .finally(() => setIsLoadingClasses(false));
@@ -98,12 +96,10 @@ export default function TeacherTaskCreatePage() {
       dueDate: form.dueDate || undefined,
     };
 
-    console.log('[TeacherTaskCreate] submitting task');
     setIsSubmitting(true);
     try {
       const res = await fetcher.createTask(payload);
       if (res.success && res.data) {
-        console.log(`[TeacherTaskCreate] task created id=${res.data.id}`);
         router.back();
       } else {
         setError(res.error ?? '创建失败');

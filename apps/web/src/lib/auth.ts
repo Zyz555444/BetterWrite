@@ -44,8 +44,11 @@ export const validateRequest = cache(async () => {
       const sessionCookie = lucia.createBlankSessionCookie();
       (await cookies()).set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes);
     }
-  } catch {
-    // ignore in middleware
+  } catch (err) {
+    console.error(
+      '[Auth] validateRequest cookie error:',
+      err instanceof Error ? err.message : 'unknown',
+    );
   }
   return result;
 });

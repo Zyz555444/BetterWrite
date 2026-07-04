@@ -58,7 +58,6 @@ export default function AdminQuestionBankPage() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    console.log('[AdminQuestionBank] loading');
     setLoading(true);
     setError(null);
     try {
@@ -69,7 +68,6 @@ export default function AdminQuestionBankPage() {
       });
       if (res.success && res.data) {
         setItems(res.data);
-        console.log(`[AdminQuestionBank] loaded ${res.data.length} items`);
       } else {
         setError(res.error ?? '加载失败');
       }
@@ -141,10 +139,8 @@ export default function AdminQuestionBankPage() {
         source: form.source || undefined,
       };
       if (editingId) {
-        console.log(`[AdminQuestionBank] updating id=${editingId}`);
         await fetcher.updateAdminQuestion(editingId, payload);
       } else {
-        console.log(`[AdminQuestionBank] creating title=${form.title}`);
         await fetcher.createAdminQuestion(payload);
       }
       setModalOpen(false);
@@ -159,7 +155,6 @@ export default function AdminQuestionBankPage() {
 
   const handleDelete = async (id: string, title: string) => {
     if (!confirm(`确认删除题目「${title}」？此操作不可恢复。`)) return;
-    console.log(`[AdminQuestionBank] deleting id=${id}`);
     try {
       await fetcher.deleteAdminQuestion(id);
       await load();

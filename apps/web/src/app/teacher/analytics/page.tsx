@@ -16,22 +16,16 @@ export default async function TeacherAnalyticsPage() {
   let analytics: ClassAnalytics | null = null;
   let error: string | null = null;
 
-  console.log('[TeacherAnalytics] loading classes');
   try {
     const classesRes = await serverFetcher.listTeacherClasses();
     if (classesRes.success && classesRes.data) {
       classes = classesRes.data;
-      console.log(`[TeacherAnalytics] classes loaded count=${classes.length}`);
       if (classes.length > 0) {
         const firstId = classes[0].id;
-        console.log(`[TeacherAnalytics] auto-selected first class id=${firstId}`);
         try {
           const analyticsRes = await serverFetcher.getClassAnalytics(firstId);
           if (analyticsRes.success && analyticsRes.data) {
             analytics = analyticsRes.data;
-            console.log(
-              `[TeacherAnalytics] analytics loaded essays=${analytics.totalEssays} students=${analytics.totalStudents}`,
-            );
           } else {
             console.warn('[TeacherAnalytics] getClassAnalytics failed:', analyticsRes.error);
           }

@@ -31,7 +31,6 @@ export default function EssayEditorPage() {
   const draft = useEssayDraft({ taskId, wordLimitMin, wordLimitMax });
 
   useEffect(() => {
-    console.log(`[StudentWrite] loadTask taskId=${taskId}`);
     fetcher
       .getTask(taskId)
       .then((res) => {
@@ -59,7 +58,6 @@ export default function EssayEditorPage() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      console.log(`[StudentWrite] submitEssay taskId=${taskId} wordCount=${draft.wordCount}`);
       const res = await fetcher.submitEssay({ content: draft.content, taskId });
       if (res.success && res.data) {
         await draft.clearDraft();

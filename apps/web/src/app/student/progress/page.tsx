@@ -34,13 +34,9 @@ export default async function StudentProgressPage() {
   let error: string | null = null;
 
   try {
-    console.log('[StudentProgress] fetching progress');
     const res = await serverFetcher.getStudentProgress();
     if (res.success && res.data) {
       progress = res.data;
-      console.log(
-        `[StudentProgress] loaded essays=${res.data.totalEssays} level=${res.data.level}`,
-      );
     } else {
       console.warn('[StudentProgress] getStudentProgress failed:', res.error);
       error = res.error ?? '获取成长报告失败';

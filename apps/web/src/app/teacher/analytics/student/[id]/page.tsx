@@ -49,7 +49,6 @@ export default function TeacherStudentAnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log(`[TeacherStudentAnalytics] page mounted studentId=${studentId}`);
     if (!studentId) {
       setError('缺少学生 ID');
       setIsLoading(false);
@@ -61,9 +60,6 @@ export default function TeacherStudentAnalyticsPage() {
       .getStudentAnalytics(studentId)
       .then((res) => {
         if (res.success && res.data) {
-          console.log(
-            `[TeacherStudentAnalytics] analytics loaded essays=${res.data.totalEssays} avg=${res.data.averageScore ?? 'null'}`,
-          );
           setData(res.data);
         } else {
           console.warn('[TeacherStudentAnalytics] getStudentAnalytics failed:', res.error);

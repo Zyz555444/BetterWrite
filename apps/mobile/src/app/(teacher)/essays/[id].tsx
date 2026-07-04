@@ -37,14 +37,12 @@ export default function TeacherEssayDetailPage() {
         ]);
         if (essayRes.success && essayRes.data) {
           setEssay(essayRes.data);
-          console.log(`[TeacherEssayDetail] essay loaded status=${essayRes.data.status}`);
         } else {
           setError(essayRes.error ?? '获取作文失败');
           console.warn('[TeacherEssayDetail] getEssay failed:', essayRes.error);
         }
         if (correctionRes.success && correctionRes.data) {
           setCorrection(correctionRes.data);
-          console.log('[TeacherEssayDetail] correction loaded');
         } else {
           setCorrection(null);
         }

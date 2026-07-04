@@ -42,15 +42,11 @@ export default function TeacherDashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('[TeacherDashboard] loading');
     fetcher
       .getTeacherDashboard()
       .then((res) => {
         if (res.success && res.data) {
           setData(res.data);
-          console.log(
-            `[TeacherDashboard] loaded classes=${res.data.classes.length} tasks=${res.data.recentTasks.length}`,
-          );
         } else {
           setError(res.error ?? '加载失败');
           console.warn('[TeacherDashboard] failed:', res.error);

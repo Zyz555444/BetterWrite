@@ -36,12 +36,6 @@ const iconMap: Record<string, ComponentType<{ className?: string }>> = {
 };
 
 export function AchievementBadge({ achievement, size = 'md' }: AchievementBadgeProps) {
-  useEffect(() => {
-    console.log(
-      `[StudentAchievementBadge] mounted code=${achievement.code} tier=${achievement.tier}`,
-    );
-  }, [achievement.code, achievement.tier]);
-
   const isSm = size === 'sm';
   const badgeSize = isSm ? 'w-12 h-12' : 'w-20 h-20';
   const iconClass = isSm ? 'w-5 h-5' : 'w-8 h-8';

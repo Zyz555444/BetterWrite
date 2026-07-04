@@ -35,13 +35,11 @@ export default function TeacherStudentsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log('[TeacherStudents] loading classes');
     fetcher
       .listTeacherClasses()
       .then((res) => {
         if (res.success && res.data) {
           setClasses(res.data);
-          console.log(`[TeacherStudents] loaded ${res.data.length} classes`);
         }
       })
       .catch((err) => console.warn('[TeacherStudents] loadClasses error:', err));
@@ -49,7 +47,6 @@ export default function TeacherStudentsPage() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      console.log(`[TeacherStudents] filter classId=${classId} keyword=${keyword}`);
       loadStudents(classId, keyword);
     }, 300);
     return () => clearTimeout(timer);
@@ -65,7 +62,6 @@ export default function TeacherStudentsPage() {
       const res = await fetcher.listStudents(reqParams);
       if (res.success && res.data) {
         setStudents(res.data);
-        console.log(`[TeacherStudents] loaded ${res.data.length} students`);
       } else {
         setStudents([]);
         setError(res.error ?? '获取学生失败');

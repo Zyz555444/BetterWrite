@@ -51,9 +51,7 @@ export default function StudentPracticeMockPage() {
     remainingRef.current = remaining;
   }, [remaining]);
 
-  useEffect(() => {
-    console.log('[StudentPracticeMock] mount');
-  }, []);
+  useEffect(() => {}, []);
 
   useEffect(() => {
     setIsLoading(true);
@@ -64,9 +62,6 @@ export default function StudentPracticeMockPage() {
         if (res.success && res.data && res.data.length > 0) {
           const picked = res.data[Math.floor(Math.random() * res.data.length)];
           setQuestion(picked);
-          console.log(
-            `[StudentPracticeMock] picked question id=${picked.id} title=${picked.title}`,
-          );
         } else {
           setLoadError(res.error ?? '题库为空，无法开始模拟');
         }
@@ -104,7 +99,6 @@ export default function StudentPracticeMockPage() {
       if (res.success && res.data) {
         setFeedbackErrors(res.data.feedback.errors);
         setHasSubmitted(true);
-        console.log(`[StudentPracticeMock] submit ok errors=${res.data.feedback.errors.length}`);
       } else {
         setError(res.error ?? '提交失败');
       }
@@ -118,14 +112,12 @@ export default function StudentPracticeMockPage() {
   useEffect(() => {
     if (remaining === 0 && !hasSubmitted && !isSubmitting && !autoSubmitTriedRef.current) {
       autoSubmitTriedRef.current = true;
-      console.log('[StudentPracticeMock] time up, auto submit');
       handleSubmit();
     }
   }, [remaining, hasSubmitted, isSubmitting, handleSubmit]);
 
   const handleExit = () => {
     if (window.confirm('确定要退出本次限时模拟吗？已输入的内容将丢失。')) {
-      console.log('[StudentPracticeMock] exit');
       router.push('/student/practice');
     }
   };

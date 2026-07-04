@@ -21,10 +21,6 @@ interface ErrorCardProps {
 }
 
 export function ErrorCard({ error, onMaster }: ErrorCardProps) {
-  useEffect(() => {
-    console.log(`[StudentErrorCard] mounted id=${error.id}`);
-  }, [error.id]);
-
   const isMastered = error.status === 'mastered';
   const typeLabel = getErrorTypeLabel(error.errorType);
 

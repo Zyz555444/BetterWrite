@@ -65,18 +65,16 @@ function TagSelector({
   const handleSelect = async (newTag: string) => {
     if (loading) return;
     setLoading(true);
-    console.log(`[TeacherStudentDetail] tag update studentId=${studentId} tag=${newTag}`);
     try {
       const res = await fetcher.updateStudentTag(studentId, newTag);
       if (res.success) {
         onUpdated(newTag);
         setEditing(false);
       } else {
-        console.warn('[TeacherStudentDetail] tag update failed:', res.error);
+        // silently ignore; UI does not show tag errors
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '更新失败';
-      console.error('[TeacherStudentDetail] tag update error:', message);
+    } catch {
+      // silently ignore; UI does not show tag errors
     } finally {
       setLoading(false);
     }
@@ -120,32 +118,25 @@ export default function TeacherStudentDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log(`[TeacherStudentDetail] page mounted studentId=${studentId}`);
-    loadStudent();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentId]);
-
-  const loadStudent = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      console.log(`[TeacherStudentDetail] loading student id=${studentId}`);
-      const res = await fetcher.getStudentDetail(studentId);
-      if (res.success && res.data) {
-        console.log(`[TeacherStudentDetail] loaded student essayCount=${res.data.essayCount}`);
-        setStudent(res.data);
-      } else {
-        console.warn('[TeacherStudentDetail] failed to load:', res.error);
-        setError(res.error ?? '获取学生失败');
+    const loadStudent = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetcher.getStudentDetail(studentId);
+        if (res.success && res.data) {
+          setStudent(res.data);
+        } else {
+          setError(res.error ?? '获取学生失败');
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : '加载失败';
+        setError(message);
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '加载失败';
-      console.error('[TeacherStudentDetail] loadStudent error:', message);
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+    loadStudent();
+  }, [studentId]);
 
   const handleTagUpdated = (newTag: string) => {
     setStudent((prev) => (prev ? { ...prev, tag: newTag } : prev));

@@ -41,11 +41,8 @@ export async function registerForPushNotifications(): Promise<string | null> {
       projectId: easProjectId,
     });
     const token = tokenResponse.data;
-    console.log(`[Push] obtained token length=${token.length}`);
-
     const result = await fetcher.registerDeviceToken({ token, platform: Platform.OS });
     if (result.success) {
-      console.log(`[Push] registered to backend platform=${Platform.OS}`);
     } else {
       console.warn(`[Push] backend register failed: ${result.error ?? 'unknown'}`);
     }
@@ -59,7 +56,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
 export async function sendTestNotification(): Promise<void> {
   const result = await fetcher.sendTestNotification();
   if (result.success) {
-    console.log(`[Push] test sent count=${result.data?.sent ?? 0}`);
   } else {
     console.warn(`[Push] test send failed: ${result.error ?? 'unknown'}`);
   }
@@ -76,19 +72,15 @@ export function setupNotificationListeners(
 
   if (onReceived) {
     receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('[Push] notification received in foreground');
       onReceived(notification);
     });
   }
 
   if (onOpened) {
     responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('[Push] notification opened by user');
       onOpened(response);
     });
   }
-
-  console.log('[Push] listeners set up');
 }
 
 export function clearNotificationListeners(): void {
@@ -100,5 +92,4 @@ export function clearNotificationListeners(): void {
     responseSubscription.remove();
     responseSubscription = null;
   }
-  console.log('[Push] listeners cleared');
 }

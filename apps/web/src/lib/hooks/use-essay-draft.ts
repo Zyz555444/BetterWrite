@@ -64,7 +64,6 @@ export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftRetur
   useEffect(() => {
     let cancelled = false;
     setIsLoaded(false);
-    console.log(`[useEssayDraft] loadDraft taskId=${taskId}`);
     fetcher
       .getDraft(taskId)
       .then((res) => {
@@ -103,13 +102,9 @@ export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftRetur
   const saveDraft = useCallback(async () => {
     const currentContent = contentRef.current;
     if (currentContent.trim().length === 0) {
-      console.log(`[useEssayDraft] saveDraft skipped empty content taskId=${taskId}`);
       return;
     }
     const currentWordCount = countWords(currentContent);
-    console.log(
-      `[useEssayDraft] saveDraft taskId=${taskId} wordCount=${currentWordCount} durationMs=${durationMsRef.current}`,
-    );
     setIsSaving(true);
     try {
       await fetcher.saveDraft(taskId, {
@@ -136,7 +131,6 @@ export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftRetur
   }, [content, isLoaded, saveDraft]);
 
   const clearDraft = useCallback(async () => {
-    console.log(`[useEssayDraft] clearDraft taskId=${taskId}`);
     try {
       await fetcher.deleteDraft(taskId);
       lastSavedContentRef.current = null;

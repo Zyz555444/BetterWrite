@@ -32,7 +32,6 @@ export default function TeacherStudentDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log(`[TeacherStudentDetail] loading id=${id}`);
     setIsLoading(true);
     setError(null);
     fetcher
@@ -40,7 +39,6 @@ export default function TeacherStudentDetailPage() {
       .then((res) => {
         if (res.success && res.data) {
           setStudent(res.data);
-          console.log(`[TeacherStudentDetail] loaded essayCount=${res.data.essayCount}`);
         } else {
           setError(res.error ?? '获取学生失败');
           console.warn('[TeacherStudentDetail] failed:', res.error);

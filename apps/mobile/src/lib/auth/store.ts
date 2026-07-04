@@ -111,7 +111,6 @@ export const useAuth = create<AuthState>((set, get) => ({
       await setStoredToken(token);
       await persistUser(user);
       set({ user, token, isLoading: false });
-      console.log(`[AuthStore] login success userId=${user.id} role=${user.role}`);
       registerForPushNotifications().catch((err: unknown) =>
         console.warn('[AuthStore] push registration failed:', err),
       );
@@ -127,7 +126,6 @@ export const useAuth = create<AuthState>((set, get) => ({
     await clearStoredToken();
     await clearPersistedUser();
     set({ user: null, token: null, error: null });
-    console.log('[AuthStore] logout cleared');
   },
 
   fetchMe: async () => {
@@ -162,7 +160,6 @@ export const useAuth = create<AuthState>((set, get) => ({
       const user = await readPersistedUser();
       if (token && user) {
         set({ token, user });
-        console.log(`[AuthStore] restoreSession optimistic userId=${user.id}`);
         await get().fetchMe();
       } else {
         set({ user: null, token: null });

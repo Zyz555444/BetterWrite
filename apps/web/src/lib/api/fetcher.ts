@@ -45,10 +45,14 @@ export type {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const { headers: callerHeaders, ...restOptions } = options ?? {};
   const res = await fetch(`${API_BASE}${path}`, {
+    ...restOptions,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
-    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...((callerHeaders as Record<string, string>) ?? {}),
+    },
   });
 
   if (!res.ok) {
@@ -151,7 +155,6 @@ export const fetcher = {
     request<ApiResponse<StudentAnalytics>>(`/api/teacher/analytics/student/${studentId}`),
 
   exportClassAnalytics: async (classId: string): Promise<void> => {
-    console.log(`[Fetcher] exportClassAnalytics classId=${classId}`);
     const res = await fetch(`${API_BASE}/api/teacher/analytics/class/${classId}/export`, {
       credentials: 'include',
     });
@@ -168,7 +171,6 @@ export const fetcher = {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    console.log(`[Fetcher] exportClassAnalytics downloaded classId=${classId}`);
   },
 
   // Students

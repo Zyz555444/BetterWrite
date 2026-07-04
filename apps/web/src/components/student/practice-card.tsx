@@ -28,8 +28,8 @@ const difficultyClass: Record<string, string> = {
 };
 
 export function PracticeCard({ question, onStart }: PracticeCardProps) {
-  useEffect(() => {}, [question.id]);
-const diffLabel = getPracticeDifficultyLabel(question.difficulty);
+  const topicLabel = getTopicTypeLabel(question.topicType);
+  const diffLabel = getPracticeDifficultyLabel(question.difficulty);
   const diffClass = difficultyClass[question.difficulty] ?? '';
 
   return (

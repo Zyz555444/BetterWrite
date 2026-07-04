@@ -118,24 +118,30 @@ export default function TeacherStudentDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const loadStudent = async () => {
       setIsLoading(true);
       setError(null);
       try {
         const res = await fetcher.getStudentDetail(studentId);
+        if (cancelled) return;
         if (res.success && res.data) {
           setStudent(res.data);
         } else {
           setError(res.error ?? '获取学生失败');
         }
       } catch (err) {
+        if (cancelled) return;
         const message = err instanceof Error ? err.message : '加载失败';
         setError(message);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     loadStudent();
+    return () => {
+      cancelled = true;
+    };
   }, [studentId]);
 
   const handleTagUpdated = (newTag: string) => {

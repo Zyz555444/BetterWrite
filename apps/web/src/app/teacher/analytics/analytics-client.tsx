@@ -21,7 +21,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface AnalyticsClientProps {
   initialClasses: TeacherClass[];
@@ -43,13 +43,16 @@ export function AnalyticsClient({
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const [exportError, setExportError] = useState<string | null>(null);
+  const analyticsRequestRef = useRef(0);
 
   const loadAnalytics = useCallback(async (classId: string) => {
     if (!classId) return;
+    const requestId = ++analyticsRequestRef.current;
     setIsLoadingAnalytics(true);
     setError(null);
     try {
       const res = await fetcher.getClassAnalytics(classId);
+      if (requestId !== analyticsRequestRef.current) return;
       if (res.success && res.data) {
         setAnalytics(res.data);
       } else {
@@ -58,12 +61,13 @@ export function AnalyticsClient({
         setAnalytics(null);
       }
     } catch (err) {
+      if (requestId !== analyticsRequestRef.current) return;
       const message = err instanceof Error ? err.message : '加载失败';
       console.error('[TeacherAnalytics] getClassAnalytics error:', message);
       setError(message);
       setAnalytics(null);
     } finally {
-      setIsLoadingAnalytics(false);
+      if (requestId === analyticsRequestRef.current) setIsLoadingAnalytics(false);
     }
   }, []);
 

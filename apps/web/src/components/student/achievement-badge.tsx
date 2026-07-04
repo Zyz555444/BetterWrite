@@ -1,7 +1,7 @@
 'use client';
 
 import { Award, BookOpen, Flame, Lock, PenLine, Star, Target, Trophy, Zap } from 'lucide-react';
-import { type ComponentType, useEffect } from 'react';
+import type { ComponentType } from 'react';
 
 interface AchievementBadgeProps {
   achievement: {

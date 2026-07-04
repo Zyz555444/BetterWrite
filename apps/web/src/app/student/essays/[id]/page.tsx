@@ -31,6 +31,7 @@ export default function EssayDetailPage() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey 用于手动触发重新加载
   useEffect(() => {
+    let cancelled = false;
     const loadData = async () => {
       setIsLoading(true);
       setError(null);
@@ -39,6 +40,7 @@ export default function EssayDetailPage() {
           fetcher.getEssay(essayId),
           fetcher.getCorrection(essayId),
         ]);
+        if (cancelled) return;
 
         if (essayRes.success && essayRes.data) {
           setEssay(essayRes.data);
@@ -50,13 +52,17 @@ export default function EssayDetailPage() {
           setCorrection(correctionRes.data);
         }
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : '加载失败');
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     loadData();
+    return () => {
+      cancelled = true;
+    };
   }, [essayId, refreshKey]);
 
   const handleRefresh = () => setRefreshKey((k) => k + 1);

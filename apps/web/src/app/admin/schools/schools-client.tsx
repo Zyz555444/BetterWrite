@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { fetcher } from '@/lib/api/fetcher';
 import type { SchoolWithStats } from '@betterwrite/shared';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface SchoolFormState {
   code: string;
@@ -43,28 +43,40 @@ export function SchoolsClient({ initialSchools, initialRegion, initialError }: S
   const [form, setForm] = useState<SchoolFormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
+  const latestRequestRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const loadSchools = async (region: string) => {
+    const requestId = ++latestRequestRef.current;
     setLoading(true);
     setError(null);
     try {
       const res = await fetcher.listAdminSchools(region ? { region } : undefined);
+      if (requestId !== latestRequestRef.current) return;
       if (res.success && res.data) {
         setSchools(res.data);
       } else {
         setError(res.error ?? '加载失败');
       }
     } catch (err) {
+      if (requestId !== latestRequestRef.current) return;
       setError(err instanceof Error ? err.message : '加载失败');
       console.error('[AdminSchools] reload error', err);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestRef.current) setLoading(false);
     }
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: regionFilter is the only dep
   useEffect(() => {
     if (regionFilter === initialRegion) return;
-    loadSchools(regionFilter);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      loadSchools(regionFilter);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [regionFilter, initialRegion]);
 
   const openCreate = () => {

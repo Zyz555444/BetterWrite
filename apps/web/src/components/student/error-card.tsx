@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { getErrorTypeLabel } from '@betterwrite/shared';
 import { ArrowRight } from 'lucide-react';
-import { useEffect } from 'react';
 
 interface ErrorCardProps {
   error: {

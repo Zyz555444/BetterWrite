@@ -117,7 +117,7 @@ function ImportModal({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   const handleConfirm = async () => {
@@ -291,8 +291,14 @@ export function StudentsClient({
   const [showImportModal, setShowImportModal] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestRequestRef = useRef(0);
+  const didMountRef = useRef(false);
 
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       loadStudents(classId, keyword);
@@ -304,6 +310,7 @@ export function StudentsClient({
   }, [classId, keyword]);
 
   const loadStudents = async (cid: string, kw: string) => {
+    const requestId = ++latestRequestRef.current;
     setIsLoadingStudents(true);
     setError(null);
     try {
@@ -311,6 +318,7 @@ export function StudentsClient({
       if (cid) params.classId = cid;
       if (kw.trim()) params.keyword = kw.trim();
       const res = await fetcher.listStudents(params);
+      if (requestId !== latestRequestRef.current) return;
       if (res.success && res.data) {
         setStudents(res.data);
       } else {
@@ -318,11 +326,12 @@ export function StudentsClient({
         setError(res.error ?? '获取学生失败');
       }
     } catch (err) {
+      if (requestId !== latestRequestRef.current) return;
       const message = err instanceof Error ? err.message : '加载失败';
       setStudents([]);
       setError(message);
     } finally {
-      setIsLoadingStudents(false);
+      if (requestId === latestRequestRef.current) setIsLoadingStudents(false);
     }
   };
 

@@ -32,39 +32,44 @@ export default function TeacherEssayDetailPage() {
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey 用于手动触发重新加载
   useEffect(() => {
+    let cancelled = false;
+    const loadData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const [essayRes, correctionRes] = await Promise.all([
+          fetcher.getEssay(essayId),
+          fetcher.getCorrection(essayId),
+        ]);
+        if (cancelled) return;
+
+        if (essayRes.success && essayRes.data) {
+          setEssay(essayRes.data);
+        } else {
+          console.warn('[TeacherEssayDetail] getEssay failed:', essayRes.error);
+          setError(essayRes.error ?? '获取作文失败');
+        }
+
+        if (correctionRes.success && correctionRes.data) {
+          setCorrection(correctionRes.data);
+        } else {
+          setCorrection(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : '加载失败';
+        console.error('[TeacherEssayDetail] loadData error:', message);
+        setError(message);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
     loadData();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [essayId, refreshKey]);
-
-  const loadData = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [essayRes, correctionRes] = await Promise.all([
-        fetcher.getEssay(essayId),
-        fetcher.getCorrection(essayId),
-      ]);
-
-      if (essayRes.success && essayRes.data) {
-        setEssay(essayRes.data);
-      } else {
-        console.warn('[TeacherEssayDetail] getEssay failed:', essayRes.error);
-        setError(essayRes.error ?? '获取作文失败');
-      }
-
-      if (correctionRes.success && correctionRes.data) {
-        setCorrection(correctionRes.data);
-      } else {
-        setCorrection(null);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : '加载失败';
-      console.error('[TeacherEssayDetail] loadData error:', message);
-      setError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleRefresh = () => {
     setRefreshKey((k) => k + 1);

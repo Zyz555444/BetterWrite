@@ -33,7 +33,32 @@ export default function TeacherEssaysPage() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
+    let cancelled = false;
+    const loadData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetcher.listTeacherEssays();
+        if (cancelled) return;
+        if (res.success && res.data) {
+          setEssays(res.data);
+        } else {
+          console.warn('[TeacherEssays] failed to load essays:', res.error);
+          setError(res.error ?? '获取作文失败');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : '加载失败';
+        console.error('[TeacherEssays] loadData error:', message);
+        setError(message);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
     loadData();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -78,8 +103,6 @@ export default function TeacherEssaysPage() {
   const handleSearchChange = (value: string) => {
     setSearch(value);
   };
-
-  const handleView = (essayId: string) => {};
 
   return (
     <RoleGuard allowedRoles={[UserRole.TEACHER]}>

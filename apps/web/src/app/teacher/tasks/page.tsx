@@ -43,11 +43,35 @@ export default function TeacherTasksPage() {
   });
 
   useEffect(() => {
+    console.log('[TeacherTasks] page mounted');
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      console.log('[TeacherTasks] loading classes and tasks');
+      const [classesRes, tasksRes] = await Promise.all([
+        fetcher.listTeacherClasses(),
+        fetcher.listTasks(),
+      ]);
+
+      if (classesRes.success && classesRes.data) {
+        console.log(`[TeacherTasks] loaded ${classesRes.data.length} classes`);
+        setClasses(classesRes.data);
+      } else {
+        console.warn('[TeacherTasks] failed to load classes:', classesRes.error);
+        setError(classesRes.error ?? '获取班级失败');
+      }
+
+      if (tasksRes.success && tasksRes.data) {
+        console.log(`[TeacherTasks] loaded ${tasksRes.data.length} tasks`);
+        setTasks(tasksRes.data);
+      } else {
+        console.warn('[TeacherTasks] failed to load tasks:', tasksRes.error);
+      loadData = async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -75,9 +99,21 @@ export default function TeacherTasksPage() {
     }
   };
 
+  const   setError(tasksRes.error ?? '获取任务失败');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '加载失败';
+      console.error('[TeacherTasks] loadData error:', message);
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleChange = (field: keyof typeof form, value: string | number) => {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
+      console.log(`[TeacherTasks] form changed field=${field} value=`, value);
       return next;
     });
   };
@@ -87,7 +123,9 @@ export default function TeacherTasksPage() {
     setError(null);
 
     if (!form.title.trim() || !form.classId || !form.requirements.trim()) {
-      setError('请填写标题、班级和要求');
+      const msg = '请填写标题、班级和要求';
+      console.warn('[TeacherTasks] submit validation failed:', msg);
+      setError(msg);
       return;
     }
 
@@ -105,11 +143,13 @@ export default function TeacherTasksPage() {
       dueDate: form.dueDate || undefined,
     };
 
+    console.log('[TeacherTasks] submitting task:', JSON.stringify(payload));
     setIsSubmitting(true);
     try {
       const res = await fetcher.createTask(payload);
       if (res.success && res.data) {
         const newTask = res.data;
+        console.log('[TeacherTasks] task created id=', newTask.id);
         setTasks((prev) => [newTask, ...prev]);
         setShowForm(false);
         setForm({
@@ -151,6 +191,7 @@ export default function TeacherTasksPage() {
             </div>
             <Button
               onClick={() => {
+                console.log(`[TeacherTasks] toggle form current=${showForm}`);
                 setShowForm((v) => !v);
               }}
             >

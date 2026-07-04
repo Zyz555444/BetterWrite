@@ -1,6 +1,9 @@
+import { logger } from '@betterwrite/shared/logger';
 import type { BaseAIProvider } from './providers/base.js';
 import { DeepSeekProvider } from './providers/deepseek.js';
 import { OpenAIProvider } from './providers/openai.js';
+
+const aiLogger = logger.child({ component: 'ai-router' });
 
 export type CorrectionType = 'content' | 'language' | 'structure' | 'scorer';
 
@@ -54,7 +57,7 @@ export class AIProviderRouter {
     try {
       return await fn(primary);
     } catch (error) {
-      console.warn(`Provider ${primary.name} failed, trying fallback`, error);
+      aiLogger.warn({ err: error, provider: primary.name }, 'AI provider failed, trying fallback');
       const fallback = this.availableNames().find((n) => n !== primary.name);
       if (!fallback) throw error;
       return await fn(this.get(fallback));

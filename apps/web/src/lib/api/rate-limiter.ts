@@ -1,31 +1,28 @@
+import { logger } from '@betterwrite/shared/logger';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
+import { getRedis } from './redis';
+
+const rateLimitLogger = logger.child({ component: 'rate-limit' });
 
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
 
-// 内存存储：适用于单实例部署（本项目使用 SQLite，天然单实例）。
-// 若需多实例/容器化部署，应替换为 Redis 等外部共享存储。
-const store = new Map<string, RateLimitEntry>();
-
+const memoryStore = new Map<string, RateLimitEntry>();
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 10;
 
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of store) {
+  for (const [key, entry] of memoryStore) {
     if (entry.resetAt <= now) {
-      store.delete(key);
+      memoryStore.delete(key);
     }
   }
 }, 60_000).unref();
 
-// 解析客户端真实 IP。
-// 优先 x-real-ip（由可信反向代理设置）；对 x-forwarded-for 取最右侧条目
-// （最接近服务端的一跳，由可信代理写入），而非客户端可控的最左侧条目，
-// 避免攻击者伪造 X-Forwarded-For 绕过限流。
 function resolveClientIp(headers: Record<string, string | undefined>): string {
   const xRealIp = headers['x-real-ip'];
   if (xRealIp) return xRealIp.trim();
@@ -49,24 +46,42 @@ export const rateLimit = (maxRequests = MAX_REQUESTS, windowMs = WINDOW_MS) => {
     });
     const key = `${c.req.routePath}:${ip}`;
     const now = Date.now();
+    const resetAt = now + windowMs;
 
-    let entry = store.get(key);
-    if (!entry || entry.resetAt <= now) {
-      entry = { count: 0, resetAt: now + windowMs };
-      store.set(key, entry);
+    const redis = getRedis();
+    if (redis) {
+      try {
+        const count = await redis.incr(`rate_limit:${key}`);
+        if (count === 1) {
+          await redis.pexpire(`rate_limit:${key}`, windowMs);
+        }
+        if (count > maxRequests) {
+          throw new HTTPException(429, { message: '请求过于频繁，请稍后再试' });
+        }
+        await next();
+        c.res.headers.set('X-RateLimit-Limit', String(maxRequests));
+        c.res.headers.set('X-RateLimit-Remaining', String(Math.max(0, maxRequests - count)));
+        c.res.headers.set('X-RateLimit-Reset', String(Math.ceil(resetAt / 1000)));
+        return;
+      } catch (err) {
+        if (err instanceof HTTPException) throw err;
+        rateLimitLogger.warn({ err }, '[RateLimit] Redis failed, falling back to memory');
+      }
     }
 
+    let entry = memoryStore.get(key);
+    if (!entry || entry.resetAt <= now) {
+      entry = { count: 0, resetAt };
+      memoryStore.set(key, entry);
+    }
     entry.count++;
 
     if (entry.count > maxRequests) {
-      throw new HTTPException(429, {
-        message: '请求过于频繁，请稍后再试',
-      });
+      throw new HTTPException(429, { message: '请求过于频繁，请稍后再试' });
     }
 
     await next();
 
-    // 在 next() 之后写入响应头，避免被下游 handler 覆盖。
     c.res.headers.set('X-RateLimit-Limit', String(maxRequests));
     c.res.headers.set('X-RateLimit-Remaining', String(Math.max(0, maxRequests - entry.count)));
     c.res.headers.set('X-RateLimit-Reset', String(Math.ceil(entry.resetAt / 1000)));

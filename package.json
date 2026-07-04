@@ -31,7 +31,7 @@
   },
   "packageManager": "pnpm@10.0.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "lefthook", "sharp"]
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "lefthook", "msgpackr-extract", "sharp"]
   },
   "engines": {
     "node": ">=24.0.0",

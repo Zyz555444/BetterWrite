@@ -1,3 +1,7 @@
+import { logger } from '@betterwrite/shared/logger';
+
+const ocrLogger = logger.child({ component: 'ocr' });
+
 export interface OcrResult {
   content: string;
   confidence: number;
@@ -28,7 +32,10 @@ async function fetchOcrWithRetry(url: string, body: unknown, apiKey: string): Pr
       if (res.ok) return res;
 
       const errText = await res.text();
-      console.error(`[OCR] attempt ${attempt}/${OCR_MAX_RETRIES} failed: ${res.status}`, errText);
+      ocrLogger.error(
+        { status: res.status, response: errText, attempt, maxRetries: OCR_MAX_RETRIES },
+        '[OCR] attempt failed',
+      );
 
       if (res.status >= 400 && res.status < 500 && res.status !== 429) {
         throw new Error(`OCR API error: ${res.status}`);
@@ -39,12 +46,13 @@ async function fetchOcrWithRetry(url: string, body: unknown, apiKey: string): Pr
         throw err;
       }
       if (err instanceof Error && err.name === 'AbortError') {
-        console.warn(
-          `[OCR] attempt ${attempt}/${OCR_MAX_RETRIES} timed out after ${OCR_TIMEOUT_MS}ms`,
+        ocrLogger.warn(
+          { attempt, maxRetries: OCR_MAX_RETRIES, timeoutMs: OCR_TIMEOUT_MS },
+          '[OCR] attempt timed out',
         );
         lastError = new Error('OCR 请求超时');
       } else {
-        console.error(`[OCR] attempt ${attempt}/${OCR_MAX_RETRIES} network error:`, err);
+        ocrLogger.error({ err, attempt, maxRetries: OCR_MAX_RETRIES }, '[OCR] network error');
         lastError = err instanceof Error ? err : new Error('网络错误');
       }
     } finally {
@@ -64,7 +72,7 @@ export async function performOcr(imageBase64: string): Promise<OcrResult> {
   const apiKey = process.env.OCR_API_KEY;
 
   if (!apiKey) {
-    console.warn('OCR_API_KEY not configured, returning mock result');
+    ocrLogger.warn('OCR_API_KEY not configured, returning mock result');
     return {
       content:
         'This is a mock OCR result. Please configure OCR_API_KEY to enable real handwriting recognition.',

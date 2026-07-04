@@ -31,7 +31,10 @@ vi.mock('next/headers', () => ({
 
 vi.mock('@betterwrite/worker', () => ({
   performOcr: vi.fn().mockResolvedValue({ content: 'mock ocr text', confidence: 0.95 }),
-  processCorrection: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/api/queue', () => ({
+  addCorrectionJob: vi.fn().mockResolvedValue(undefined),
 }));
 
 import app from '@/lib/api/routes';

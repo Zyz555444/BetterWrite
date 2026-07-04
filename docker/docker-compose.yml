@@ -1,48 +1,197 @@
-services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: betterwrite-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: betterwrite
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d betterwrite"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+name: betterwrite
 
+services:
   redis:
     image: redis:8-alpine
     container_name: betterwrite-redis
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - backend
     volumes:
       - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 5s
+      timeout: 3s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
 
-  minio:
-    image: minio/minio:latest
-    container_name: betterwrite-minio
-    command: server /data --console-address ":9001"
+  migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.migrate
+    container_name: betterwrite-migrate
+    user: "1000:1000"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/betterwrite.db}
+      DATABASE_AUTH_TOKEN: ${DATABASE_AUTH_TOKEN:-}
+    networks:
+      - backend
     volumes:
-      - minio-data:/data
+      - sqlite-data:/app/data
+    command: pnpm turbo run db:migrate
+
+  seed:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.migrate
+    container_name: betterwrite-seed
+    user: "1000:1000"
+    profiles:
+      - tools
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/betterwrite.db}
+      DATABASE_AUTH_TOKEN: ${DATABASE_AUTH_TOKEN:-}
+    networks:
+      - backend
+    volumes:
+      - sqlite-data:/app/data
+    command: pnpm turbo run db:seed
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    container_name: betterwrite-worker
+    restart: unless-stopped
+    networks:
+      - backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/betterwrite.db}
+      DATABASE_AUTH_TOKEN: ${DATABASE_AUTH_TOKEN:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      WORKER_HEALTH_PORT: ${WORKER_HEALTH_PORT:-8080}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3}
+    volumes:
+      - sqlite-data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"http.get('http://localhost:${WORKER_HEALTH_PORT:-8080}/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    container_name: betterwrite-web
+    user: "1000:1000"
+    restart: unless-stopped
+    networks:
+      - frontend
+      - backend
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/betterwrite.db}
+      DATABASE_AUTH_TOKEN: ${DATABASE_AUTH_TOKEN:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - sqlite-data:/app/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+  backup:
+    image: keinos/sqlite3:latest
+    container_name: betterwrite-backup
+    profiles:
+      - backup
+    restart: unless-stopped
+    networks:
+      - backend
+    volumes:
+      - sqlite-data:/data
+      - backup-data:/backup
+    environment:
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
+    command: >
+      sh -c "while true; do
+        sqlite3 /data/betterwrite.db \".backup /backup/betterwrite-$$(date +%Y%m%d-%H%M%S).db\";
+        sleep $$BACKUP_INTERVAL;
+      done"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+
+networks:
+  frontend:
+  backend:
 
 volumes:
-  postgres-data:
+  sqlite-data:
   redis-data:
-  minio-data:
+  backup-data:

@@ -63,27 +63,52 @@ import type {
   StudentProgress,
 } from '@betterwrite/shared';
 import { DEDUCTION_RULES, SCORE_TIERS, SCORING_WEIGHTS } from '@betterwrite/shared';
-import { performOcr, processCorrection } from '@betterwrite/worker';
+import { env } from '@betterwrite/shared/env';
+import { logger } from '@betterwrite/shared/logger';
+import { performOcr } from '@betterwrite/worker';
 import { zValidator } from '@hono/zod-validator';
 import bcrypt from 'bcryptjs';
 import { and, count, desc, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
 import { z } from 'zod';
 import { getAiRouter } from '../ai/router';
 import { memoizeAsync } from './cache';
 import { authMiddleware, requireRole } from './middleware';
 import type { AuthVariables } from './middleware';
+import { addCorrectionJob, correctionQueue } from './queue';
 import { rateLimit } from './rate-limiter';
+import { pingRedis } from './redis';
 
 const app = new Hono<{ Variables: AuthVariables }>().basePath('/api');
+
+const routesLogger = logger.child({ component: 'routes' });
+
+// ========== CORS ==========
+const allowedOrigins = env.CORS_ORIGIN
+  ? env.CORS_ORIGIN.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  : [];
+
+app.use(
+  '*',
+  cors({
+    origin: (origin) => {
+      if (!origin) return null;
+      return allowedOrigins.includes(origin) ? origin : null;
+    },
+    credentials: true,
+  }),
+);
 
 // ========== Error Handling ==========
 app.onError((err, c) => {
   if (err instanceof HTTPException) {
     return c.json({ success: false, error: err.message }, err.status);
   }
-  console.error('API Error:', err);
+  routesLogger.error({ err }, 'API Error:');
   return c.json({ success: false, error: '服务器内部错误' }, 500);
 });
 
@@ -118,7 +143,42 @@ async function assertStudentAccess(user: AuthUser, studentId: string): Promise<b
 }
 
 // ========== Health ==========
-app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/health', async (c) => {
+  const timestamp = new Date().toISOString();
+  let database: 'ok' | 'error' = 'ok';
+  let redis: 'ok' | 'error' | 'disabled' = 'disabled';
+  let queue: 'ok' | 'error' | 'disabled' = 'disabled';
+
+  try {
+    await db.query.users.findFirst({ columns: { id: true } });
+  } catch (err) {
+    logger.error({ err }, '[Health] Database check failed');
+    database = 'error';
+  }
+
+  if (env.REDIS_URL) {
+    const redisOk = await pingRedis();
+    redis = redisOk ? 'ok' : 'error';
+
+    if (correctionQueue && redis === 'ok') {
+      try {
+        await correctionQueue.count();
+        queue = 'ok';
+      } catch (err) {
+        logger.error({ err }, '[Health] Queue check failed');
+        queue = 'error';
+      }
+    } else if (correctionQueue) {
+      queue = 'error';
+    }
+  }
+
+  const ok =
+    database === 'ok' &&
+    (redis === 'ok' || redis === 'disabled') &&
+    (queue === 'ok' || queue === 'disabled');
+  return c.json({ status: ok ? 'ok' : 'error', timestamp, database, redis, queue }, ok ? 200 : 503);
+});
 
 // ========== Auth ==========
 const loginSchema = z.object({
@@ -276,7 +336,7 @@ const tokenLoginSchema = z.object({
 
 app.post('/auth/token', rateLimit(10, 60_000), zValidator('json', tokenLoginSchema), async (c) => {
   const { email, password, platform, deviceName } = c.req.valid('json');
-  console.log(`[API /auth/token] email=${email} platform=${platform}`);
+  routesLogger.info({ email: email, platform: platform }, '[API /auth/token]');
 
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (!user || !user.isActive) {
@@ -305,7 +365,7 @@ app.post('/auth/token', rateLimit(10, 60_000), zValidator('json', tokenLoginSche
 
   await db.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id));
 
-  console.log(`[API /auth/token] login success userId=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /auth/token] login success');
   return c.json({
     success: true,
     data: {
@@ -323,7 +383,7 @@ app.post('/auth/token', rateLimit(10, 60_000), zValidator('json', tokenLoginSche
 
 app.get('/auth/tokens', authMiddleware, async (c) => {
   const user = c.get('user');
-  console.log(`[API /auth/tokens] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /auth/tokens]');
   const list = await db.query.apiTokens.findMany({
     where: and(eq(apiTokens.userId, user.id), gt(apiTokens.expiresAt, new Date().toISOString())),
     columns: {
@@ -347,7 +407,7 @@ const deviceTokenSchema = z.object({
 app.post('/auth/device-token', authMiddleware, zValidator('json', deviceTokenSchema), async (c) => {
   const user = c.get('user');
   const { token, platform } = c.req.valid('json');
-  console.log(`[API /auth/device-token] user=${user.id} platform=${platform}`);
+  routesLogger.info({ userId: user.id, platform: platform }, '[API /auth/device-token]');
   const now = new Date().toISOString();
 
   const existing = await db.query.deviceTokens.findFirst({
@@ -387,18 +447,19 @@ app.post(
   async (c) => {
     const user = c.get('user');
     const { imageBase64, taskId } = c.req.valid('json');
-    console.log(`[API /essays/ocr] user=${user.id} taskId=${taskId ?? 'none'}`);
+    routesLogger.info({ userId: user.id, taskId: taskId ?? 'none' }, '[API /essays/ocr]');
 
     try {
       const result = await performOcr(imageBase64);
-      console.log(
-        `[API /essays/ocr] user=${user.id} confidence=${result.confidence} contentLength=${result.content.length}`,
+      routesLogger.info(
+        { userId: user.id, confidence: result.confidence, contentLength: result.content.length },
+        '[API /essays/ocr]',
       );
       return c.json({ success: true, data: result });
     } catch (err) {
-      console.error(
-        `[API /essays/ocr] user=${user.id} error:`,
-        err instanceof Error ? err.message : 'unknown',
+      routesLogger.error(
+        { userId: user.id, err: err instanceof Error ? err.message : 'unknown' },
+        '[API /essays/ocr] error',
       );
       return c.json({ success: false, error: 'OCR 识别失败' }, 500);
     }
@@ -408,7 +469,7 @@ app.post(
 // ========== Notifications ==========
 app.post('/notifications/test', authMiddleware, async (c) => {
   const user = c.get('user');
-  console.log(`[API /notifications/test] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /notifications/test]');
 
   const tokens = await db.query.deviceTokens.findMany({
     where: eq(deviceTokens.userId, user.id),
@@ -440,11 +501,11 @@ app.post('/notifications/test', authMiddleware, async (c) => {
   });
 
   if (!res.ok) {
-    console.error(`[API /notifications/test] push failed status=${res.status}`);
+    routesLogger.error({ status: res.status }, '[API /notifications/test] push failed');
     return c.json({ success: false, error: '推送发送失败' }, 500);
   }
 
-  console.log(`[API /notifications/test] user=${user.id} sent=${messages.length}`);
+  routesLogger.info({ userId: user.id, sent: messages.length }, '[API /notifications/test]');
   return c.json({ success: true, data: { sent: messages.length } });
 });
 
@@ -485,7 +546,7 @@ app.post('/essays', authMiddleware, zValidator('json', essaySchema), async (c) =
     })
     .returning();
 
-  processCorrection({ essayId }).catch((err) => console.error('Correction failed:', err));
+  await addCorrectionJob(essayId);
 
   return c.json({ success: true, data: essay });
 });
@@ -504,7 +565,7 @@ app.get('/essays/my', authMiddleware, async (c) => {
 app.get('/essays/:id', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  console.log(`[API /essays/:id] user=${user.id} role=${user.role} essayId=${id}`);
+  routesLogger.info({ userId: user.id, role: user.role, essayId: id }, '[API /essays/:id]');
   const essay = await db.query.essays.findFirst({
     where: eq(essays.id, id),
     with: { correction: true, student: true, task: true },
@@ -518,24 +579,27 @@ app.get('/essays/:id', authMiddleware, async (c) => {
     (user.role === UserRole.TEACHER && essay.student?.schoolId === user.schoolId);
 
   if (!canAccess) {
-    console.warn(`[API /essays/:id] access denied user=${user.id} essayId=${id}`);
+    routesLogger.warn({ userId: user.id, essayId: id }, '[API /essays/:id] access denied');
     return c.json({ success: false, error: '无权查看' }, 403);
   }
 
-  console.log(`[API /essays/:id] access granted user=${user.id} essayId=${id}`);
+  routesLogger.info({ userId: user.id, essayId: id }, '[API /essays/:id] access granted');
   return c.json({ success: true, data: essay });
 });
 
 app.get('/essays/:id/correction', authMiddleware, async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  console.log(`[API /essays/:id/correction] user=${user.id} role=${user.role} essayId=${id}`);
+  routesLogger.info(
+    { userId: user.id, role: user.role, essayId: id },
+    '[API /essays/:id/correction]',
+  );
   const essay = await db.query.essays.findFirst({
     where: eq(essays.id, id),
     with: { correction: true, student: true },
   });
   if (!essay) {
-    console.warn(`[API /essays/:id/correction] essay not found id=${id}`);
+    routesLogger.warn({ id: id }, '[API /essays/:id/correction] essay not found');
     return c.json({ success: false, error: 'Not found' }, 404);
   }
 
@@ -546,16 +610,19 @@ app.get('/essays/:id/correction', authMiddleware, async (c) => {
     (user.role === UserRole.TEACHER && essay.student?.schoolId === user.schoolId);
 
   if (!canAccess) {
-    console.warn(`[API /essays/:id/correction] access denied user=${user.id} essayId=${id}`);
+    routesLogger.warn(
+      { userId: user.id, essayId: id },
+      '[API /essays/:id/correction] access denied',
+    );
     return c.json({ success: false, error: '无权查看' }, 403);
   }
 
   if (!essay.correction) {
-    console.log(`[API /essays/:id/correction] no correction yet essayId=${id}`);
+    routesLogger.info({ essayId: id }, '[API /essays/:id/correction] no correction yet');
     return c.json({ success: false, error: '批改结果尚未生成' }, 404);
   }
 
-  console.log(`[API /essays/:id/correction] returning correction essayId=${id}`);
+  routesLogger.info({ essayId: id }, '[API /essays/:id/correction] returning correction');
   return c.json({ success: true, data: essay.correction });
 });
 
@@ -565,7 +632,7 @@ app.get(
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
     const user = c.get('user');
-    console.log(`[API /essays] user=${user.id} role=${user.role}`);
+    routesLogger.info({ userId: user.id, role: user.role }, '[API /essays]');
     let conditions = undefined;
 
     if (user.role === UserRole.TEACHER && user.schoolId) {
@@ -591,7 +658,7 @@ app.get(
       limit: 100,
       with: { student: { columns: { id: true, name: true, studentNo: true } }, correction: true },
     });
-    console.log(`[API /essays] user=${user.id} returning ${all.length} essays`);
+    routesLogger.info({ userId: user.id, returning: all.length }, '[API /essays]');
     return c.json({ success: true, data: all });
   },
 );
@@ -599,7 +666,7 @@ app.get(
 // ========== Tasks ==========
 app.get('/tasks', authMiddleware, async (c) => {
   const user = c.get('user');
-  console.log(`[API /tasks] user=${user.id} role=${user.role}`);
+  routesLogger.info({ userId: user.id, role: user.role }, '[API /tasks]');
   let list: (typeof essayTasks.$inferSelect)[];
 
   if (user.role === UserRole.STUDENT) {
@@ -620,7 +687,7 @@ app.get('/tasks', authMiddleware, async (c) => {
     });
   }
 
-  console.log(`[API /tasks] user=${user.id} returning ${list.length} tasks`);
+  routesLogger.info({ userId: user.id, returning: list.length }, '[API /tasks]');
   return c.json({ success: true, data: list });
 });
 
@@ -660,7 +727,10 @@ app.post(
   async (c) => {
     const user = c.get('user');
     const data = c.req.valid('json');
-    console.log(`[API POST /tasks] user=${user.id} title=${data.title} classId=${data.classId}`);
+    routesLogger.info(
+      { userId: user.id, title: data.title, classId: data.classId },
+      '[API POST /tasks]',
+    );
     const now = new Date().toISOString();
     const id = randomUUID();
 
@@ -677,7 +747,7 @@ app.post(
       })
       .returning();
 
-    console.log(`[API POST /tasks] task created id=${task.id} title=${task.title}`);
+    routesLogger.info({ id: task.id, title: task.title }, '[API POST /tasks] task created');
     return c.json({ success: true, data: task });
   },
 );
@@ -685,7 +755,7 @@ app.post(
 // ========== Teacher Classes ==========
 app.get('/teacher/classes', authMiddleware, requireRole(UserRole.TEACHER), async (c) => {
   const user = c.get('user');
-  console.log(`[API /teacher/classes] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /teacher/classes]');
 
   const myClasses = await db.query.classes.findMany({
     where: eq(classes.teacherId, user.id),
@@ -699,14 +769,14 @@ app.get('/teacher/classes', authMiddleware, requireRole(UserRole.TEACHER), async
     studentCount: (cls.enrollments ?? []).filter((e) => e.role === 'student').length,
   }));
 
-  console.log(`[API /teacher/classes] user=${user.id} returning ${classStats.length} classes`);
+  routesLogger.info({ userId: user.id, returning: classStats.length }, '[API /teacher/classes]');
   return c.json({ success: true, data: classStats });
 });
 
 // ========== Teacher Dashboard ==========
 app.get('/teacher/dashboard', authMiddleware, requireRole(UserRole.TEACHER), async (c) => {
   const user = c.get('user');
-  console.log(`[API /teacher/dashboard] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /teacher/dashboard]');
 
   const data = await memoizeAsync(`teacher_dash:${user.id}`, 60_000, async () => {
     const myClasses = await db.query.classes.findMany({
@@ -752,8 +822,14 @@ app.get('/teacher/dashboard', authMiddleware, requireRole(UserRole.TEACHER), asy
       studentCount: (cls.enrollments ?? []).filter((e) => e.role === 'student').length,
     }));
 
-    console.log(
-      `[API /teacher/dashboard] user=${user.id} classes=${myClasses.length} students=${studentIds.length} pending=${pendingEssays}`,
+    routesLogger.info(
+      {
+        userId: user.id,
+        classes: myClasses.length,
+        students: studentIds.length,
+        pending: pendingEssays,
+      },
+      '[API /teacher/dashboard]',
     );
 
     return {
@@ -781,7 +857,7 @@ app.get(
     const user = c.get('user');
     const classId = c.req.param('classId');
     const start = Date.now();
-    console.log(`[API /teacher/analytics/class] user=${user.id} classId=${classId}`);
+    routesLogger.info({ userId: user.id, classId: classId }, '[API /teacher/analytics/class]');
 
     // 1. 校验班级存在
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
@@ -866,8 +942,9 @@ app.get(
       allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
     const duration = Date.now() - start;
 
-    console.log(
-      `[API /teacher/analytics/class] user=${user.id} classId=${classId} essays=${completedEssays.length} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, classId: classId, essays: completedEssays.length, duration: duration },
+      '[API /teacher/analytics/class]',
     );
 
     return c.json({
@@ -895,7 +972,10 @@ app.get(
     const user = c.get('user');
     const studentId = c.req.param('studentId');
     const start = Date.now();
-    console.log(`[API /teacher/analytics/student] user=${user.id} studentId=${studentId}`);
+    routesLogger.info(
+      { userId: user.id, studentId: studentId },
+      '[API /teacher/analytics/student]',
+    );
 
     const student = await db.query.users.findFirst({ where: eq(users.id, studentId) });
     if (!student) return c.json({ success: false, error: '学生不存在' }, 404);
@@ -959,8 +1039,9 @@ app.get(
       allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
     const duration = Date.now() - start;
 
-    console.log(
-      `[API /teacher/analytics/student] user=${user.id} studentId=${studentId} essays=${completedEssays.length} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, studentId: studentId, essays: completedEssays.length, duration: duration },
+      '[API /teacher/analytics/student]',
     );
 
     return c.json({
@@ -994,7 +1075,10 @@ app.get(
     const user = c.get('user');
     const classId = c.req.param('classId');
     const start = Date.now();
-    console.log(`[API /teacher/analytics/class/export] user=${user.id} classId=${classId}`);
+    routesLogger.info(
+      { userId: user.id, classId: classId },
+      '[API /teacher/analytics/class/export]',
+    );
 
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
     if (!cls) return c.json({ success: false, error: '班级不存在' }, 404);
@@ -1045,8 +1129,9 @@ app.get(
       .join('\n');
     const csv = `\uFEFF${header}${rows}`;
     const duration = Date.now() - start;
-    console.log(
-      `[API /teacher/analytics/class/export] user=${user.id} classId=${classId} rows=${allEssays.length} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, classId: classId, rows: allEssays.length, duration: duration },
+      '[API /teacher/analytics/class/export]',
     );
 
     return new Response(csv, {
@@ -1068,8 +1153,9 @@ app.get(
     const classId = c.req.query('classId');
     const keyword = c.req.query('keyword')?.trim().toLowerCase();
     const start = Date.now();
-    console.log(
-      `[API /teacher/students] user=${user.id} classId=${classId ?? 'all'} keyword=${keyword ?? ''}`,
+    routesLogger.info(
+      { userId: user.id, classId: classId ?? 'all', keyword: keyword ?? '' },
+      '[API /teacher/students]',
     );
 
     // 确定查询的班级范围（按角色隔离，防止跨校/跨班 IDOR）
@@ -1181,8 +1267,9 @@ app.get(
     }
 
     const duration = Date.now() - start;
-    console.log(
-      `[API /teacher/students] user=${user.id} returning=${result.length} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, returning: result.length, duration: duration },
+      '[API /teacher/students]',
     );
     return c.json({ success: true, data: result });
   },
@@ -1196,7 +1283,7 @@ app.get(
     const user = c.get('user');
     const studentId = c.req.param('id');
     const start = Date.now();
-    console.log(`[API /teacher/students/:id] user=${user.id} studentId=${studentId}`);
+    routesLogger.info({ userId: user.id, studentId: studentId }, '[API /teacher/students/:id]');
 
     const student = await db.query.users.findFirst({ where: eq(users.id, studentId) });
     if (!student) return c.json({ success: false, error: '学生不存在' }, 404);
@@ -1228,8 +1315,9 @@ app.get(
       allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
 
     const duration = Date.now() - start;
-    console.log(
-      `[API /teacher/students/:id] user=${user.id} studentId=${studentId} essays=${recentEssays.length} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, studentId: studentId, essays: recentEssays.length, duration: duration },
+      '[API /teacher/students/:id]',
     );
 
     return c.json({
@@ -1275,7 +1363,7 @@ app.post(
     const user = c.get('user');
     const { classId, csv } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /teacher/students/import] user=${user.id} classId=${classId}`);
+    routesLogger.info({ userId: user.id, classId: classId }, '[API /teacher/students/import]');
 
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
     if (!cls) return c.json({ success: false, error: '班级不存在' }, 404);
@@ -1385,8 +1473,15 @@ app.post(
     }
 
     const duration = Date.now() - start;
-    console.log(
-      `[API /teacher/students/import] user=${user.id} classId=${classId} success=${successCount}/${lines.length - 1} duration=${duration}ms`,
+    routesLogger.info(
+      {
+        userId: user.id,
+        classId: classId,
+        success: successCount,
+        total: lines.length - 1,
+        duration: duration,
+      },
+      '[API /teacher/students/import]',
     );
 
     return c.json({
@@ -1410,8 +1505,9 @@ app.patch(
     const studentId = c.req.param('id');
     const { tag } = c.req.valid('json');
     const start = Date.now();
-    console.log(
-      `[API /teacher/students/:id/tags] user=${user.id} studentId=${studentId} tag=${tag}`,
+    routesLogger.info(
+      { userId: user.id, studentId: studentId, tag: tag },
+      '[API /teacher/students/:id/tags]',
     );
 
     const student = await db.query.users.findFirst({ where: eq(users.id, studentId) });
@@ -1441,8 +1537,9 @@ app.patch(
     }
 
     const duration = Date.now() - start;
-    console.log(
-      `[API /teacher/students/:id/tags] user=${user.id} studentId=${studentId} tag=${tag} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, studentId: studentId, tag: tag, duration: duration },
+      '[API /teacher/students/:id/tags]',
     );
     return c.json({ success: true, data: { studentId, tag } });
   },
@@ -1460,8 +1557,14 @@ app.get(
     const difficulty = c.req.query('difficulty');
     const limit = Number(c.req.query('limit') ?? '50');
     const start = Date.now();
-    console.log(
-      `[API /teacher/resources] user=${user.id} type=${type ?? 'all'} topicType=${topicType ?? 'all'} difficulty=${difficulty ?? 'all'}`,
+    routesLogger.info(
+      {
+        userId: user.id,
+        type: type ?? 'all',
+        topicType: topicType ?? 'all',
+        difficulty: difficulty ?? 'all',
+      },
+      '[API /teacher/resources]',
     );
 
     const conditions: ReturnType<typeof eq>[] = [];
@@ -1477,8 +1580,9 @@ app.get(
     });
 
     const duration = Date.now() - start;
-    console.log(
-      `[API /teacher/resources] user=${user.id} returning=${list.length} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, returning: list.length, duration: duration },
+      '[API /teacher/resources]',
     );
     return c.json({ success: true, data: list });
   },
@@ -1508,8 +1612,9 @@ app.post(
     const user = c.get('user');
     const data = c.req.valid('json');
     const start = Date.now();
-    console.log(
-      `[API POST /teacher/resources] user=${user.id} type=${data.type} title=${data.title}`,
+    routesLogger.info(
+      { userId: user.id, type: data.type, title: data.title },
+      '[API POST /teacher/resources]',
     );
 
     // 去重校验
@@ -1517,8 +1622,9 @@ app.post(
       where: and(eq(teachingResources.type, data.type), eq(teachingResources.title, data.title)),
     });
     if (existing) {
-      console.warn(
-        `[API POST /teacher/resources] duplicate title user=${user.id} type=${data.type} title=${data.title}`,
+      routesLogger.warn(
+        { userId: user.id, type: data.type, title: data.title },
+        '[API POST /teacher/resources] duplicate title',
       );
       return c.json({ success: false, error: '该类型下已存在同名资源' }, 409);
     }
@@ -1543,7 +1649,10 @@ app.post(
       .returning();
 
     const duration = Date.now() - start;
-    console.log(`[API POST /teacher/resources] created id=${resource.id} duration=${duration}ms`);
+    routesLogger.info(
+      { id: resource.id, duration: duration },
+      '[API POST /teacher/resources] created',
+    );
     return c.json({ success: true, data: resource });
   },
 );
@@ -1556,7 +1665,7 @@ app.get(
     const user = c.get('user');
     const id = c.req.param('id');
     const start = Date.now();
-    console.log(`[API /teacher/resources/:id] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /teacher/resources/:id]');
 
     const resource = await db.query.teachingResources.findFirst({
       where: eq(teachingResources.id, id),
@@ -1565,7 +1674,10 @@ app.get(
     if (!resource) return c.json({ success: false, error: '资源不存在' }, 404);
 
     const duration = Date.now() - start;
-    console.log(`[API /teacher/resources/:id] user=${user.id} id=${id} duration=${duration}ms`);
+    routesLogger.info(
+      { userId: user.id, id: id, duration: duration },
+      '[API /teacher/resources/:id]',
+    );
     return c.json({ success: true, data: resource });
   },
 );
@@ -1589,7 +1701,7 @@ app.patch(
     const id = c.req.param('id');
     const data = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API PATCH /teacher/resources/:id] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API PATCH /teacher/resources/:id]');
 
     const existing = await db.query.teachingResources.findFirst({
       where: eq(teachingResources.id, id),
@@ -1615,8 +1727,9 @@ app.patch(
       .where(eq(teachingResources.id, id))
       .returning();
     const duration = Date.now() - start;
-    console.log(
-      `[API PATCH /teacher/resources/:id] user=${user.id} id=${id} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, id: id, duration: duration },
+      '[API PATCH /teacher/resources/:id]',
     );
     return c.json({ success: true, data: updated });
   },
@@ -1630,7 +1743,7 @@ app.delete(
     const user = c.get('user');
     const id = c.req.param('id');
     const start = Date.now();
-    console.log(`[API DELETE /teacher/resources/:id] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API DELETE /teacher/resources/:id]');
 
     const existing = await db.query.teachingResources.findFirst({
       where: eq(teachingResources.id, id),
@@ -1643,8 +1756,9 @@ app.delete(
 
     await db.delete(teachingResources).where(eq(teachingResources.id, id));
     const duration = Date.now() - start;
-    console.log(
-      `[API DELETE /teacher/resources/:id] user=${user.id} id=${id} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, id: id, duration: duration },
+      '[API DELETE /teacher/resources/:id]',
     );
     return c.json({ success: true });
   },
@@ -1782,7 +1896,7 @@ const ACHIEVEMENT_CATALOG = [
 app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const start = Date.now();
-  console.log(`[API /student/errors] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /student/errors]');
   await syncStudentErrorBook(user.id);
   const all = await db.query.errorBooks.findMany({
     where: eq(errorBooks.studentId, user.id),
@@ -1830,8 +1944,9 @@ app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async 
     latestCorrected: g.latestCorrected,
   }));
   const duration = Date.now() - start;
-  console.log(
-    `[API /student/errors] user=${user.id} groups=${groups.length} duration=${duration}ms`,
+  routesLogger.info(
+    { userId: user.id, groups: groups.length, duration: duration },
+    '[API /student/errors]',
   );
   return c.json({ success: true, data: groups });
 });
@@ -1839,10 +1954,13 @@ app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async 
 app.post('/student/errors/sync', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const start = Date.now();
-  console.log(`[API /student/errors/sync] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /student/errors/sync]');
   const synced = await syncStudentErrorBook(user.id);
   const duration = Date.now() - start;
-  console.log(`[API /student/errors/sync] user=${user.id} synced=${synced} duration=${duration}ms`);
+  routesLogger.info(
+    { userId: user.id, synced: synced, duration: duration },
+    '[API /student/errors/sync]',
+  );
   return c.json({ success: true, data: { synced } });
 });
 
@@ -1857,7 +1975,7 @@ app.post(
     const user = c.get('user');
     const { errorType } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /student/errors/practice] user=${user.id} errorType=${errorType}`);
+    routesLogger.info({ userId: user.id, errorType: errorType }, '[API /student/errors/practice]');
     const router = getAiRouter();
     if (router.availableNames().length === 0) {
       return c.json({ success: false, error: 'AI 服务未配置' }, 503);
@@ -1873,13 +1991,15 @@ app.post(
         .filter((s) => s.length > 0)
         .slice(0, 3);
       const duration = Date.now() - start;
-      console.log(
-        `[API /student/errors/practice] user=${user.id} generated=${exercises.length} duration=${duration}ms`,
+      routesLogger.info(
+        { userId: user.id, generated: exercises.length, duration: duration },
+        '[API /student/errors/practice]',
       );
       return c.json({ success: true, data: { exercises } });
     } catch (err) {
-      console.warn(
-        `[API /student/errors/practice] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      routesLogger.warn(
+        { userId: user.id, error: err instanceof Error ? err.message : 'unknown' },
+        '[API /student/errors/practice]',
       );
       return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
@@ -1891,8 +2011,9 @@ app.get('/student/errors/:type', authMiddleware, requireRole(UserRole.STUDENT), 
   const type = c.req.param('type');
   const offset = Number(c.req.query('offset') ?? '0');
   const limit = Number(c.req.query('limit') ?? '20');
-  console.log(
-    `[API /student/errors/:type] user=${user.id} type=${type} offset=${offset} limit=${limit}`,
+  routesLogger.info(
+    { userId: user.id, type: type, offset: offset, limit: limit },
+    '[API /student/errors/:type]',
   );
   const list = await db.query.errorBooks.findMany({
     where: and(eq(errorBooks.studentId, user.id), eq(errorBooks.errorType, type)),
@@ -1907,7 +2028,7 @@ app.post('/student/errors/:id/master', authMiddleware, requireRole(UserRole.STUD
   const user = c.get('user');
   const id = c.req.param('id');
   const now = new Date().toISOString();
-  console.log(`[API /student/errors/:id/master] user=${user.id} id=${id}`);
+  routesLogger.info({ userId: user.id, id: id }, '[API /student/errors/:id/master]');
   const existing = await db.query.errorBooks.findFirst({
     where: and(eq(errorBooks.id, id), eq(errorBooks.studentId, user.id)),
   });
@@ -1932,7 +2053,7 @@ app.post(
     const user = c.get('user');
     const { text } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /student/ai/polish] user=${user.id}`);
+    routesLogger.info({ userId: user.id }, '[API /student/ai/polish]');
     const router = getAiRouter();
     if (router.availableNames().length === 0) {
       return c.json({ success: false, error: 'AI 服务未配置' }, 503);
@@ -1941,8 +2062,9 @@ app.post(
     try {
       result = await polishEssay(router, text);
     } catch (err) {
-      console.warn(
-        `[API /student/ai/polish] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      routesLogger.warn(
+        { userId: user.id, error: err instanceof Error ? err.message : 'unknown' },
+        '[API /student/ai/polish]',
       );
       return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
@@ -1960,7 +2082,7 @@ app.post(
       createdAt: now,
     });
     const duration = Date.now() - start;
-    console.log(`[API /student/ai/polish] user=${user.id} duration=${duration}ms`);
+    routesLogger.info({ userId: user.id, duration: duration }, '[API /student/ai/polish]');
     const data: AiAssistantResult = {
       mode: AiAssistantMode.POLISH,
       input: text,
@@ -1985,7 +2107,7 @@ app.post(
     const user = c.get('user');
     const { text } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /student/ai/upgrade] user=${user.id}`);
+    routesLogger.info({ userId: user.id }, '[API /student/ai/upgrade]');
     const router = getAiRouter();
     if (router.availableNames().length === 0) {
       return c.json({ success: false, error: 'AI 服务未配置' }, 503);
@@ -1994,8 +2116,9 @@ app.post(
     try {
       result = await upgradeSentences(router, text);
     } catch (err) {
-      console.warn(
-        `[API /student/ai/upgrade] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      routesLogger.warn(
+        { userId: user.id, error: err instanceof Error ? err.message : 'unknown' },
+        '[API /student/ai/upgrade]',
       );
       return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
@@ -2014,7 +2137,7 @@ app.post(
       createdAt: now,
     });
     const duration = Date.now() - start;
-    console.log(`[API /student/ai/upgrade] user=${user.id} duration=${duration}ms`);
+    routesLogger.info({ userId: user.id, duration: duration }, '[API /student/ai/upgrade]');
     const data: AiAssistantResult = {
       mode: AiAssistantMode.UPGRADE,
       input: text,
@@ -2042,7 +2165,7 @@ app.post(
     const user = c.get('user');
     const { word, context } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /student/ai/synonym] user=${user.id} word=${word}`);
+    routesLogger.info({ userId: user.id, word: word }, '[API /student/ai/synonym]');
     const router = getAiRouter();
     if (router.availableNames().length === 0) {
       return c.json({ success: false, error: 'AI 服务未配置' }, 503);
@@ -2051,8 +2174,9 @@ app.post(
     try {
       result = await getSynonyms(router, word, context);
     } catch (err) {
-      console.warn(
-        `[API /student/ai/synonym] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      routesLogger.warn(
+        { userId: user.id, error: err instanceof Error ? err.message : 'unknown' },
+        '[API /student/ai/synonym]',
       );
       return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
@@ -2071,7 +2195,7 @@ app.post(
       createdAt: now,
     });
     const duration = Date.now() - start;
-    console.log(`[API /student/ai/synonym] user=${user.id} duration=${duration}ms`);
+    routesLogger.info({ userId: user.id, duration: duration }, '[API /student/ai/synonym]');
     const data: AiAssistantResult = {
       mode: AiAssistantMode.SYNONYM,
       input: word,
@@ -2096,7 +2220,7 @@ app.post(
     const user = c.get('user');
     const { text } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /student/ai/grammar] user=${user.id}`);
+    routesLogger.info({ userId: user.id }, '[API /student/ai/grammar]');
     const router = getAiRouter();
     if (router.availableNames().length === 0) {
       return c.json({ success: false, error: 'AI 服务未配置' }, 503);
@@ -2105,8 +2229,9 @@ app.post(
     try {
       result = await checkGrammar(router, text);
     } catch (err) {
-      console.warn(
-        `[API /student/ai/grammar] user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+      routesLogger.warn(
+        { userId: user.id, error: err instanceof Error ? err.message : 'unknown' },
+        '[API /student/ai/grammar]',
       );
       return c.json({ success: false, error: 'AI 调用失败，请稍后重试' }, 500);
     }
@@ -2125,7 +2250,7 @@ app.post(
       createdAt: now,
     });
     const duration = Date.now() - start;
-    console.log(`[API /student/ai/grammar] user=${user.id} duration=${duration}ms`);
+    routesLogger.info({ userId: user.id, duration: duration }, '[API /student/ai/grammar]');
     const data: AiAssistantResult = {
       mode: AiAssistantMode.GRAMMAR,
       input: text,
@@ -2143,8 +2268,9 @@ app.get('/student/ai/history', authMiddleware, requireRole(UserRole.STUDENT), as
   const offset = Number(c.req.query('offset') ?? '0');
   const limit = Number(c.req.query('limit') ?? '20');
   const mode = c.req.query('mode');
-  console.log(
-    `[API /student/ai/history] user=${user.id} offset=${offset} limit=${limit} mode=${mode ?? 'all'}`,
+  routesLogger.info(
+    { userId: user.id, offset: offset, limit: limit, mode: mode ?? 'all' },
+    '[API /student/ai/history]',
   );
   const conditions = [eq(aiConversations.studentId, user.id)];
   if (mode) conditions.push(eq(aiConversations.mode, mode));
@@ -2176,8 +2302,9 @@ app.get('/student/question-bank', authMiddleware, requireRole(UserRole.STUDENT),
   const difficulty = c.req.query('difficulty');
   const offset = Number(c.req.query('offset') ?? '0');
   const limit = Number(c.req.query('limit') ?? '20');
-  console.log(
-    `[API /student/question-bank] user=${user.id} topicType=${topicType ?? 'all'} difficulty=${difficulty ?? 'all'}`,
+  routesLogger.info(
+    { userId: user.id, topicType: topicType ?? 'all', difficulty: difficulty ?? 'all' },
+    '[API /student/question-bank]',
   );
   const conditions = [eq(questionBank.isPublic, 1)];
   if (topicType) conditions.push(eq(questionBank.topicType, topicType));
@@ -2210,7 +2337,7 @@ app.get('/student/question-bank', authMiddleware, requireRole(UserRole.STUDENT),
 app.get('/student/question-bank/:id', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
-  console.log(`[API /student/question-bank/:id] user=${user.id} id=${id}`);
+  routesLogger.info({ userId: user.id, id: id }, '[API /student/question-bank/:id]');
   const r = await db.query.questionBank.findFirst({ where: eq(questionBank.id, id) });
   if (!r) return c.json({ success: false, error: '题目不存在' }, 404);
   const data: QuestionBankItem = {
@@ -2248,7 +2375,10 @@ app.post(
     const user = c.get('user');
     const { questionId, content, durationMs, exerciseType } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /student/practice] user=${user.id} questionId=${questionId ?? 'none'}`);
+    routesLogger.info(
+      { userId: user.id, questionId: questionId ?? 'none' },
+      '[API /student/practice]',
+    );
     const wordCount = countWords(content);
     const now = new Date().toISOString();
     let question = null;
@@ -2263,8 +2393,9 @@ app.post(
       try {
         feedback = await checkGrammar(router, content);
       } catch (err) {
-        console.warn(
-          `[API /student/practice] grammar check failed user=${user.id} error=${err instanceof Error ? err.message : 'unknown'}`,
+        routesLogger.warn(
+          { userId: user.id, error: err instanceof Error ? err.message : 'unknown' },
+          '[API /student/practice] grammar check failed',
         );
       }
     }
@@ -2289,8 +2420,9 @@ app.post(
       })
       .returning();
     const duration = Date.now() - start;
-    console.log(
-      `[API /student/practice] user=${user.id} exerciseId=${exercise.id} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, exerciseId: exercise.id, duration: duration },
+      '[API /student/practice]',
     );
     return c.json({ success: true, data: { exercise, feedback } });
   },
@@ -2305,7 +2437,7 @@ app.post(
     const user = c.get('user');
     const { content } = c.req.valid('json');
     const start = Date.now();
-    console.log(`[API /student/practice/deep] user=${user.id}`);
+    routesLogger.info({ userId: user.id }, '[API /student/practice/deep]');
     const wordCount = countWords(content);
     const now = new Date().toISOString();
     const essayId = randomUUID();
@@ -2321,10 +2453,11 @@ app.post(
       createdAt: now,
       updatedAt: now,
     });
-    processCorrection({ essayId }).catch((err) => console.error('Correction failed:', err));
+    await addCorrectionJob(essayId);
     const duration = Date.now() - start;
-    console.log(
-      `[API /student/practice/deep] user=${user.id} essayId=${essayId} duration=${duration}ms`,
+    routesLogger.info(
+      { userId: user.id, essayId: essayId, duration: duration },
+      '[API /student/practice/deep]',
     );
     return c.json({ success: true, data: { essayId } });
   },
@@ -2334,7 +2467,10 @@ app.get('/student/practice/history', authMiddleware, requireRole(UserRole.STUDEN
   const user = c.get('user');
   const offset = Number(c.req.query('offset') ?? '0');
   const limit = Number(c.req.query('limit') ?? '20');
-  console.log(`[API /student/practice/history] user=${user.id} offset=${offset} limit=${limit}`);
+  routesLogger.info(
+    { userId: user.id, offset: offset, limit: limit },
+    '[API /student/practice/history]',
+  );
   const rows = await db.query.practiceExercises.findMany({
     where: eq(practiceExercises.studentId, user.id),
     orderBy: desc(practiceExercises.createdAt),
@@ -2366,7 +2502,7 @@ app.get('/student/practice/history', authMiddleware, requireRole(UserRole.STUDEN
 app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const start = Date.now();
-  console.log(`[API /student/progress] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /student/progress]');
   const studentEssays = await db.query.essays.findMany({
     where: eq(essays.studentId, user.id),
     with: { correction: true },
@@ -2456,8 +2592,9 @@ app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), asyn
     level,
   };
   const duration = Date.now() - start;
-  console.log(
-    `[API /student/progress] user=${user.id} essays=${completedEssays.length} duration=${duration}ms`,
+  routesLogger.info(
+    { userId: user.id, essays: completedEssays.length, duration: duration },
+    '[API /student/progress]',
   );
   return c.json({ success: true, data });
 });
@@ -2465,7 +2602,7 @@ app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), asyn
 app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const start = Date.now();
-  console.log(`[API /student/achievements] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /student/achievements]');
   const earned = await db.query.achievements.findMany({
     where: eq(achievements.studentId, user.id),
   });
@@ -2516,8 +2653,9 @@ app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), 
   });
   const unlockedNotRecorded = expectedCodes.filter((code) => !earnedCodes.has(code));
   if (unlockedNotRecorded.length > 0) {
-    console.log(
-      `[API /student/achievements] user=${user.id} unlocked-but-not-recorded=${unlockedNotRecorded.join(',')}`,
+    routesLogger.info(
+      { userId: user.id, unlockedButNotRecorded: unlockedNotRecorded.join(',') },
+      '[API /student/achievements]',
     );
   }
   const list: Achievement[] = ACHIEVEMENT_CATALOG.map((item) => {
@@ -2548,8 +2686,9 @@ app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), 
     };
   });
   const duration = Date.now() - start;
-  console.log(
-    `[API /student/achievements] user=${user.id} earned=${earned.length} duration=${duration}ms`,
+  routesLogger.info(
+    { userId: user.id, earned: earned.length, duration: duration },
+    '[API /student/achievements]',
   );
   return c.json({ success: true, data: list });
 });
@@ -2558,7 +2697,7 @@ app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), 
 app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const start = Date.now();
-  console.log(`[API /student/dashboard] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /student/dashboard]');
 
   const data = await memoizeAsync(`student_dash:${user.id}`, 60_000, async () => {
     const enrollments = await db.query.classEnrollments.findMany({
@@ -2599,8 +2738,14 @@ app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), asy
   });
 
   const duration = Date.now() - start;
-  console.log(
-    `[API /student/dashboard] user=${user.id} pending=${data.pendingTasks} corrected=${data.correctedEssays} duration=${duration}ms`,
+  routesLogger.info(
+    {
+      userId: user.id,
+      pending: data.pendingTasks,
+      corrected: data.correctedEssays,
+      duration: duration,
+    },
+    '[API /student/dashboard]',
   );
   return c.json({ success: true, data });
 });
@@ -2608,7 +2753,7 @@ app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), asy
 app.get('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const taskId = c.req.param('taskId');
-  console.log(`[API /student/drafts/:taskId GET] user=${user.id} taskId=${taskId}`);
+  routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId GET]');
   const draft = await db.query.essayDrafts.findFirst({
     where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
   });
@@ -2641,7 +2786,7 @@ app.post(
     const taskId = c.req.param('taskId');
     const { content, wordCount, durationMs } = c.req.valid('json');
     const now = new Date().toISOString();
-    console.log(`[API /student/drafts/:taskId POST] user=${user.id} taskId=${taskId}`);
+    routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId POST]');
     const existing = await db.query.essayDrafts.findFirst({
       where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
     });
@@ -2687,7 +2832,7 @@ app.post(
 app.delete('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const taskId = c.req.param('taskId');
-  console.log(`[API /student/drafts/:taskId DELETE] user=${user.id} taskId=${taskId}`);
+  routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId DELETE]');
   await db
     .delete(essayDrafts)
     .where(and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)));
@@ -2698,7 +2843,7 @@ app.delete('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDE
 app.get('/admin/dashboard/stats', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
   const user = c.get('user');
   const startedAt = Date.now();
-  console.log(`[API /admin/dashboard/stats] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /admin/dashboard/stats]');
 
   try {
     const data = await memoizeAsync(`admin_dash:${user.id}`, 60_000, async () => {
@@ -2753,14 +2898,15 @@ app.get('/admin/dashboard/stats', authMiddleware, requireRole(UserRole.SUPER_ADM
       } satisfies AdminDashboardStats;
     });
 
-    console.log(
-      `[API /admin/dashboard/stats] exit duration=${Date.now() - startedAt}ms schools=${data.totalSchools}`,
+    routesLogger.info(
+      { duration: Date.now() - startedAt, schools: data.totalSchools },
+      '[API /admin/dashboard/stats] exit',
     );
     return c.json({ success: true, data });
   } catch (err) {
-    console.error(
+    routesLogger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
       '[API /admin/dashboard/stats] error:',
-      err instanceof Error ? err.message : 'unknown',
     );
     return c.json({ success: false, error: '获取仪表盘统计失败' }, 500);
   }
@@ -2785,8 +2931,9 @@ app.get('/admin/schools', authMiddleware, requireRole(UserRole.SUPER_ADMIN), asy
   const region = c.req.query('region');
   const offset = Number(c.req.query('offset') ?? '0');
   const limit = Number(c.req.query('limit') ?? '50');
-  console.log(
-    `[API /admin/schools] user=${user.id} region=${region ?? 'all'} offset=${offset} limit=${limit}`,
+  routesLogger.info(
+    { userId: user.id, region: region ?? 'all', offset: offset, limit: limit },
+    '[API /admin/schools]',
   );
 
   try {
@@ -2857,12 +3004,16 @@ app.get('/admin/schools', authMiddleware, requireRole(UserRole.SUPER_ADMIN), asy
       };
     });
 
-    console.log(
-      `[API /admin/schools] exit duration=${Date.now() - startedAt}ms count=${stats.length}`,
+    routesLogger.info(
+      { duration: Date.now() - startedAt, count: stats.length },
+      '[API /admin/schools] exit',
     );
     return c.json({ success: true, data: stats });
   } catch (err) {
-    console.error('[API /admin/schools] error:', err instanceof Error ? err.message : 'unknown');
+    routesLogger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
+      '[API /admin/schools] error:',
+    );
     return c.json({ success: false, error: '获取学校列表失败' }, 500);
   }
 });
@@ -2876,7 +3027,10 @@ app.post(
     const user = c.get('user');
     const startedAt = Date.now();
     const body = c.req.valid('json');
-    console.log(`[API /admin/schools POST] user=${user.id} code=${body.code} name=${body.name}`);
+    routesLogger.info(
+      { userId: user.id, code: body.code, name: body.name },
+      '[API /admin/schools POST]',
+    );
 
     try {
       const existing = await db.query.schools.findFirst({ where: eq(schools.code, body.code) });
@@ -2896,12 +3050,15 @@ app.post(
         createdAt: now,
         updatedAt: now,
       });
-      console.log(`[API /admin/schools POST] exit duration=${Date.now() - startedAt}ms id=${id}`);
+      routesLogger.info(
+        { duration: Date.now() - startedAt, id: id },
+        '[API /admin/schools POST] exit',
+      );
       return c.json({ success: true, data: { id } }, 201);
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/schools POST] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '创建学校失败' }, 500);
     }
@@ -2918,7 +3075,7 @@ app.put(
     const startedAt = Date.now();
     const id = c.req.param('id');
     const body = c.req.valid('json');
-    console.log(`[API /admin/schools/:id PUT] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/schools/:id PUT]');
 
     try {
       const existing = await db.query.schools.findFirst({ where: eq(schools.id, id) });
@@ -2938,12 +3095,12 @@ app.put(
           updatedAt: now,
         })
         .where(eq(schools.id, id));
-      console.log(`[API /admin/schools/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      routesLogger.info({ duration: Date.now() - startedAt }, '[API /admin/schools/:id PUT] exit');
       return c.json({ success: true });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/schools/:id PUT] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '更新学校失败' }, 500);
     }
@@ -2954,7 +3111,7 @@ app.delete('/admin/schools/:id', authMiddleware, requireRole(UserRole.SUPER_ADMI
   const user = c.get('user');
   const startedAt = Date.now();
   const id = c.req.param('id');
-  console.log(`[API /admin/schools/:id DELETE] user=${user.id} id=${id}`);
+  routesLogger.info({ userId: user.id, id: id }, '[API /admin/schools/:id DELETE]');
 
   try {
     const existing = await db.query.schools.findFirst({ where: eq(schools.id, id) });
@@ -2963,12 +3120,12 @@ app.delete('/admin/schools/:id', authMiddleware, requireRole(UserRole.SUPER_ADMI
     }
     const now = new Date().toISOString();
     await db.update(schools).set({ isActive: false, updatedAt: now }).where(eq(schools.id, id));
-    console.log(`[API /admin/schools/:id DELETE] exit duration=${Date.now() - startedAt}ms`);
+    routesLogger.info({ duration: Date.now() - startedAt }, '[API /admin/schools/:id DELETE] exit');
     return c.json({ success: true });
   } catch (err) {
-    console.error(
+    routesLogger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
       '[API /admin/schools/:id DELETE] error:',
-      err instanceof Error ? err.message : 'unknown',
     );
     return c.json({ success: false, error: '删除学校失败' }, 500);
   }
@@ -2982,7 +3139,7 @@ app.get(
     const user = c.get('user');
     const startedAt = Date.now();
     const id = c.req.param('id');
-    console.log(`[API /admin/schools/:id/stats] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/schools/:id/stats]');
 
     try {
       const school = await db.query.schools.findFirst({ where: eq(schools.id, id) });
@@ -3045,12 +3202,15 @@ app.get(
                 (Number(activeStudentRow?.value ?? 0) / Number(studentRow?.value ?? 0)) * 100,
               ),
       };
-      console.log(`[API /admin/schools/:id/stats] exit duration=${Date.now() - startedAt}ms`);
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/schools/:id/stats] exit',
+      );
       return c.json({ success: true, data });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/schools/:id/stats] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '获取学校统计失败' }, 500);
     }
@@ -3077,7 +3237,7 @@ const apiConfigUpdateSchema = apiConfigCreateSchema.partial().omit({ apiKey: tru
 app.get('/admin/api-configs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
   const user = c.get('user');
   const startedAt = Date.now();
-  console.log(`[API /admin/api-configs] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /admin/api-configs]');
 
   try {
     const rows = await db.query.apiConfigs.findMany({ orderBy: desc(apiConfigs.priority) });
@@ -3101,14 +3261,15 @@ app.get('/admin/api-configs', authMiddleware, requireRole(UserRole.SUPER_ADMIN),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
-    console.log(
-      `[API /admin/api-configs] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    routesLogger.info(
+      { duration: Date.now() - startedAt, count: data.length },
+      '[API /admin/api-configs] exit',
     );
     return c.json({ success: true, data });
   } catch (err) {
-    console.error(
+    routesLogger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
       '[API /admin/api-configs] error:',
-      err instanceof Error ? err.message : 'unknown',
     );
     return c.json({ success: false, error: '获取 API 配置失败' }, 500);
   }
@@ -3123,7 +3284,10 @@ app.post(
     const user = c.get('user');
     const startedAt = Date.now();
     const body = c.req.valid('json');
-    console.log(`[API /admin/api-configs POST] user=${user.id} provider=${body.provider}`);
+    routesLogger.info(
+      { userId: user.id, provider: body.provider },
+      '[API /admin/api-configs POST]',
+    );
 
     try {
       const now = new Date().toISOString();
@@ -3142,14 +3306,15 @@ app.post(
         createdAt: now,
         updatedAt: now,
       });
-      console.log(
-        `[API /admin/api-configs POST] exit duration=${Date.now() - startedAt}ms id=${id}`,
+      routesLogger.info(
+        { duration: Date.now() - startedAt, id: id },
+        '[API /admin/api-configs POST] exit',
       );
       return c.json({ success: true, data: { id } }, 201);
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/api-configs POST] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '创建 API 配置失败' }, 500);
     }
@@ -3166,7 +3331,7 @@ app.put(
     const startedAt = Date.now();
     const id = c.req.param('id');
     const body = c.req.valid('json');
-    console.log(`[API /admin/api-configs/:id PUT] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/api-configs/:id PUT]');
 
     try {
       const existing = await db.query.apiConfigs.findFirst({ where: eq(apiConfigs.id, id) });
@@ -3189,12 +3354,15 @@ app.put(
           updatedAt: now,
         })
         .where(eq(apiConfigs.id, id));
-      console.log(`[API /admin/api-configs/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/api-configs/:id PUT] exit',
+      );
       return c.json({ success: true });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/api-configs/:id PUT] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '更新 API 配置失败' }, 500);
     }
@@ -3209,16 +3377,19 @@ app.delete(
     const user = c.get('user');
     const startedAt = Date.now();
     const id = c.req.param('id');
-    console.log(`[API /admin/api-configs/:id DELETE] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/api-configs/:id DELETE]');
 
     try {
       await db.delete(apiConfigs).where(eq(apiConfigs.id, id));
-      console.log(`[API /admin/api-configs/:id DELETE] exit duration=${Date.now() - startedAt}ms`);
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/api-configs/:id DELETE] exit',
+      );
       return c.json({ success: true });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/api-configs/:id DELETE] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '删除 API 配置失败' }, 500);
     }
@@ -3234,8 +3405,14 @@ app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), as
   const dateTo = c.req.query('dateTo');
   const offset = Number(c.req.query('offset') ?? '0');
   const limit = Number(c.req.query('limit') ?? '50');
-  console.log(
-    `[API /admin/api-logs] user=${user.id} provider=${provider ?? 'all'} dateFrom=${dateFrom ?? ''} dateTo=${dateTo ?? ''}`,
+  routesLogger.info(
+    {
+      userId: user.id,
+      provider: provider ?? 'all',
+      dateFrom: dateFrom ?? '',
+      dateTo: dateTo ?? '',
+    },
+    '[API /admin/api-logs]',
   );
 
   try {
@@ -3265,12 +3442,16 @@ app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), as
       essayId: r.essayId,
       createdAt: r.createdAt,
     }));
-    console.log(
-      `[API /admin/api-logs] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    routesLogger.info(
+      { duration: Date.now() - startedAt, count: data.length },
+      '[API /admin/api-logs] exit',
     );
     return c.json({ success: true, data });
   } catch (err) {
-    console.error('[API /admin/api-logs] error:', err instanceof Error ? err.message : 'unknown');
+    routesLogger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
+      '[API /admin/api-logs] error:',
+    );
     return c.json({ success: false, error: '获取 API 日志失败' }, 500);
   }
 });
@@ -3288,7 +3469,7 @@ const announcementUpdateSchema = announcementCreateSchema.partial();
 app.get('/admin/announcements', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
   const user = c.get('user');
   const startedAt = Date.now();
-  console.log(`[API /admin/announcements] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /admin/announcements]');
 
   try {
     const rows = await db.query.announcements.findMany({
@@ -3306,14 +3487,15 @@ app.get('/admin/announcements', authMiddleware, requireRole(UserRole.SUPER_ADMIN
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
-    console.log(
-      `[API /admin/announcements] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    routesLogger.info(
+      { duration: Date.now() - startedAt, count: data.length },
+      '[API /admin/announcements] exit',
     );
     return c.json({ success: true, data });
   } catch (err) {
-    console.error(
+    routesLogger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
       '[API /admin/announcements] error:',
-      err instanceof Error ? err.message : 'unknown',
     );
     return c.json({ success: false, error: '获取公告列表失败' }, 500);
   }
@@ -3328,7 +3510,7 @@ app.post(
     const user = c.get('user');
     const startedAt = Date.now();
     const body = c.req.valid('json');
-    console.log(`[API /admin/announcements POST] user=${user.id} title=${body.title}`);
+    routesLogger.info({ userId: user.id, title: body.title }, '[API /admin/announcements POST]');
 
     try {
       const now = new Date().toISOString();
@@ -3343,14 +3525,15 @@ app.post(
         createdAt: now,
         updatedAt: now,
       });
-      console.log(
-        `[API /admin/announcements POST] exit duration=${Date.now() - startedAt}ms id=${id}`,
+      routesLogger.info(
+        { duration: Date.now() - startedAt, id: id },
+        '[API /admin/announcements POST] exit',
       );
       return c.json({ success: true, data: { id } }, 201);
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/announcements POST] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '发布公告失败' }, 500);
     }
@@ -3367,7 +3550,7 @@ app.put(
     const startedAt = Date.now();
     const id = c.req.param('id');
     const body = c.req.valid('json');
-    console.log(`[API /admin/announcements/:id PUT] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/announcements/:id PUT]');
 
     try {
       const existing = await db.query.announcements.findFirst({
@@ -3387,12 +3570,15 @@ app.put(
           updatedAt: now,
         })
         .where(eq(announcements.id, id));
-      console.log(`[API /admin/announcements/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/announcements/:id PUT] exit',
+      );
       return c.json({ success: true });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/announcements/:id PUT] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '更新公告失败' }, 500);
     }
@@ -3407,18 +3593,19 @@ app.delete(
     const user = c.get('user');
     const startedAt = Date.now();
     const id = c.req.param('id');
-    console.log(`[API /admin/announcements/:id DELETE] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/announcements/:id DELETE]');
 
     try {
       await db.delete(announcements).where(eq(announcements.id, id));
-      console.log(
-        `[API /admin/announcements/:id DELETE] exit duration=${Date.now() - startedAt}ms`,
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/announcements/:id DELETE] exit',
       );
       return c.json({ success: true });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/announcements/:id DELETE] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '删除公告失败' }, 500);
     }
@@ -3449,8 +3636,9 @@ app.get('/admin/question-bank', authMiddleware, requireRole(UserRole.SUPER_ADMIN
   const difficulty = c.req.query('difficulty');
   const offset = Number(c.req.query('offset') ?? '0');
   const limit = Number(c.req.query('limit') ?? '50');
-  console.log(
-    `[API /admin/question-bank] user=${user.id} topicType=${topicType ?? 'all'} difficulty=${difficulty ?? 'all'}`,
+  routesLogger.info(
+    { userId: user.id, topicType: topicType ?? 'all', difficulty: difficulty ?? 'all' },
+    '[API /admin/question-bank]',
   );
 
   try {
@@ -3481,14 +3669,15 @@ app.get('/admin/question-bank', authMiddleware, requireRole(UserRole.SUPER_ADMIN
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
-    console.log(
-      `[API /admin/question-bank] exit duration=${Date.now() - startedAt}ms count=${data.length}`,
+    routesLogger.info(
+      { duration: Date.now() - startedAt, count: data.length },
+      '[API /admin/question-bank] exit',
     );
     return c.json({ success: true, data });
   } catch (err) {
-    console.error(
+    routesLogger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
       '[API /admin/question-bank] error:',
-      err instanceof Error ? err.message : 'unknown',
     );
     return c.json({ success: false, error: '获取题库失败' }, 500);
   }
@@ -3503,7 +3692,7 @@ app.post(
     const user = c.get('user');
     const startedAt = Date.now();
     const body = c.req.valid('json');
-    console.log(`[API /admin/question-bank POST] user=${user.id} title=${body.title}`);
+    routesLogger.info({ userId: user.id, title: body.title }, '[API /admin/question-bank POST]');
 
     try {
       const now = new Date().toISOString();
@@ -3525,14 +3714,15 @@ app.post(
         createdAt: now,
         updatedAt: now,
       });
-      console.log(
-        `[API /admin/question-bank POST] exit duration=${Date.now() - startedAt}ms id=${id}`,
+      routesLogger.info(
+        { duration: Date.now() - startedAt, id: id },
+        '[API /admin/question-bank POST] exit',
       );
       return c.json({ success: true, data: { id } }, 201);
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/question-bank POST] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '创建题目失败' }, 500);
     }
@@ -3549,7 +3739,7 @@ app.put(
     const startedAt = Date.now();
     const id = c.req.param('id');
     const body = c.req.valid('json');
-    console.log(`[API /admin/question-bank/:id PUT] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/question-bank/:id PUT]');
 
     try {
       const existing = await db.query.questionBank.findFirst({ where: eq(questionBank.id, id) });
@@ -3574,12 +3764,15 @@ app.put(
           updatedAt: now,
         })
         .where(eq(questionBank.id, id));
-      console.log(`[API /admin/question-bank/:id PUT] exit duration=${Date.now() - startedAt}ms`);
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/question-bank/:id PUT] exit',
+      );
       return c.json({ success: true });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/question-bank/:id PUT] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '更新题目失败' }, 500);
     }
@@ -3594,18 +3787,19 @@ app.delete(
     const user = c.get('user');
     const startedAt = Date.now();
     const id = c.req.param('id');
-    console.log(`[API /admin/question-bank/:id DELETE] user=${user.id} id=${id}`);
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/question-bank/:id DELETE]');
 
     try {
       await db.delete(questionBank).where(eq(questionBank.id, id));
-      console.log(
-        `[API /admin/question-bank/:id DELETE] exit duration=${Date.now() - startedAt}ms`,
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/question-bank/:id DELETE] exit',
       );
       return c.json({ success: true });
     } catch (err) {
-      console.error(
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
         '[API /admin/question-bank/:id DELETE] error:',
-        err instanceof Error ? err.message : 'unknown',
       );
       return c.json({ success: false, error: '删除题目失败' }, 500);
     }
@@ -3616,13 +3810,13 @@ app.delete(
 app.get('/admin/scoring-config', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
   const user = c.get('user');
   const startedAt = Date.now();
-  console.log(`[API /admin/scoring-config] user=${user.id}`);
+  routesLogger.info({ userId: user.id }, '[API /admin/scoring-config]');
   const data = {
     scoringWeights: SCORING_WEIGHTS,
     scoreTiers: SCORE_TIERS,
     deductionRules: DEDUCTION_RULES,
   };
-  console.log(`[API /admin/scoring-config] exit duration=${Date.now() - startedAt}ms`);
+  routesLogger.info({ duration: Date.now() - startedAt }, '[API /admin/scoring-config] exit');
   return c.json({ success: true, data });
 });
 

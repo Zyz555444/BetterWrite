@@ -1,8 +1,15 @@
 import { randomUUID } from 'node:crypto';
+import { createServer } from 'node:http';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { type EssayTaskInput, correctEssay, createProviderRouter } from '@betterwrite/ai';
 import { corrections, db, essays } from '@betterwrite/db';
 import { getScoreTier } from '@betterwrite/shared';
+import { env } from '@betterwrite/shared/env';
+import { logger } from '@betterwrite/shared/logger';
+import { CORRECTION_QUEUE, type CorrectionJobData } from '@betterwrite/shared/queue';
+import { Worker } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
+import { Redis } from 'ioredis';
 
 export { performOcr, type OcrResult } from './ocr.js';
 
@@ -11,6 +18,7 @@ export interface CorrectionJob {
 }
 
 const router = createProviderRouter(process.env);
+const workerLogger = logger.child({ component: 'worker' });
 
 // 启动时恢复卡住的作文：将 'correcting' 状态的作文重置为 'pending'，使其可被重新处理。
 export async function resetStuckEssays(): Promise<number> {
@@ -24,13 +32,17 @@ export async function resetStuckEssays(): Promise<number> {
       .set({ status: 'pending', updatedAt: now })
       .where(eq(essays.id, essay.id));
   }
-  console.log(`[Worker] Reset ${stuck.length} stuck essay(s) from 'correcting' to 'pending'`);
+  workerLogger.info(
+    { resetCount: stuck.length },
+    "Reset stuck essay(s) from 'correcting' to 'pending'",
+  );
   return stuck.length;
 }
 
 export async function processCorrection(job: CorrectionJob): Promise<void> {
   const { essayId } = job;
-  console.log(`📝 Correcting essay ${essayId}`);
+  const correctionLogger = workerLogger.child({ essayId });
+  correctionLogger.info('Correcting essay');
 
   const essay = await db.query.essays.findFirst({
     where: eq(essays.id, essayId),
@@ -43,7 +55,7 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
 
   // 幂等性：已完成的作文不重复批改，避免重复插入 correction 行。
   if (essay.status === 'completed') {
-    console.log(`⏭️ Essay ${essayId} already completed, skipping`);
+    correctionLogger.info('Essay already completed, skipping');
     return;
   }
 
@@ -60,7 +72,7 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
     let result: Awaited<ReturnType<typeof correctEssay>>;
 
     if (router.availableNames().length === 0) {
-      console.warn('No AI provider configured, using mock correction');
+      correctionLogger.warn('No AI provider configured, using mock correction');
       result = createMockCorrection(essay.content, essay.wordCount ?? 0);
     } else if (!essay.task) {
       result = await correctEssay(
@@ -131,9 +143,12 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
       }
     });
 
-    console.log(`✅ Essay ${essayId} corrected: ${result.totalScore}/15 (${result.scoreTier})`);
+    correctionLogger.info(
+      { totalScore: result.totalScore, scoreTier: result.scoreTier },
+      'Essay corrected',
+    );
   } catch (error) {
-    console.error(`❌ Essay ${essayId} correction failed:`, error);
+    correctionLogger.error({ err: error }, 'Essay correction failed');
     await db.update(essays).set({ status: 'failed', updatedAt: now }).where(eq(essays.id, essayId));
     throw error;
   }
@@ -198,4 +213,114 @@ function createMockCorrection(
     aiProvider: 'mock',
     aiModel: 'mock',
   };
+}
+
+async function main(): Promise<void> {
+  if (!env.REDIS_URL) {
+    workerLogger.error('REDIS_URL is required to run the worker');
+    process.exit(1);
+  }
+
+  const resetCount = await resetStuckEssays();
+  workerLogger.info({ resetCount }, 'Worker starting');
+
+  const connection = new Redis(env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+
+  connection.on('error', (err) => {
+    workerLogger.error({ err }, 'Redis connection error');
+  });
+  connection.on('close', () => {
+    workerLogger.warn('Redis connection closed');
+  });
+  connection.on('end', async () => {
+    workerLogger.error('Redis connection ended, shutting down worker');
+    await shutdown('Redis end');
+  });
+
+  const worker = new Worker<CorrectionJobData>(
+    CORRECTION_QUEUE,
+    async (job) => {
+      workerLogger.info(
+        { essayId: job.data.essayId, attempt: job.attemptsMade + 1 },
+        'Processing correction',
+      );
+      await processCorrection({ essayId: job.data.essayId });
+    },
+    { connection, concurrency: env.WORKER_CONCURRENCY },
+  );
+
+  worker.on('failed', (job, err) => {
+    workerLogger.error({ essayId: job?.data.essayId, err }, 'Correction job failed');
+  });
+
+  worker.on('completed', (job) => {
+    workerLogger.info({ essayId: job.data.essayId }, 'Correction job completed');
+  });
+
+  const healthServer = createServer(async (req, res) => {
+    if (req.url === '/health') {
+      let database: 'ok' | 'error' = 'ok';
+      try {
+        await db.query.users.findFirst({ columns: { id: true } });
+      } catch (err) {
+        workerLogger.error({ err }, 'Health check database failed');
+        database = 'error';
+      }
+
+      let redis: 'ok' | 'error' = 'ok';
+      try {
+        await connection.ping();
+      } catch (err) {
+        workerLogger.error({ err }, 'Health check redis failed');
+        redis = 'error';
+      }
+
+      const ok = worker.isRunning() && database === 'ok' && redis === 'ok';
+      res.writeHead(ok ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          status: ok ? 'ok' : 'error',
+          queue: CORRECTION_QUEUE,
+          database,
+          redis,
+        }),
+      );
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  healthServer.listen(env.WORKER_HEALTH_PORT, () => {
+    workerLogger.info({ port: env.WORKER_HEALTH_PORT }, 'Worker health server listening');
+  });
+
+  let isShuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    workerLogger.info({ signal }, 'Shutting down worker');
+    await worker.close();
+    healthServer.close();
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+}
+
+// 仅当以 node dist/index.js 直接启动时才运行 worker，避免被 web 引入时误启动。
+const isMainModule =
+  typeof process !== 'undefined' &&
+  process.argv.length > 1 &&
+  fileURLToPath(import.meta.url) === fileURLToPath(pathToFileURL(process.argv[1]));
+
+if (isMainModule) {
+  main().catch((err) => {
+    logger.error(err, 'Worker failed to start');
+    process.exit(1);
+  });
 }

@@ -21,6 +21,18 @@
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "default": "./dist/utils/index.js"
+    },
+    "./env": {
+      "types": "./dist/env.d.ts",
+      "default": "./dist/env.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "default": "./dist/logger.js"
+    },
+    "./queue": {
+      "types": "./dist/queue.d.ts",
+      "default": "./dist/queue.js"
     }
   },
   "scripts": {
@@ -30,11 +42,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "pino": "^9.6.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@betterwrite/tsconfig": "workspace:*",
     "@biomejs/biome": "^1.9.4",
+    "pino-pretty": "^13.0.0",
     "typescript": "^5.7.3"
   }
 }

@@ -22,7 +22,10 @@
     "@betterwrite/ai": "workspace:*",
     "@betterwrite/db": "workspace:*",
     "@betterwrite/shared": "workspace:*",
-    "drizzle-orm": "^0.38.0"
+    "bullmq": "^5.48.0",
+    "drizzle-orm": "^0.38.0",
+    "ioredis": "5.10.1",
+    "pino": "^9.6.0"
   },
   "devDependencies": {
     "@betterwrite/tsconfig": "workspace:*",

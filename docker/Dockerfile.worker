@@ -10,15 +10,25 @@ COPY packages ./packages
 COPY apps/worker ./apps/worker
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm turbo run build --filter=@betterwrite/worker...
+RUN pnpm turbo run build --filter=@betterwrite/worker
+RUN pnpm deploy --filter=@betterwrite/worker --prod /prod/worker
 
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY --from=builder /app/apps/worker/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages ./packages
+COPY --from=builder --chown=node:node /prod/worker/dist ./dist
+COPY --from=builder --chown=node:node /prod/worker/node_modules ./node_modules
+COPY --from=builder --chown=node:node /prod/worker/package.json ./package.json
+
+RUN mkdir -p /app/data && chown -R node:node /app/data
+
+USER node
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "http.get('http://localhost:8080/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 CMD ["node", "dist/index.js"]

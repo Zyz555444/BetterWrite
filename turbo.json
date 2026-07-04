@@ -4,12 +4,18 @@
   "globalEnv": [
     "NODE_ENV",
     "DATABASE_URL",
+    "DATABASE_AUTH_TOKEN",
     "REDIS_URL",
     "NEXTAUTH_SECRET",
     "NEXT_PUBLIC_API_URL",
+    "CORS_ORIGIN",
+    "LOG_LEVEL",
+    "WORKER_HEALTH_PORT",
+    "WORKER_CONCURRENCY",
     "OPENAI_API_KEY",
     "DEEPSEEK_API_KEY",
-    "ANTHROPIC_API_KEY"
+    "ANTHROPIC_API_KEY",
+    "EXPO_ACCESS_TOKEN"
   ],
   "tasks": {
     "build": {

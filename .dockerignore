@@ -1,0 +1,54 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Turbo / build outputs
+.turbo
+.next
+dist
+out
+build
+coverage
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Local SQLite database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Documentation
+*.md
+docs
+
+# Tests
+tests
+**/*.test.ts
+**/__tests__
+
+# IDE & OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs
+
+# Lefthook / commit hooks
+lefthook.yml
+.commitlintrc*
+
+# CI / CD metadata
+.github

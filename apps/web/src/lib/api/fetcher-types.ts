@@ -77,6 +77,8 @@ export interface Essay {
   totalScore: number | null;
   scoreTier: string | null;
   correctionId: string | null;
+  teacherReview: string | null;
+  teacherScore: number | null;
   submittedAt: string;
   correctedAt: string | null;
   createdAt: string;

@@ -208,7 +208,8 @@ export default function TeacherTasksPage() {
     try {
       const res = await fetcher.publishTask(id);
       if (res.success && res.data) {
-        setTasks((prev) => prev.map((t) => (t.id === id ? res.data : t)));
+        const updated = res.data;
+        setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
       } else {
         setError(res.error ?? '发布失败');
       }
@@ -223,7 +224,8 @@ export default function TeacherTasksPage() {
     try {
       const res = await fetcher.closeTask(id);
       if (res.success && res.data) {
-        setTasks((prev) => prev.map((t) => (t.id === id ? res.data : t)));
+        const updated = res.data;
+        setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
       } else {
         setError(res.error ?? '截止失败');
       }
@@ -255,7 +257,11 @@ export default function TeacherTasksPage() {
                   setShowForm(false);
                 }}
               >
-                {showAiForm ? <X className="w-4 h-4 mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                {showAiForm ? (
+                  <X className="w-4 h-4 mr-2" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2" />
+                )}
                 {showAiForm ? '取消' : 'AI 出题'}
               </Button>
               <Button
@@ -559,11 +565,7 @@ export default function TeacherTasksPage() {
                           </Button>
                         )}
                         {task.status === 'published' && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleClose(task.id)}
-                          >
+                          <Button size="sm" variant="outline" onClick={() => handleClose(task.id)}>
                             截止
                           </Button>
                         )}

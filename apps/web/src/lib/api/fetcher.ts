@@ -18,6 +18,7 @@ import type {
   StudentProgress,
 } from '@betterwrite/shared';
 import type {
+  AiGeneratedTask,
   ApiResponse,
   AuthUserResponse,
   CorrectionDetail,
@@ -113,10 +114,7 @@ export const fetcher = {
   getEssay: (id: string) => request<ApiResponse<Essay>>(`/api/essays/${id}`),
   getCorrection: (id: string) =>
     request<ApiResponse<CorrectionDetail>>(`/api/essays/${id}/correction`),
-  reviewEssay: (
-    id: string,
-    body: { teacherReview?: string; teacherScore?: number },
-  ) =>
+  reviewEssay: (id: string, body: { teacherReview?: string; teacherScore?: number }) =>
     request<ApiResponse<Essay>>(`/api/essays/${id}/review`, {
       method: 'PUT',
       body: JSON.stringify(body),

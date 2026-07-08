@@ -6,9 +6,10 @@ import { RoleGuard } from '@/components/layout/role-guard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { type CorrectionDetail, type Essay, fetcher } from '@/lib/api/fetcher';
 import { UserRole } from '@betterwrite/shared';
-import { ArrowLeft, Clock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Clock, RefreshCw, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -30,6 +31,10 @@ export default function TeacherEssayDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const [review, setReview] = useState('');
+  const [teacherScore, setTeacherScore] = useState('');
+  const [isSavingReview, setIsSavingReview] = useState(false);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey 用于手动触发重新加载
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +50,12 @@ export default function TeacherEssayDetailPage() {
 
         if (essayRes.success && essayRes.data) {
           setEssay(essayRes.data);
+          setReview(essayRes.data.teacherReview ?? '');
+          setTeacherScore(
+            essayRes.data.teacherScore !== null && essayRes.data.teacherScore !== undefined
+              ? String(essayRes.data.teacherScore)
+              : '',
+          );
         } else {
           console.warn('[TeacherEssayDetail] getEssay failed:', essayRes.error);
           setError(essayRes.error ?? '获取作文失败');
@@ -73,6 +84,50 @@ export default function TeacherEssayDetailPage() {
 
   const handleRefresh = () => {
     setRefreshKey((k) => k + 1);
+  };
+
+  const handleSaveReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!essay) return;
+
+    const scoreNum = teacherScore.trim() === '' ? undefined : Number(teacherScore);
+    if (
+      teacherScore.trim() !== '' &&
+      (Number.isNaN(scoreNum) || scoreNum === undefined || scoreNum < 0 || scoreNum > 100)
+    ) {
+      setError('教师分数需在 0-100 之间');
+      return;
+    }
+
+    const payload: { teacherReview?: string; teacherScore?: number } = {};
+    if (review.trim()) payload.teacherReview = review.trim();
+    if (scoreNum !== undefined) payload.teacherScore = scoreNum;
+    if (Object.keys(payload).length === 0) {
+      setError('请填写评语或分数');
+      return;
+    }
+
+    setIsSavingReview(true);
+    setError(null);
+    try {
+      const res = await fetcher.reviewEssay(essayId, payload);
+      if (res.success && res.data) {
+        setEssay(res.data);
+        setReview(res.data.teacherReview ?? '');
+        setTeacherScore(
+          res.data.teacherScore !== null && res.data.teacherScore !== undefined
+            ? String(res.data.teacherScore)
+            : '',
+        );
+      } else {
+        setError(res.error ?? '保存复核失败');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '保存复核失败';
+      setError(message);
+    } finally {
+      setIsSavingReview(false);
+    }
   };
 
   return (
@@ -161,6 +216,58 @@ export default function TeacherEssayDetailPage() {
               {correction && (
                 <CorrectionResultView correction={correction} originalEssay={essay.content} />
               )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-title-20 flex items-center gap-2">
+                    <Save className="w-4 h-4 text-accent" />
+                    教师复核
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSaveReview} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="md:col-span-3 space-y-2">
+                        <label
+                          htmlFor="teacherReview"
+                          className="text-copy-14 font-medium text-neutral-10"
+                        >
+                          教师评语
+                        </label>
+                        <textarea
+                          id="teacherReview"
+                          value={review}
+                          onChange={(e) => setReview(e.target.value)}
+                          placeholder="输入针对该作文的评语或修改建议..."
+                          className="w-full min-h-[100px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="teacherScore"
+                          className="text-copy-14 font-medium text-neutral-10"
+                        >
+                          教师分数
+                        </label>
+                        <Input
+                          id="teacherScore"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={teacherScore}
+                          onChange={(e) => setTeacherScore(e.target.value)}
+                          placeholder="0-100"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={isSavingReview}>
+                        {isSavingReview ? '保存中...' : '保存复核'}
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
             </>
           ) : null}
         </div>

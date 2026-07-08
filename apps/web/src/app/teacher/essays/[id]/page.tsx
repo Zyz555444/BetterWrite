@@ -90,18 +90,18 @@ export default function TeacherEssayDetailPage() {
     e.preventDefault();
     if (!essay) return;
 
-    const scoreNum = teacherScore.trim() === '' ? undefined : Number(teacherScore);
-    if (
-      teacherScore.trim() !== '' &&
-      (Number.isNaN(scoreNum) || scoreNum === undefined || scoreNum < 0 || scoreNum > 100)
-    ) {
-      setError('教师分数需在 0-100 之间');
-      return;
-    }
-
     const payload: { teacherReview?: string; teacherScore?: number } = {};
     if (review.trim()) payload.teacherReview = review.trim();
-    if (scoreNum !== undefined) payload.teacherScore = scoreNum;
+
+    if (teacherScore.trim() !== '') {
+      const scoreNum = Number(teacherScore);
+      if (Number.isNaN(scoreNum) || scoreNum < 0 || scoreNum > 100) {
+        setError('教师分数需在 0-100 之间');
+        return;
+      }
+      payload.teacherScore = scoreNum;
+    }
+
     if (Object.keys(payload).length === 0) {
       setError('请填写评语或分数');
       return;

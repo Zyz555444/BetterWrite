@@ -22,18 +22,13 @@
     "android": {
       "package": "com.betterwrite.app",
       "permissions": [
-        "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "POST_NOTIFICATIONS",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
     },
-    "plugins": [
-      "expo-router",
-      "expo-camera",
-      "expo-notifications"
-    ],
+    "plugins": ["expo-router", "expo-camera", "expo-notifications"],
     "experiments": {
       "typedRoutes": true
     },

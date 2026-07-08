@@ -1,9 +1,15 @@
+import os
+
 import paramiko
 import time
 
+SSH_PASSWORD = os.environ.get('SSH_PASSWORD')
+if not SSH_PASSWORD:
+    raise RuntimeError('请设置环境变量 SSH_PASSWORD')
+
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('103.79.186.155', username='root', password='Sz555444', timeout=60)
+ssh.connect('103.79.186.155', username='root', password=SSH_PASSWORD, timeout=60)
 
 def run(cmd, timeout=30):
     print(f'\n$ {cmd[:150]}...' if len(cmd) > 150 else f'\n$ {cmd}')

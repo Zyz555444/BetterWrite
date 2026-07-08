@@ -1,0 +1,22 @@
+# Node modules
+node_modules
+
+# Next.js
+.next
+
+# Logs
+*.log
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+
+# Keep dist directories for workspace packages
+!packages/**/dist

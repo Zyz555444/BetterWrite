@@ -21,15 +21,32 @@
     },
     "android": {
       "package": "com.betterwrite.app",
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE", "POST_NOTIFICATIONS"]
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
-    "plugins": ["expo-router", "expo-camera", "expo-notifications"],
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      "expo-notifications"
+    ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiUrl": "http://10.0.2.2:3000",
-      "easProjectId": ""
-    }
+      "apiUrl": "https://api.cosky.top",
+      "easProjectId": "",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "d9524f93-f889-44d5-80fc-3dbc2aa56c93"
+      }
+    },
+    "owner": "codesky"
   }
 }

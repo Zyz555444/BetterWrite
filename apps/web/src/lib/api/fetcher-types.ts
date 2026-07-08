@@ -33,6 +33,17 @@ export interface EssayTask {
   updatedAt: string;
 }
 
+export interface AiGeneratedTask {
+  title: string;
+  topicType: string;
+  topicCategory: string;
+  requirements: string;
+  keyPoints: string[];
+  referenceEssay: string;
+  wordLimitMin?: number;
+  wordLimitMax?: number;
+}
+
 export interface Correction {
   id: string;
   essayId: string;

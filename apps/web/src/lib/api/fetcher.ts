@@ -30,6 +30,7 @@ import type {
 } from './fetcher-types';
 
 export type {
+  AiGeneratedTask,
   ApiResponse,
   AuthUserResponse,
   Correction,
@@ -99,6 +100,11 @@ export const fetcher = {
         schoolId: string | null;
       }>
     >('/api/auth/me'),
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request<ApiResponse<null>>('/api/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
 
   // Essays
   submitEssay: (body: { content: string; taskId?: string; title?: string }) =>
@@ -107,6 +113,14 @@ export const fetcher = {
   getEssay: (id: string) => request<ApiResponse<Essay>>(`/api/essays/${id}`),
   getCorrection: (id: string) =>
     request<ApiResponse<CorrectionDetail>>(`/api/essays/${id}/correction`),
+  reviewEssay: (
+    id: string,
+    body: { teacherReview?: string; teacherScore?: number },
+  ) =>
+    request<ApiResponse<Essay>>(`/api/essays/${id}/review`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
 
   // Tasks
   listTasks: () => request<ApiResponse<EssayTask[]>>('/api/tasks'),
@@ -146,6 +160,21 @@ export const fetcher = {
     dueDate?: string;
   }) =>
     request<ApiResponse<EssayTask>>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
+  aiGenerateTask: (body: {
+    topic: string;
+    topicType?: string;
+    gradeLevel?: string;
+    wordLimitMin?: number;
+    wordLimitMax?: number;
+  }) =>
+    request<ApiResponse<AiGeneratedTask>>('/api/tasks/ai-generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  publishTask: (id: string) =>
+    request<ApiResponse<EssayTask>>(`/api/tasks/${id}/publish`, { method: 'PUT' }),
+  closeTask: (id: string) =>
+    request<ApiResponse<EssayTask>>(`/api/tasks/${id}/close`, { method: 'PUT' }),
 
   // Analytics
   getClassAnalytics: (classId: string) =>

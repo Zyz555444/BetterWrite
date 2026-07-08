@@ -9,7 +9,8 @@
     "ios": "expo start --ios",
     "build": "echo 'Mobile app uses Expo build, no tsc build step'",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "prebuild": "node scripts/prepare-workspace.js"
   },
   "dependencies": {
     "@betterwrite/design-system": "workspace:*",

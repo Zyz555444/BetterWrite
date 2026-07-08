@@ -25,13 +25,20 @@
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "2.1.8",
     "lefthook": "^1.10.10",
+    "ssh2": "^1.17.0",
     "turbo": "^2.4.0",
     "typescript": "^5.7.3",
     "vitest": "2.1.8"
   },
   "packageManager": "pnpm@10.0.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "lefthook", "msgpackr-extract", "sharp"]
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "esbuild",
+      "lefthook",
+      "msgpackr-extract",
+      "sharp"
+    ]
   },
   "engines": {
     "node": ">=24.0.0",

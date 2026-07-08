@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type EssayTask, fetcher } from '@/lib/api/fetcher';
 import { TopicTypeLabels, UserRole } from '@betterwrite/shared';
-import { Calendar, PenLine, Plus, School, X } from 'lucide-react';
+import { Bot, Calendar, PenLine, Plus, School, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const statusLabels: Record<string, string> = {
@@ -31,6 +31,8 @@ export default function TeacherTasksPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showAiForm, setShowAiForm] = useState(false);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [form, setForm] = useState({
     title: '',
     topicType: 'narration',
@@ -40,6 +42,13 @@ export default function TeacherTasksPage() {
     wordLimitMin: 80,
     wordLimitMax: 125,
     dueDate: '',
+  });
+  const [aiForm, setAiForm] = useState({
+    topic: '',
+    topicType: '',
+    gradeLevel: 'Grade 7-9 (Chinese middle school)',
+    wordLimitMin: 80,
+    wordLimitMax: 125,
   });
 
   useEffect(() => {
@@ -85,6 +94,10 @@ export default function TeacherTasksPage() {
       const next = { ...prev, [field]: value };
       return next;
     });
+  };
+
+  const handleAiChange = (field: keyof typeof aiForm, value: string | number) => {
+    setAiForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,6 +153,86 @@ export default function TeacherTasksPage() {
     }
   };
 
+  const handleAiGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!aiForm.topic.trim()) {
+      setError('请输入 AI 出题主题');
+      return;
+    }
+
+    setIsAiGenerating(true);
+    try {
+      const res = await fetcher.aiGenerateTask({
+        topic: aiForm.topic.trim(),
+        topicType: aiForm.topicType || undefined,
+        gradeLevel: aiForm.gradeLevel || undefined,
+        wordLimitMin: Number(aiForm.wordLimitMin),
+        wordLimitMax: Number(aiForm.wordLimitMax),
+      });
+      if (res.success && res.data) {
+        const generated = res.data;
+        setForm((prev) => ({
+          ...prev,
+          title: generated.title,
+          topicType: generated.topicType,
+          requirements: generated.requirements,
+          keyPoints: generated.keyPoints.join('\n'),
+          wordLimitMin: generated.wordLimitMin ?? prev.wordLimitMin,
+          wordLimitMax: generated.wordLimitMax ?? prev.wordLimitMax,
+        }));
+        setShowAiForm(false);
+        setShowForm(true);
+        setAiForm({
+          topic: '',
+          topicType: '',
+          gradeLevel: 'Grade 7-9 (Chinese middle school)',
+          wordLimitMin: 80,
+          wordLimitMax: 125,
+        });
+      } else {
+        console.warn('[TeacherTasks] aiGenerateTask failed:', res.error);
+        setError(res.error ?? 'AI 出题失败');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'AI 出题失败';
+      console.error('[TeacherTasks] aiGenerateTask error:', message);
+      setError(message);
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
+  const handlePublish = async (id: string) => {
+    setError(null);
+    try {
+      const res = await fetcher.publishTask(id);
+      if (res.success && res.data) {
+        setTasks((prev) => prev.map((t) => (t.id === id ? res.data : t)));
+      } else {
+        setError(res.error ?? '发布失败');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '发布失败';
+      setError(message);
+    }
+  };
+
+  const handleClose = async (id: string) => {
+    setError(null);
+    try {
+      const res = await fetcher.closeTask(id);
+      if (res.success && res.data) {
+        setTasks((prev) => prev.map((t) => (t.id === id ? res.data : t)));
+      } else {
+        setError(res.error ?? '截止失败');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '截止失败';
+      setError(message);
+    }
+  };
+
   const getClassLabel = (classId: string) => {
     const cls = classes.find((c) => c.id === classId);
     return cls ? `${cls.grade} · ${cls.name}` : classId;
@@ -154,17 +247,119 @@ export default function TeacherTasksPage() {
               <h1 className="text-title-24 font-serif font-medium text-neutral-10">作文任务</h1>
               <p className="text-copy-14 text-neutral-8 mt-1">布置、查看和管理班级作文任务</p>
             </div>
-            <Button
-              onClick={() => {
-                setShowForm((v) => !v);
-              }}
-            >
-              {showForm ? <X className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-              {showForm ? '取消' : '新建任务'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAiForm((v) => !v);
+                  setShowForm(false);
+                }}
+              >
+                {showAiForm ? <X className="w-4 h-4 mr-2" /> : <Sparkles className="w-4 h-4 mr-2" />}
+                {showAiForm ? '取消' : 'AI 出题'}
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowForm((v) => !v);
+                  setShowAiForm(false);
+                }}
+              >
+                {showForm ? <X className="w-4 h-4 mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+                {showForm ? '取消' : '新建任务'}
+              </Button>
+            </div>
           </div>
 
           {error && <p className="text-error text-copy-14">{error}</p>}
+
+          {showAiForm && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-title-20 flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-accent" />
+                  AI 辅助出题
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleAiGenerate} className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="aiTopic" className="text-copy-14 font-medium text-neutral-10">
+                      主题 / 提示词
+                    </label>
+                    <Input
+                      id="aiTopic"
+                      value={aiForm.topic}
+                      onChange={(e) => handleAiChange('topic', e.target.value)}
+                      placeholder="例如：一次难忘的旅行"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="aiTopicType"
+                        className="text-copy-14 font-medium text-neutral-10"
+                      >
+                        体裁（可选）
+                      </label>
+                      <select
+                        id="aiTopicType"
+                        value={aiForm.topicType}
+                        onChange={(e) => handleAiChange('topicType', e.target.value)}
+                        className="w-full h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
+                      >
+                        <option value="">自动选择</option>
+                        {Object.entries(TopicTypeLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="aiWordLimitMin"
+                        className="text-copy-14 font-medium text-neutral-10"
+                      >
+                        最少词数
+                      </label>
+                      <Input
+                        id="aiWordLimitMin"
+                        type="number"
+                        value={aiForm.wordLimitMin}
+                        onChange={(e) => handleAiChange('wordLimitMin', Number(e.target.value))}
+                        min={20}
+                        max={500}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="aiWordLimitMax"
+                        className="text-copy-14 font-medium text-neutral-10"
+                      >
+                        最多词数
+                      </label>
+                      <Input
+                        id="aiWordLimitMax"
+                        type="number"
+                        value={aiForm.wordLimitMax}
+                        onChange={(e) => handleAiChange('wordLimitMax', Number(e.target.value))}
+                        min={20}
+                        max={500}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={isAiGenerating}>
+                      {isAiGenerating ? '生成中...' : '生成并填入表单'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
 
           {showForm && (
             <Card>
@@ -356,6 +551,31 @@ export default function TeacherTasksPage() {
                             </>
                           )}
                         </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {task.status === 'draft' && (
+                          <Button size="sm" onClick={() => handlePublish(task.id)}>
+                            发布
+                          </Button>
+                        )}
+                        {task.status === 'published' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleClose(task.id)}
+                          >
+                            截止
+                          </Button>
+                        )}
+                        {task.status === 'closed' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handlePublish(task.id)}
+                          >
+                            重新发布
+                          </Button>
+                        )}
                       </div>
                     </li>
                   ))}

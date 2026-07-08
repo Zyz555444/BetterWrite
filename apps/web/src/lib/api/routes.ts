@@ -313,6 +313,48 @@ app.post('/auth/logout', authMiddleware, async (c) => {
   });
 });
 
+const passwordChangeSchema = z.object({
+  currentPassword: z.string().min(1, '请输入当前密码'),
+  newPassword: z.string().min(8, '新密码至少8位'),
+});
+
+app.put(
+  '/auth/password',
+  authMiddleware,
+  rateLimit(5, 60_000),
+  zValidator('json', passwordChangeSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { currentPassword, newPassword } = c.req.valid('json');
+    routesLogger.info({ userId: user.id }, '[API PUT /auth/password]');
+
+    const record = await db.query.users.findFirst({
+      where: eq(users.id, user.id),
+      columns: { id: true, passwordHash: true, isActive: true },
+    });
+    if (!record || !record.isActive) {
+      return c.json({ success: false, error: '用户不存在或已禁用' }, 401);
+    }
+
+    const valid = await bcrypt.compare(currentPassword, record.passwordHash);
+    if (!valid) {
+      routesLogger.warn({ userId: user.id }, '[API PUT /auth/password] current password mismatch');
+      return c.json({ success: false, error: '当前密码错误' }, 401);
+    }
+
+    if (currentPassword === newPassword) {
+      return c.json({ success: false, error: '新密码不能与当前密码相同' }, 400);
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const now = new Date().toISOString();
+    await db.update(users).set({ passwordHash, updatedAt: now }).where(eq(users.id, user.id));
+
+    routesLogger.info({ userId: user.id }, '[API PUT /auth/password] password updated');
+    return c.json({ success: true });
+  },
+);
+
 app.get('/auth/me', authMiddleware, async (c) => {
   const user = c.get('user');
   return c.json({
@@ -627,6 +669,73 @@ app.get('/essays/:id/correction', authMiddleware, async (c) => {
   return c.json({ success: true, data: essay.correction });
 });
 
+const essayReviewSchema = z
+  .object({
+    teacherReview: z.string().min(1, '评语不能为空').max(2000, '评语过长').optional(),
+    teacherScore: z.number().min(0, '分数不能小于0').max(100, '分数不能大于100').optional(),
+  })
+  .refine((d) => d.teacherReview !== undefined || d.teacherScore !== undefined, {
+    message: '至少需要提供评语或分数',
+  });
+
+app.put(
+  '/essays/:id/review',
+  authMiddleware,
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
+  zValidator('json', essayReviewSchema),
+  async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    const { teacherReview, teacherScore } = c.req.valid('json');
+    routesLogger.info(
+      {
+        userId: user.id,
+        role: user.role,
+        essayId: id,
+        hasReview: teacherReview !== undefined,
+        hasScore: teacherScore !== undefined,
+      },
+      '[API PUT /essays/:id/review]',
+    );
+
+    const essay = await db.query.essays.findFirst({
+      where: eq(essays.id, id),
+      with: { student: { columns: { id: true, schoolId: true } } },
+    });
+    if (!essay) {
+      routesLogger.warn({ essayId: id }, '[API PUT /essays/:id/review] essay not found');
+      return c.json({ success: false, error: '作文不存在' }, 404);
+    }
+
+    const canAccess =
+      user.role === UserRole.SUPER_ADMIN ||
+      (user.role === UserRole.SCHOOL_ADMIN && essay.student?.schoolId === user.schoolId) ||
+      (user.role === UserRole.TEACHER && essay.student?.schoolId === user.schoolId);
+
+    if (!canAccess) {
+      routesLogger.warn(
+        { userId: user.id, essayId: id, role: user.role },
+        '[API PUT /essays/:id/review] access denied',
+      );
+      return c.json({ success: false, error: '无权复核该作文' }, 403);
+    }
+
+    const now = new Date().toISOString();
+    const [updated] = await db
+      .update(essays)
+      .set({
+        ...(teacherReview !== undefined ? { teacherReview } : {}),
+        ...(teacherScore !== undefined ? { teacherScore } : {}),
+        updatedAt: now,
+      })
+      .where(eq(essays.id, id))
+      .returning();
+
+    routesLogger.info({ essayId: id }, '[API PUT /essays/:id/review] review saved');
+    return c.json({ success: true, data: updated });
+  },
+);
+
 app.get(
   '/essays',
   authMiddleware,
@@ -677,7 +786,10 @@ app.get('/tasks', authMiddleware, async (c) => {
     });
     const classIds = enrollments.map((e) => e.classId);
     list = await db.query.essayTasks.findMany({
-      where: classIds.length > 0 ? inArray(essayTasks.classId, classIds) : undefined,
+      where:
+        classIds.length > 0
+          ? and(inArray(essayTasks.classId, classIds), eq(essayTasks.status, 'published'))
+          : undefined,
       orderBy: desc(essayTasks.createdAt),
       limit: 50,
     });
@@ -742,7 +854,7 @@ app.post(
         ...data,
         keyPoints: JSON.stringify(data.keyPoints),
         createdBy: user.id,
-        status: 'published',
+        status: 'draft',
         createdAt: now,
         updatedAt: now,
       })
@@ -750,6 +862,150 @@ app.post(
 
     routesLogger.info({ id: task.id, title: task.title }, '[API POST /tasks] task created');
     return c.json({ success: true, data: task });
+  },
+);
+
+const aiTopicGenerateSchema = z.object({
+  topic: z.string().min(1, '请输入主题').max(200, '主题过长'),
+  topicType: z.string().optional(),
+  gradeLevel: z.string().optional(),
+  wordLimitMin: z.number().int().min(20).max(500).optional(),
+  wordLimitMax: z.number().int().min(20).max(500).optional(),
+});
+
+const aiTopicResultSchema = z.object({
+  title: z.string(),
+  topicType: z.string(),
+  topicCategory: z.string(),
+  requirements: z.string(),
+  keyPoints: z.array(z.string()),
+  referenceEssay: z.string(),
+});
+
+app.post(
+  '/tasks/ai-generate',
+  authMiddleware,
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
+  rateLimit(5, 60_000),
+  zValidator('json', aiTopicGenerateSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { topic, topicType, gradeLevel, wordLimitMin, wordLimitMax } = c.req.valid('json');
+    const start = Date.now();
+    routesLogger.info(
+      { userId: user.id, topic: topic, topicType: topicType },
+      '[API POST /tasks/ai-generate]',
+    );
+
+    const router = getAiRouter();
+    if (router.availableNames().length === 0) {
+      return c.json({ success: false, error: 'AI 服务未配置，请联系管理员' }, 503);
+    }
+
+    const wlMin = wordLimitMin ?? 80;
+    const wlMax = wordLimitMax ?? 125;
+    const grade = gradeLevel ?? 'Grade 7-9 (Chinese middle school)';
+    const typeHint = topicType
+      ? `Suggested topic type: ${topicType}.`
+      : 'Choose an appropriate topic type (narrative/argumentative/descriptive/practical).';
+
+    const prompt = `You are an English writing teacher for Chinese middle school students. Generate a writing task based on the given topic. ${typeHint} The task must be suitable for ${grade} students with a target word count of ${wlMin}-${wlMax} words. Return JSON with: title (concise English title), topicType (one of narrative/argumentative/descriptive/practical), topicCategory (sub-category in English), requirements (detailed requirements in English, 2-4 sentences), keyPoints (3-5 bullet points students should cover, as string array), referenceEssay (a short model essay within the word limit). Topic: ${topic}`;
+
+    try {
+      const generated = await router.executeWithFallback('content', (provider) =>
+        provider.completeStructured(prompt, aiTopicResultSchema, { maxOutputTokens: 1024 }),
+      );
+      const duration = Date.now() - start;
+      routesLogger.info(
+        { userId: user.id, title: generated.title, duration: duration },
+        '[API POST /tasks/ai-generate] generated',
+      );
+      return c.json({ success: true, data: generated });
+    } catch (err) {
+      routesLogger.warn(
+        { userId: user.id, error: err instanceof Error ? err.message : 'unknown' },
+        '[API POST /tasks/ai-generate] AI call failed',
+      );
+      return c.json({ success: false, error: 'AI 生成失败，请稍后重试' }, 500);
+    }
+  },
+);
+
+app.put(
+  '/tasks/:id/publish',
+  authMiddleware,
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    routesLogger.info({ userId: user.id, taskId: id }, '[API PUT /tasks/:id/publish]');
+
+    const task = await db.query.essayTasks.findFirst({ where: eq(essayTasks.id, id) });
+    if (!task) {
+      return c.json({ success: false, error: '任务不存在' }, 404);
+    }
+    if (!(await assertClassAccess(user, task.classId))) {
+      routesLogger.warn(
+        { userId: user.id, taskId: id },
+        '[API PUT /tasks/:id/publish] access denied',
+      );
+      return c.json({ success: false, error: '无权操作该任务' }, 403);
+    }
+    if (task.status === 'published') {
+      return c.json({ success: false, error: '任务已发布' }, 400);
+    }
+
+    const now = new Date().toISOString();
+    const [updated] = await db
+      .update(essayTasks)
+      .set({ status: 'published', updatedAt: now })
+      .where(eq(essayTasks.id, id))
+      .returning();
+
+    routesLogger.info(
+      { taskId: id, prevStatus: task.status },
+      '[API PUT /tasks/:id/publish] published',
+    );
+    return c.json({ success: true, data: updated });
+  },
+);
+
+app.put(
+  '/tasks/:id/close',
+  authMiddleware,
+  requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    routesLogger.info({ userId: user.id, taskId: id }, '[API PUT /tasks/:id/close]');
+
+    const task = await db.query.essayTasks.findFirst({ where: eq(essayTasks.id, id) });
+    if (!task) {
+      return c.json({ success: false, error: '任务不存在' }, 404);
+    }
+    if (!(await assertClassAccess(user, task.classId))) {
+      routesLogger.warn(
+        { userId: user.id, taskId: id },
+        '[API PUT /tasks/:id/close] access denied',
+      );
+      return c.json({ success: false, error: '无权操作该任务' }, 403);
+    }
+    if (task.status === 'draft') {
+      return c.json({ success: false, error: '草稿任务请先发布' }, 400);
+    }
+    if (task.status === 'closed') {
+      return c.json({ success: false, error: '任务已结束' }, 400);
+    }
+
+    const now = new Date().toISOString();
+    const [updated] = await db
+      .update(essayTasks)
+      .set({ status: 'closed', updatedAt: now })
+      .where(eq(essayTasks.id, id))
+      .returning();
+
+    routesLogger.info({ taskId: id, prevStatus: task.status }, '[API PUT /tasks/:id/close] closed');
+    return c.json({ success: true, data: updated });
   },
 );
 

@@ -9,7 +9,7 @@ WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=http://localhost:3000
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
-COPY package.json pnpm-workspace.yaml turbo.json .npmrc ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
 COPY packages ./packages
 COPY apps ./apps
 

@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+.DS_Store
+apps/web/
+apps/worker/
+packages/ai/
+packages/db/
+docker/
+docs/
+*.md
+.github/

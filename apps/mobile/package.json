@@ -10,7 +10,10 @@
     "build": "echo 'Mobile app uses Expo build, no tsc build step'",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
-    "prebuild": "node scripts/prepare-workspace.js"
+    "setup-node-modules": "node scripts/setup-node-modules.js",
+    "prebuild": "node scripts/prepare-workspace.js",
+    "eas-build-pre-install": "node scripts/prepare-eas-build.js",
+    "eas-build-post-build": "node scripts/restore-package-json.js || true"
   },
   "dependencies": {
     "@betterwrite/design-system": "workspace:*",
@@ -27,6 +30,7 @@
     "expo-secure-store": "~15.0.0",
     "expo-status-bar": "~2.2.0",
     "expo-system-ui": "~5.0.0",
+    "expo-updates": "~57.0.6",
     "react": "^19.0.0",
     "react-native": "^0.86.0",
     "react-native-safe-area-context": "5.4.0",
@@ -38,6 +42,7 @@
     "@betterwrite/tsconfig": "workspace:*",
     "@biomejs/biome": "^1.9.4",
     "@types/react": "^19.0.0",
+    "babel-preset-expo": "^57.0.2",
     "typescript": "^5.7.3"
   }
 }

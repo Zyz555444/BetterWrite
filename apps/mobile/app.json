@@ -16,7 +16,8 @@
       "bundleIdentifier": "com.betterwrite.app",
       "infoPlist": {
         "NSCameraUsageDescription": "BetterWrite 需要相机权限以拍照识别手写作文",
-        "NSPhotoLibraryUsageDescription": "BetterWrite 需要相册权限以选择作文照片"
+        "NSPhotoLibraryUsageDescription": "BetterWrite 需要相册权限以选择作文照片",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -25,10 +26,18 @@
         "READ_EXTERNAL_STORAGE",
         "POST_NOTIFICATIONS",
         "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
     },
-    "plugins": ["expo-router", "expo-camera", "expo-notifications"],
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      "expo-notifications"
+    ],
     "experiments": {
       "typedRoutes": true
     },
@@ -42,6 +51,12 @@
         "projectId": "d9524f93-f889-44d5-80fc-3dbc2aa56c93"
       }
     },
-    "owner": "codesky"
+    "owner": "codesky",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d9524f93-f889-44d5-80fc-3dbc2aa56c93"
+    }
   }
 }

@@ -60,19 +60,11 @@ export function calculateAbilityRadar(
     { label: 'Structure', key: 'structureScore' as const, max: 3 },
     { label: 'Presentation', key: 'presentationScore' as const, max: 1.5 },
   ];
-  const valid = essays.filter(
-    (e) =>
-      e.topicAdherenceScore !== null ||
-      e.contentScore !== null ||
-      e.languageScore !== null ||
-      e.structureScore !== null ||
-      e.presentationScore !== null,
-  );
-  if (valid.length === 0) {
+  if (essays.length === 0) {
     return dims.map((d) => ({ label: d.label, value: 0, max: d.max }));
   }
   return dims.map((d) => {
-    const scores = valid.map((e) => e[d.key]).filter((s): s is number => s !== null);
+    const scores = essays.map((e) => e[d.key]).filter((s): s is number => s !== null);
     if (scores.length === 0) return { label: d.label, value: 0, max: d.max };
     const sum = scores.reduce((acc, s) => acc + s, 0);
     return { label: d.label, value: sum / scores.length, max: d.max };

@@ -35,7 +35,8 @@
       },
       "env": {
         "API_URL": "https://api.cosky.top"
-      }
+      },
+      "postbuild": "node scripts/restore-package-json.js || true"
     }
   },
   "submit": {

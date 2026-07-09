@@ -56,6 +56,7 @@ export interface CorrectionError {
 export interface Correction {
   id: string;
   essayId: string;
+  topicAdherenceScore: number;
   contentScore: number;
   languageScore: number;
   structureScore: number;
@@ -123,6 +124,7 @@ export interface StudentAnalytics {
   totalEssays: number;
   averageScore: number | null;
   abilities: {
+    topicAdherence: number;
     content: number;
     language: number;
     structure: number;

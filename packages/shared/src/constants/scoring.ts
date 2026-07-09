@@ -1,5 +1,6 @@
 export const SCORING_WEIGHTS = {
-  content: 0.3,
+  topicAdherence: 0.2,
+  content: 0.1,
   language: 0.4,
   structure: 0.2,
   presentation: 0.1,

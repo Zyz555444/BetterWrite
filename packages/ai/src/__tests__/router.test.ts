@@ -52,7 +52,7 @@ describe('AIProviderRouter', () => {
     expect(router.availableNames()).toEqual(['openai', 'deepseek']);
   });
 
-  it('routes content/scorer to openai first', () => {
+  it('routes content/topicAdherence/scorer to openai first', () => {
     const router = new AIProviderRouter();
     const openai = new MockProvider('openai');
     const deepseek = new MockProvider('deepseek');
@@ -60,6 +60,7 @@ describe('AIProviderRouter', () => {
     router.register(deepseek);
 
     expect(router.route('content')).toBe(openai);
+    expect(router.route('topicAdherence')).toBe(openai);
     expect(router.route('scorer')).toBe(openai);
   });
 

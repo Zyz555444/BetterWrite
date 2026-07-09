@@ -9,6 +9,7 @@ export const corrections = sqliteTable(
     essayId: text('essay_id')
       .notNull()
       .references(() => essays.id, { onDelete: 'cascade' }),
+    topicAdherenceScore: real('topic_adherence_score'),
     contentScore: real('content_score'),
     languageScore: real('language_score'),
     structureScore: real('structure_score'),

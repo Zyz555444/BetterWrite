@@ -4,3 +4,4 @@ export { contentPrompt } from './content.js';
 export { languagePrompt } from './language.js';
 export { structurePrompt } from './structure.js';
 export { scorerPrompt } from './scorer.js';
+export { topicAdherencePrompt } from './topic-adherence.js';

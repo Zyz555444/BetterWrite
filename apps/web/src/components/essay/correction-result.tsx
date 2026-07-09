@@ -22,6 +22,7 @@ interface CorrectionResultProps {
 }
 
 const _dimensionLabels: Record<string, string> = {
+  topicAdherence: '审题扣题',
   content: '内容',
   language: '语言',
   structure: '结构',
@@ -38,7 +39,8 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
   const [activeTab, setActiveTab] = useState<'overview' | 'errors' | 'revised'>('overview');
 
   const radarData = [
-    { subject: '内容', A: (correction.contentScore / 4.5) * 100, fullMark: 100 },
+    { subject: '审题扣题', A: (correction.topicAdherenceScore / 3) * 100, fullMark: 100 },
+    { subject: '内容', A: (correction.contentScore / 1.5) * 100, fullMark: 100 },
     { subject: '语言', A: (correction.languageScore / 6) * 100, fullMark: 100 },
     { subject: '结构', A: (correction.structureScore / 3) * 100, fullMark: 100 },
     { subject: '卷面', A: (correction.presentationScore / 1.5) * 100, fullMark: 100 },
@@ -73,7 +75,13 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
           <CardContent>
             <div className="space-y-3">
               {[
-                { key: 'content', label: '内容', score: correction.contentScore, max: 4.5 },
+                {
+                  key: 'topicAdherence',
+                  label: '审题扣题',
+                  score: correction.topicAdherenceScore,
+                  max: 3,
+                },
+                { key: 'content', label: '内容', score: correction.contentScore, max: 1.5 },
                 { key: 'language', label: '语言', score: correction.languageScore, max: 6 },
                 { key: 'structure', label: '结构', score: correction.structureScore, max: 3 },
                 {

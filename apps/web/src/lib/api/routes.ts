@@ -1248,11 +1248,12 @@ app.get(
     });
     const completedEssays = studentEssays.filter((e) => e.status === 'completed' && e.correction);
 
-    // 四维能力平均
-    const abilities = { content: 0, language: 0, structure: 0, presentation: 0 };
+    // 五维能力平均
+    const abilities = { topicAdherence: 0, content: 0, language: 0, structure: 0, presentation: 0 };
     let abilityCount = 0;
     for (const e of completedEssays) {
       if (e.correction) {
+        abilities.topicAdherence += e.correction.topicAdherenceScore ?? 0;
         abilities.content += e.correction.contentScore ?? 0;
         abilities.language += e.correction.languageScore ?? 0;
         abilities.structure += e.correction.structureScore ?? 0;
@@ -1261,6 +1262,7 @@ app.get(
       }
     }
     if (abilityCount > 0) {
+      abilities.topicAdherence /= abilityCount;
       abilities.content /= abilityCount;
       abilities.language /= abilityCount;
       abilities.structure /= abilityCount;
@@ -2772,6 +2774,7 @@ app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), asyn
     allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
   const radarData = calculateAbilityRadar(
     completedEssays.map((e) => ({
+      topicAdherenceScore: e.correction?.topicAdherenceScore ?? null,
       contentScore: e.correction?.contentScore ?? null,
       languageScore: e.correction?.languageScore ?? null,
       structureScore: e.correction?.structureScore ?? null,

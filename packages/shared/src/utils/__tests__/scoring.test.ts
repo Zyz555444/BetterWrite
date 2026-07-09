@@ -80,37 +80,64 @@ describe('calculateErrorStats', () => {
 describe('calculateAbilityRadar', () => {
   it('returns zero values for no essays', () => {
     const result = calculateAbilityRadar([]);
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(5);
     expect(result.every((d) => d.value === 0)).toBe(true);
   });
 
   it('returns zero values when all scores are null', () => {
     const result = calculateAbilityRadar([
-      { contentScore: null, languageScore: null, structureScore: null, presentationScore: null },
+      {
+        topicAdherenceScore: null,
+        contentScore: null,
+        languageScore: null,
+        structureScore: null,
+        presentationScore: null,
+      },
     ]);
     expect(result.every((d) => d.value === 0)).toBe(true);
   });
 
   it('calculates average for each dimension', () => {
     const result = calculateAbilityRadar([
-      { contentScore: 4, languageScore: 5, structureScore: 2, presentationScore: 1 },
-      { contentScore: 3, languageScore: 4, structureScore: 3, presentationScore: 1 },
+      {
+        topicAdherenceScore: 2,
+        contentScore: 1,
+        languageScore: 5,
+        structureScore: 2,
+        presentationScore: 1,
+      },
+      {
+        topicAdherenceScore: 3,
+        contentScore: 1.5,
+        languageScore: 4,
+        structureScore: 3,
+        presentationScore: 1,
+      },
     ]);
+    const topicAdherence = result.find((d) => d.label === 'TopicAdherence');
     const content = result.find((d) => d.label === 'Content');
     const language = result.find((d) => d.label === 'Language');
-    expect(content?.value).toBe(3.5);
-    expect(content?.max).toBe(4.5);
+    expect(topicAdherence?.value).toBe(2.5);
+    expect(topicAdherence?.max).toBe(3);
+    expect(content?.value).toBe(1.25);
+    expect(content?.max).toBe(1.5);
     expect(language?.value).toBe(4.5);
     expect(language?.max).toBe(6);
   });
 
   it('skips null scores in average calculation', () => {
     const result = calculateAbilityRadar([
-      { contentScore: 4, languageScore: null, structureScore: null, presentationScore: null },
+      {
+        topicAdherenceScore: 2,
+        contentScore: 1,
+        languageScore: null,
+        structureScore: null,
+        presentationScore: null,
+      },
     ]);
-    const content = result.find((d) => d.label === 'Content');
+    const topicAdherence = result.find((d) => d.label === 'TopicAdherence');
     const language = result.find((d) => d.label === 'Language');
-    expect(content?.value).toBe(4);
+    expect(topicAdherence?.value).toBe(2);
     expect(language?.value).toBe(0);
   });
 });

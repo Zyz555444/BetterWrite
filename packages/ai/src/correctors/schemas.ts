@@ -35,8 +35,29 @@ export const contentAnalysisSchema = z.object({
   pointCoverage: z.array(contentPointSchema),
   expansionScore: z.number().min(0).max(4.5),
   relevanceScore: z.number().min(0).max(4.5),
-  contentScore: z.number().min(0).max(4.5),
+  contentScore: z.number().min(0).max(1.5),
   comment: z.string(),
+});
+
+export const taskUnderstandingSchema = z.object({
+  genreCorrect: z.boolean(),
+  personTenseAppropriate: z.boolean(),
+  formatAppropriate: z.boolean(),
+  comment: z.string(),
+});
+
+export const requiredElementSchema = z.object({
+  element: z.string(),
+  required: z.boolean(),
+  present: z.boolean(),
+  evidence: z.string(),
+});
+
+export const topicIssueSchema = z.object({
+  severity: z.enum(['high', 'medium', 'low']),
+  category: z.string(),
+  description: z.string(),
+  evidence: z.string(),
 });
 
 export const languageAnalysisSchema = z.object({
@@ -94,8 +115,23 @@ export const suggestionSchema = z.object({
   suggestion: z.string(),
 });
 
+export const topicAdherenceAnalysisSchema = z.object({
+  taskUnderstanding: taskUnderstandingSchema,
+  keyPointCoverage: z.array(contentPointSchema),
+  requiredElements: z.array(requiredElementSchema),
+  topicRelevance: z.object({
+    score: z.number().min(0).max(5),
+    comment: z.string(),
+  }),
+  topicAdherenceScore: z.number().min(0).max(3),
+  issues: z.array(topicIssueSchema),
+  suggestions: z.array(suggestionSchema),
+  comment: z.string(),
+});
+
 export const dimensionScoresSchema = z.object({
-  content: z.number().min(0).max(4.5),
+  topicAdherence: z.number().min(0).max(3),
+  content: z.number().min(0).max(1.5),
   language: z.number().min(0).max(6),
   structure: z.number().min(0).max(3),
   presentation: z.number().min(0).max(1.5),
@@ -111,6 +147,7 @@ export const scorerSchema = z.object({
 });
 
 export type ContentAnalysis = z.infer<typeof contentAnalysisSchema>;
+export type TopicAdherenceAnalysis = z.infer<typeof topicAdherenceAnalysisSchema>;
 export type LanguageAnalysis = z.infer<typeof languageAnalysisSchema>;
 export type StructureAnalysis = z.infer<typeof structureAnalysisSchema>;
 export type ScorerResult = z.infer<typeof scorerSchema>;

@@ -69,6 +69,7 @@ export interface EssayTask {
 export interface Correction {
   id: string;
   essayId: string;
+  topicAdherenceScore: number | null;
   contentScore: number | null;
   languageScore: number | null;
   structureScore: number | null;
@@ -90,6 +91,7 @@ export interface Correction {
 export interface CorrectionDetail {
   id: string;
   essayId: string;
+  topicAdherenceScore: number;
   contentScore: number;
   languageScore: number;
   structureScore: number;

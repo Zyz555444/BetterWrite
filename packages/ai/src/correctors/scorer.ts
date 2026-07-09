@@ -1,4 +1,5 @@
 export function scorerPrompt(input: {
+  topicAdherenceResult: { topicAdherenceScore: number; issues: unknown[] };
   contentResult: { contentScore: number };
   languageResult: { languageScore: number; errors: unknown[] };
   structureResult: { structureScore: number };
@@ -17,10 +18,14 @@ export function scorerPrompt(input: {
 | 第五档（差） | 3-0 | 能写出相关词，不能表达完整意思 |
 
 ## 各维度得分
-- 内容维度: ${input.contentResult.contentScore}/4.5
+- 审题扣题维度: ${input.topicAdherenceResult.topicAdherenceScore}/3.0
+- 内容维度: ${input.contentResult.contentScore}/1.5
 - 语言维度: ${input.languageResult.languageScore}/6.0
 - 结构维度: ${input.structureResult.structureScore}/3.0
 - 卷面维度: 满分1.5，依据字数达标度与格式规范评分（非硬性满分）
+
+## 审题扣题问题
+${JSON.stringify(input.topicAdherenceResult.issues, null, 2)}
 
 ## 词数
 当前词数: ${input.wordCount}
@@ -39,7 +44,8 @@ export function scorerPrompt(input: {
   "scoreTier": "1st",
   "tierLabel": "第一档（优）",
   "dimensionScores": {
-    "content": 4.0,
+    "topicAdherence": 2.5,
+    "content": 1.0,
     "language": 5.0,
     "structure": 2.5,
     "presentation": 1.5

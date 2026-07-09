@@ -5,7 +5,7 @@ import { OpenAIProvider } from './providers/openai.js';
 
 const aiLogger = logger.child({ component: 'ai-router' });
 
-export type CorrectionType = 'content' | 'language' | 'structure' | 'scorer';
+export type CorrectionType = 'content' | 'topicAdherence' | 'language' | 'structure' | 'scorer';
 
 export interface RouterEnv {
   DEEPSEEK_API_KEY?: string;
@@ -42,6 +42,7 @@ export class AIProviderRouter {
   route(type: CorrectionType): BaseAIProvider {
     switch (type) {
       case 'content':
+      case 'topicAdherence':
       case 'scorer':
         return this.has('openai') ? this.get('openai') : this.get('deepseek');
       default:

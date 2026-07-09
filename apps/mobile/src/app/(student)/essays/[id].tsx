@@ -125,6 +125,11 @@ export default function EssayDetailPage() {
               </Text>
             </View>
             <View style={styles.dimensionRow}>
+              <DimensionItem
+                label="审题扣题"
+                value={correction.topicAdherenceScore}
+                colors={colors}
+              />
               <DimensionItem label="内容" value={correction.contentScore} colors={colors} />
               <DimensionItem label="语言" value={correction.languageScore} colors={colors} />
               <DimensionItem label="结构" value={correction.structureScore} colors={colors} />

@@ -8,13 +8,16 @@ import {
   type LanguageAnalysis,
   type ScorerResult,
   type StructureAnalysis,
+  type TopicAdherenceAnalysis,
   contentAnalysisSchema,
   languageAnalysisSchema,
   scorerSchema,
   structureAnalysisSchema,
+  topicAdherenceAnalysisSchema,
 } from './schemas.js';
 import { scorerPrompt } from './scorer.js';
 import { structurePrompt } from './structure.js';
+import { topicAdherencePrompt } from './topic-adherence.js';
 
 export interface EssayTaskInput {
   title: string;
@@ -26,6 +29,7 @@ export interface EssayTaskInput {
 }
 
 export interface CorrectionResult {
+  topicAdherenceScore: number;
   contentScore: number;
   languageScore: number;
   structureScore: number;
@@ -61,7 +65,10 @@ export async function correctEssay(
 ): Promise<CorrectionResult> {
   const wordCount = countWords(essay);
 
-  const [contentResult, languageResult, structureResult] = await Promise.all([
+  const [topicAdherenceResult, contentResult, languageResult, structureResult] = await Promise.all([
+    router.executeWithFallback('topicAdherence', (provider) =>
+      analyzeTopicAdherence(provider, essay, task),
+    ),
     router.executeWithFallback('content', (provider) => analyzeContent(provider, essay, task)),
     router.executeWithFallback('language', (provider) => analyzeLanguage(provider, essay)),
     router.executeWithFallback('structure', (provider) => analyzeStructure(provider, essay, task)),
@@ -69,6 +76,7 @@ export async function correctEssay(
 
   const scoreResult = await router.executeWithFallback('scorer', (provider) =>
     calculateScore(provider, {
+      topicAdherenceResult,
       contentResult,
       languageResult,
       structureResult,
@@ -78,6 +86,7 @@ export async function correctEssay(
   );
 
   return {
+    topicAdherenceScore: scoreResult.dimensionScores.topicAdherence,
     contentScore: scoreResult.dimensionScores.content,
     languageScore: scoreResult.dimensionScores.language,
     structureScore: scoreResult.dimensionScores.structure,
@@ -87,7 +96,7 @@ export async function correctEssay(
     errors: languageResult.errors,
     highlights: languageResult.highlights,
     revisedEssay: languageResult.revisedEssay,
-    suggestions: scoreResult.suggestions,
+    suggestions: mergeSuggestions(topicAdherenceResult.suggestions, scoreResult.suggestions),
     aiProvider: scoreResult.aiProvider,
     aiModel: scoreResult.aiModel,
   };
@@ -100,6 +109,17 @@ async function analyzeContent(
 ): Promise<ContentAnalysis> {
   const prompt = contentPrompt(essay, task);
   return provider.completeStructured(prompt, contentAnalysisSchema, { maxOutputTokens: 2048 });
+}
+
+async function analyzeTopicAdherence(
+  provider: BaseAIProvider,
+  essay: string,
+  task: EssayTaskInput,
+): Promise<TopicAdherenceAnalysis> {
+  const prompt = topicAdherencePrompt(essay, task);
+  return provider.completeStructured(prompt, topicAdherenceAnalysisSchema, {
+    maxOutputTokens: 2048,
+  });
 }
 
 async function analyzeLanguage(provider: BaseAIProvider, essay: string): Promise<LanguageAnalysis> {
@@ -119,6 +139,7 @@ async function analyzeStructure(
 async function calculateScore(
   provider: BaseAIProvider,
   input: {
+    topicAdherenceResult: TopicAdherenceAnalysis;
     contentResult: ContentAnalysis;
     languageResult: LanguageAnalysis;
     structureResult: StructureAnalysis;
@@ -136,4 +157,31 @@ async function calculateScore(
     aiProvider: provider.name,
     aiModel: provider.defaultModel,
   };
+}
+
+function mergeSuggestions(
+  topicSuggestions: Array<{
+    priority: 'high' | 'medium' | 'low';
+    category: string;
+    suggestion: string;
+  }>,
+  scorerSuggestions: Array<{
+    priority: 'high' | 'medium' | 'low';
+    category: string;
+    suggestion: string;
+  }>,
+): Array<{ priority: 'high' | 'medium' | 'low'; category: string; suggestion: string }> {
+  const seen = new Set<string>();
+  const merged: Array<{
+    priority: 'high' | 'medium' | 'low';
+    category: string;
+    suggestion: string;
+  }> = [];
+  for (const s of [...topicSuggestions, ...scorerSuggestions]) {
+    const key = `${s.category}::${s.suggestion}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(s);
+  }
+  return merged;
 }

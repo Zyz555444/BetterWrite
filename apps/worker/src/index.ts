@@ -108,6 +108,7 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
       await tx.insert(corrections).values({
         id: correctionId,
         essayId,
+        topicAdherenceScore: result.topicAdherenceScore,
         contentScore: result.contentScore,
         languageScore: result.languageScore,
         structureScore: result.structureScore,
@@ -188,12 +189,14 @@ function createMockCorrection(
   if (wordCount >= 100 && wordCount <= 125) total = Math.min(15, total + 0.5);
 
   const tier = getScoreTier(total);
-  const contentScore = Math.round(total * 0.3 * 10) / 10;
+  const topicAdherenceScore = Math.round(total * 0.2 * 10) / 10;
+  const contentScore = Math.round(total * 0.1 * 10) / 10;
   const languageScore = Math.round(total * 0.4 * 10) / 10;
   const structureScore = Math.round(total * 0.2 * 10) / 10;
   const presentationScore = Math.round(total * 0.1 * 10) / 10;
 
   return {
+    topicAdherenceScore,
     contentScore,
     languageScore,
     structureScore,

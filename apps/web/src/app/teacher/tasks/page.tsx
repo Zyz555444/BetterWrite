@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type EssayTask, fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import { TopicTypeLabels, UserRole } from '@betterwrite/shared';
 import { Bot, Calendar, PenLine, Plus, School, Sparkles, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -141,12 +142,12 @@ export default function TeacherTasksPage() {
           dueDate: '',
         });
       } else {
-        console.warn('[TeacherTasks] createTask failed:', res.error);
+        clientLogger.warn('[TeacherTasks] createTask failed:', res.error);
         setError(res.error ?? '创建失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '创建失败';
-      console.error('[TeacherTasks] createTask error:', message);
+      clientLogger.error('[TeacherTasks] createTask error:', message);
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -191,12 +192,12 @@ export default function TeacherTasksPage() {
           wordLimitMax: 125,
         });
       } else {
-        console.warn('[TeacherTasks] aiGenerateTask failed:', res.error);
+        clientLogger.warn('[TeacherTasks] aiGenerateTask failed:', res.error);
         setError(res.error ?? 'AI 出题失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'AI 出题失败';
-      console.error('[TeacherTasks] aiGenerateTask error:', message);
+      clientLogger.error('[TeacherTasks] aiGenerateTask error:', message);
       setError(message);
     } finally {
       setIsAiGenerating(false);
@@ -241,7 +242,7 @@ export default function TeacherTasksPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={[UserRole.TEACHER]}>
+    <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
       <DashboardLayout>
         <div className="space-y-6">
           <div className="flex items-center justify-between">

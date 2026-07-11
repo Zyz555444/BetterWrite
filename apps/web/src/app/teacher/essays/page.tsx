@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type Essay, fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import { UserRole, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
 import { FileText, Filter, Search } from 'lucide-react';
 import Link from 'next/link';
@@ -36,13 +37,13 @@ export default function TeacherEssaysPage() {
         if (res.success && res.data) {
           setEssays(res.data);
         } else {
-          console.warn('[TeacherEssays] failed to load essays:', res.error);
+          clientLogger.warn('[TeacherEssays] failed to load essays:', res.error);
           setError(res.error ?? '获取作文失败');
         }
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : '加载失败';
-        console.error('[TeacherEssays] loadData error:', message);
+        clientLogger.error('[TeacherEssays] loadData error:', message);
         setError(message);
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -63,12 +64,12 @@ export default function TeacherEssaysPage() {
       if (res.success && res.data) {
         setEssays(res.data);
       } else {
-        console.warn('[TeacherEssays] failed to load essays:', res.error);
+        clientLogger.warn('[TeacherEssays] failed to load essays:', res.error);
         setError(res.error ?? '获取作文失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载失败';
-      console.error('[TeacherEssays] loadData error:', message);
+      clientLogger.error('[TeacherEssays] loadData error:', message);
       setError(message);
     } finally {
       setIsLoading(false);
@@ -98,7 +99,7 @@ export default function TeacherEssaysPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={[UserRole.TEACHER]}>
+    <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
       <DashboardLayout>
         <div className="space-y-6">
           <div className="flex items-center justify-between">

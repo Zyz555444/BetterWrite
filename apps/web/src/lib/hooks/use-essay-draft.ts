@@ -1,6 +1,7 @@
 'use client';
 
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import { countWords } from '@betterwrite/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -80,7 +81,7 @@ export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftRetur
         }
       })
       .catch((err) => {
-        console.warn('[useEssayDraft] loadDraft failed', err);
+        clientLogger.warn('[useEssayDraft] loadDraft failed', err);
         lastSavedContentRef.current = '';
       })
       .finally(() => {
@@ -114,7 +115,7 @@ export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftRetur
       });
       lastSavedContentRef.current = currentContent;
     } catch (err) {
-      console.warn('[useEssayDraft] saveDraft failed', err);
+      clientLogger.warn('[useEssayDraft] saveDraft failed', err);
     } finally {
       setIsSaving(false);
     }
@@ -138,7 +139,7 @@ export function useEssayDraft(options: UseEssayDraftOptions): UseEssayDraftRetur
       setDurationMs(0);
       setChecklist(createInitialChecklist());
     } catch (err) {
-      console.warn('[useEssayDraft] clearDraft failed', err);
+      clientLogger.warn('[useEssayDraft] clearDraft failed', err);
     }
   }, [taskId]);
 

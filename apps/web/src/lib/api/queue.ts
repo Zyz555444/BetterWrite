@@ -8,12 +8,16 @@ import {
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 
-const connection = env.REDIS_URL
-  ? new Redis(env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    })
-  : null;
+const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build';
+
+const connection =
+  env.REDIS_URL && !isBuildPhase
+    ? new Redis(env.REDIS_URL, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        lazyConnect: true,
+      })
+    : null;
 
 export const correctionQueue = connection
   ? new Queue<CorrectionJobData>(CORRECTION_QUEUE, { connection })

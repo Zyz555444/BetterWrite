@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Essay, EssayTask } from '@/lib/api/fetcher-types';
 import { type StudentDashboardData, serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
 import type { DailyQuote as DailyQuoteData } from '@betterwrite/shared';
 import { UserRole, calculateScoreDistribution, formatScore } from '@betterwrite/shared';
 import Link from 'next/link';
@@ -79,7 +79,7 @@ export default async function StudentDashboardPage() {
   ];
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <div className="space-y-6">
         {error && (
           <div className="rounded-md ring-1 ring-error/30 bg-error/10 p-3 text-copy-14 text-error">

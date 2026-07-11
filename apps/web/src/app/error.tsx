@@ -1,5 +1,6 @@
 'use client';
 
+import { clientLogger } from '@/lib/client-logger';
 import { AlertCircle } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -10,7 +11,7 @@ interface ErrorProps {
 
 export default function GlobalError({ error, reset }: ErrorProps) {
   useEffect(() => {
-    console.error('[GlobalError]', error.message, error.digest);
+    clientLogger.error('[GlobalError]', error.message, error.digest);
   }, [error]);
 
   return (

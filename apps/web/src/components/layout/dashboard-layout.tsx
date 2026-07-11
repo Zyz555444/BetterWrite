@@ -71,53 +71,42 @@ const navItems: NavItem[] = [
     icon: <LayoutDashboard className="w-4 h-4" />,
     roles: [UserRole.SCHOOL_ADMIN],
   },
-  {
-    href: '/school/teachers',
-    label: '教师管理',
-    icon: <Users className="w-4 h-4" />,
-    roles: [UserRole.SCHOOL_ADMIN],
-  },
-  {
-    href: '/school/classes',
-    label: '班级管理',
-    icon: <School className="w-4 h-4" />,
-    roles: [UserRole.SCHOOL_ADMIN],
-  },
+
   {
     href: '/teacher/dashboard',
     label: '班级概览',
     icon: <LayoutDashboard className="w-4 h-4" />,
-    roles: [UserRole.TEACHER],
+    roles: [UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN],
   },
   {
     href: '/teacher/tasks',
     label: '作文任务',
     icon: <PenLine className="w-4 h-4" />,
-    roles: [UserRole.TEACHER],
+    roles: [UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN],
   },
   {
     href: '/teacher/essays',
     label: '批改中心',
     icon: <FileText className="w-4 h-4" />,
-    roles: [UserRole.TEACHER],
+    roles: [UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN],
   },
   {
     href: '/teacher/analytics',
     label: '数据分析',
     icon: <BarChart3 className="w-4 h-4" />,
-    roles: [UserRole.TEACHER],
+    roles: [UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN],
   },
   {
     href: '/teacher/students',
     label: '学生管理',
     icon: <Users className="w-4 h-4" />,
-    roles: [UserRole.TEACHER],
+    roles: [UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN],
   },
   {
     href: '/teacher/resources',
     label: '教学资源',
     icon: <BookOpen className="w-4 h-4" />,
-    roles: [UserRole.TEACHER],
+    roles: [UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN],
   },
   {
     href: '/student/dashboard',
@@ -180,6 +169,7 @@ export function DashboardLayout({ children, user: userProp }: DashboardLayoutPro
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   const user = userProp ?? storeUser;
 
@@ -209,7 +199,7 @@ export function DashboardLayout({ children, user: userProp }: DashboardLayoutPro
               key={item.href}
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2 rounded-md text-copy-14 transition-colors duration-fast ease-yohaku ${
-                pathname === item.href
+                isActive(item.href)
                   ? 'bg-accent/10 text-accent font-medium'
                   : 'text-neutral-8 hover:bg-neutral-3 hover:text-neutral-10'
               }`}
@@ -256,7 +246,7 @@ export function DashboardLayout({ children, user: userProp }: DashboardLayoutPro
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2 rounded-md text-copy-14 ${
-                  pathname === item.href
+                  isActive(item.href)
                     ? 'bg-accent/10 text-accent font-medium'
                     : 'text-neutral-8 hover:bg-neutral-3'
                 }`}

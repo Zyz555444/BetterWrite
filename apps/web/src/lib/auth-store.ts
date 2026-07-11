@@ -37,6 +37,22 @@ function normalizeUser(data: {
   };
 }
 
+export function toAuthUser(data: {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  schoolId: string | null;
+}): AuthUser {
+  return {
+    id: data.id,
+    name: data.name,
+    email: data.email,
+    role: data.role as UserRoleType,
+    schoolId: data.schoolId,
+  };
+}
+
 export const useAuth = create<AuthState>((set) => ({
   user: null,
   isLoading: false,

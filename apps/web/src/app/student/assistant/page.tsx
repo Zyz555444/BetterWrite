@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import { type AiAssistantResult, type AiConversation, UserRole } from '@betterwrite/shared';
 import { ChevronDown, ChevronRight, History } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -133,13 +134,13 @@ export default function StudentAiAssistantPage() {
           setHistory(res.data);
         } else {
           setHistoryError(res.error ?? '获取历史记录失败');
-          console.warn(`[StudentAiAssistant] 历史加载失败 error=${res.error ?? 'unknown'}`);
+          clientLogger.warn(`[StudentAiAssistant] 历史加载失败 error=${res.error ?? 'unknown'}`);
         }
       })
       .catch((err) => {
         const msg = err instanceof Error ? err.message : '获取历史记录失败';
         setHistoryError(msg);
-        console.warn(`[StudentAiAssistant] 历史加载异常 error=${msg}`);
+        clientLogger.warn(`[StudentAiAssistant] 历史加载异常 error=${msg}`);
       })
       .finally(() => setHistoryLoading(false));
   }, []);
@@ -180,12 +181,12 @@ export default function StudentAiAssistantPage() {
         loadHistory();
       } else {
         setError(res.error ?? 'AI 调用失败');
-        console.warn(`[StudentAiAssistant] 提交失败 error=${res.error ?? 'unknown'}`);
+        clientLogger.warn(`[StudentAiAssistant] 提交失败 error=${res.error ?? 'unknown'}`);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'AI 调用失败';
       setError(msg);
-      console.warn(`[StudentAiAssistant] 提交异常 error=${msg}`);
+      clientLogger.warn(`[StudentAiAssistant] 提交异常 error=${msg}`);
     } finally {
       setIsLoading(false);
     }

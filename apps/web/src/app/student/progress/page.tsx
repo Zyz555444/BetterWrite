@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
 import { type StudentProgress, UserRole, formatScore } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import { Award, FileText, Medal, Target, TrendingUp } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
@@ -38,19 +39,19 @@ export default async function StudentProgressPage() {
     if (res.success && res.data) {
       progress = res.data;
     } else {
-      console.warn('[StudentProgress] getStudentProgress failed:', res.error);
+      logger.warn({ error: res.error }, '[StudentProgress] getStudentProgress failed');
       error = res.error ?? '获取成长报告失败';
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : '加载失败';
-    console.error('[StudentProgress] getStudentProgress error:', message);
+    logger.error({ message }, '[StudentProgress] getStudentProgress error');
     error = message;
   }
 
   const hasReport = progress !== null && progress.totalEssays > 0;
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <div className="space-y-6">
         <div>
           <h1 className="text-title-24 font-serif font-medium text-neutral-10">写作成长</h1>

@@ -1,9 +1,10 @@
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
 import type { SchoolWithStats } from '@betterwrite/shared';
 import { UserRole } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import { redirect } from 'next/navigation';
 import { SchoolsClient } from './schools-client';
 
@@ -26,15 +27,15 @@ export default async function AdminSchoolsPage({ searchParams }: PageProps) {
       schools = res.data;
     } else {
       error = res.error ?? '加载失败';
-      console.warn('[AdminSchools] load failed:', error);
+      logger.warn({ error }, '[AdminSchools] load failed');
     }
   } catch (err) {
     error = err instanceof Error ? err.message : '加载失败';
-    console.error('[AdminSchools] load error:', err);
+    logger.error({ err }, '[AdminSchools] load error');
   }
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <SchoolsClient initialSchools={schools} initialRegion={region} initialError={error} />
     </DashboardLayout>
   );

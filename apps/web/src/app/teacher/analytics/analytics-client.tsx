@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
 import type { TeacherClass } from '@/lib/api/server';
+import { clientLogger } from '@/lib/client-logger';
 import {
   type ClassAnalytics,
   formatScore,
@@ -56,14 +57,14 @@ export function AnalyticsClient({
       if (res.success && res.data) {
         setAnalytics(res.data);
       } else {
-        console.warn('[TeacherAnalytics] getClassAnalytics failed:', res.error);
+        clientLogger.warn('[TeacherAnalytics] getClassAnalytics failed:', res.error);
         setError(res.error ?? '获取班级分析数据失败');
         setAnalytics(null);
       }
     } catch (err) {
       if (requestId !== analyticsRequestRef.current) return;
       const message = err instanceof Error ? err.message : '加载失败';
-      console.error('[TeacherAnalytics] getClassAnalytics error:', message);
+      clientLogger.error('[TeacherAnalytics] getClassAnalytics error:', message);
       setError(message);
       setAnalytics(null);
     } finally {
@@ -89,7 +90,7 @@ export function AnalyticsClient({
       await fetcher.exportClassAnalytics(selectedClassId);
     } catch (err) {
       const message = err instanceof Error ? err.message : '导出失败';
-      console.error('[TeacherAnalytics] export error:', message);
+      clientLogger.error('[TeacherAnalytics] export error:', message);
       setExportError(message);
     } finally {
       setIsExporting(false);

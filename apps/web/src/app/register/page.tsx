@@ -84,9 +84,9 @@ export default function RegisterPage() {
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="至少6位"
+                placeholder="至少8位"
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
             <div className="space-y-2">

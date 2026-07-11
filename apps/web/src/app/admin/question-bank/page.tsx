@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import type { QuestionBankItem } from '@betterwrite/shared';
 import { UserRole } from '@betterwrite/shared';
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
@@ -73,7 +74,7 @@ export default function AdminQuestionBankPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载失败');
-      console.error('[AdminQuestionBank] load error', err);
+      clientLogger.error('[AdminQuestionBank] load error', err);
     } finally {
       setLoading(false);
     }
@@ -147,7 +148,7 @@ export default function AdminQuestionBankPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
-      console.error('[AdminQuestionBank] save error', err);
+      clientLogger.error('[AdminQuestionBank] save error', err);
     } finally {
       setSaving(false);
     }
@@ -160,7 +161,7 @@ export default function AdminQuestionBankPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
-      console.error('[AdminQuestionBank] delete error', err);
+      clientLogger.error('[AdminQuestionBank] delete error', err);
     }
   };
 

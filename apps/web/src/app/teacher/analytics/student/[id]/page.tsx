@@ -6,6 +6,7 @@ import { RoleGuard } from '@/components/layout/role-guard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import {
   type StudentAnalytics,
   UserRole,
@@ -56,13 +57,13 @@ export default function TeacherStudentAnalyticsPage() {
         if (res.success && res.data) {
           setData(res.data);
         } else {
-          console.warn('[TeacherStudentAnalytics] getStudentAnalytics failed:', res.error);
+          clientLogger.warn('[TeacherStudentAnalytics] getStudentAnalytics failed:', res.error);
           setError(res.error ?? '获取学生分析数据失败');
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : '加载失败';
-        console.error('[TeacherStudentAnalytics] getStudentAnalytics error:', message);
+        clientLogger.error('[TeacherStudentAnalytics] getStudentAnalytics error:', message);
         setError(message);
       })
       .finally(() => setIsLoading(false));
@@ -124,7 +125,7 @@ export default function TeacherStudentAnalyticsPage() {
   }, [data, isLoading]);
 
   return (
-    <RoleGuard allowedRoles={[UserRole.TEACHER]}>
+    <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
       <DashboardLayout>
         <div className="max-w-5xl mx-auto space-y-6">
           <div className="flex items-center gap-2">

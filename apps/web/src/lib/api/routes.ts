@@ -571,6 +571,12 @@ app.post('/essays', authMiddleware, zValidator('json', essaySchema), async (c) =
     if (!task) {
       return c.json({ success: false, error: '作文任务不存在' }, 404);
     }
+    const enrolled = await db.query.classEnrollments.findFirst({
+      where: and(eq(classEnrollments.classId, task.classId), eq(classEnrollments.userId, user.id)),
+    });
+    if (!enrolled) {
+      return c.json({ success: false, error: '无权提交该任务' }, 403);
+    }
   }
 
   const [essay] = await db
@@ -619,7 +625,7 @@ app.get('/essays/:id', authMiddleware, async (c) => {
     essay.studentId === user.id ||
     user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.SCHOOL_ADMIN ||
-    (user.role === UserRole.TEACHER && essay.student?.schoolId === user.schoolId);
+    (user.role === UserRole.TEACHER && (await assertStudentAccess(user, essay.studentId)));
 
   if (!canAccess) {
     routesLogger.warn({ userId: user.id, essayId: id }, '[API /essays/:id] access denied');
@@ -650,7 +656,7 @@ app.get('/essays/:id/correction', authMiddleware, async (c) => {
     essay.studentId === user.id ||
     user.role === UserRole.SUPER_ADMIN ||
     user.role === UserRole.SCHOOL_ADMIN ||
-    (user.role === UserRole.TEACHER && essay.student?.schoolId === user.schoolId);
+    (user.role === UserRole.TEACHER && (await assertStudentAccess(user, essay.studentId)));
 
   if (!canAccess) {
     routesLogger.warn(
@@ -710,7 +716,7 @@ app.put(
     const canAccess =
       user.role === UserRole.SUPER_ADMIN ||
       (user.role === UserRole.SCHOOL_ADMIN && essay.student?.schoolId === user.schoolId) ||
-      (user.role === UserRole.TEACHER && essay.student?.schoolId === user.schoolId);
+      (user.role === UserRole.TEACHER && (await assertStudentAccess(user, essay.studentId)));
 
     if (!canAccess) {
       routesLogger.warn(
@@ -751,15 +757,18 @@ app.get(
         columns: { id: true },
       });
       const ids = classIds.map((c) => c.id);
-      if (ids.length > 0) {
-        const enrollments = await db.query.classEnrollments.findMany({
-          where: inArray(classEnrollments.classId, ids),
-          columns: { userId: true },
-        });
-        const studentIds = enrollments.map((e) => e.userId);
-        conditions =
-          studentIds.length > 0 ? studentIds.map((id) => eq(essays.studentId, id)) : undefined;
+      if (ids.length === 0) {
+        return c.json({ success: true, data: [] });
       }
+      const enrollments = await db.query.classEnrollments.findMany({
+        where: inArray(classEnrollments.classId, ids),
+        columns: { userId: true },
+      });
+      const studentIds = enrollments.map((e) => e.userId);
+      if (studentIds.length === 0) {
+        return c.json({ success: true, data: [] });
+      }
+      conditions = studentIds.map((id) => eq(essays.studentId, id));
     }
 
     const all = await db.query.essays.findMany({
@@ -844,6 +853,11 @@ app.post(
       { userId: user.id, title: data.title, classId: data.classId },
       '[API POST /tasks]',
     );
+
+    if (!(await assertClassAccess(user, data.classId))) {
+      return c.json({ success: false, error: '无权为该班级创建任务' }, 403);
+    }
+
     const now = new Date().toISOString();
     const id = randomUUID();
 
@@ -1051,16 +1065,18 @@ app.get('/teacher/dashboard', authMiddleware, requireRole(UserRole.TEACHER), asy
         orderBy: desc(essayTasks.createdAt),
         limit: 5,
       }),
-      db.query.essays.findMany({
-        where: studentIds.length > 0 ? inArray(essays.studentId, studentIds) : undefined,
-        orderBy: desc(essays.createdAt),
-        limit: 10,
-        with: {
-          student: { columns: { id: true, name: true, studentNo: true } },
-          task: true,
-          correction: true,
-        },
-      }),
+      studentIds.length > 0
+        ? db.query.essays.findMany({
+            where: inArray(essays.studentId, studentIds),
+            orderBy: desc(essays.createdAt),
+            limit: 10,
+            with: {
+              student: { columns: { id: true, name: true, studentNo: true } },
+              task: true,
+              correction: true,
+            },
+          })
+        : Promise.resolve([]),
     ]);
 
     const pendingEssays = recentEssays.filter(
@@ -1131,10 +1147,13 @@ app.get(
     const studentIds = enrollments.map((e) => e.userId);
 
     // 3. 获取班级所有已批改作文
-    const allEssays = await db.query.essays.findMany({
-      where: studentIds.length > 0 ? inArray(essays.studentId, studentIds) : undefined,
-      with: { correction: true, task: true },
-    });
+    const allEssays =
+      studentIds.length > 0
+        ? await db.query.essays.findMany({
+            where: inArray(essays.studentId, studentIds),
+            with: { correction: true, task: true },
+          })
+        : [];
     const completedEssays = allEssays.filter((e) => e.status === 'completed' && e.correction);
 
     // 4. 平均分趋势：按 task 分组
@@ -1351,15 +1370,18 @@ app.get(
     });
     const studentIds = enrollments.map((e) => e.userId);
 
-    const allEssays = await db.query.essays.findMany({
-      where: studentIds.length > 0 ? inArray(essays.studentId, studentIds) : undefined,
-      with: {
-        student: { columns: { id: true, name: true, studentNo: true } },
-        task: true,
-        correction: true,
-      },
-      orderBy: desc(essays.createdAt),
-    });
+    const allEssays =
+      studentIds.length > 0
+        ? await db.query.essays.findMany({
+            where: inArray(essays.studentId, studentIds),
+            with: {
+              student: { columns: { id: true, name: true, studentNo: true } },
+              task: true,
+              correction: true,
+            },
+            orderBy: desc(essays.createdAt),
+          })
+        : [];
 
     const escapeCSV = (val: string | number | null | undefined): string => {
       const s = String(val ?? '');
@@ -1608,6 +1630,36 @@ app.get(
   },
 );
 
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      fields.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  fields.push(current);
+  return fields.map((f) => f.trim());
+}
+
 const importSchema = z.object({
   classId: z.string().min(1, '请选择班级'),
   csv: z.string().min(1, 'CSV 内容不能为空'),
@@ -1667,7 +1719,7 @@ app.post(
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      const parts = line.split(',').map((s) => s.trim());
+      const parts = parseCsvLine(line);
       if (parts.length < 2) {
         results.push({ line: i + 1, name: '', email: '', success: false, error: '字段不足' });
         continue;
@@ -2300,7 +2352,9 @@ app.post('/student/errors/:id/master', authMiddleware, requireRole(UserRole.STUD
 });
 
 // ========== Student AI Assistant ==========
-const aiPolishBodySchema = z.object({ text: z.string().min(1) });
+const aiPolishBodySchema = z.object({
+  text: z.string().min(1).max(5000, '文本过长，请控制在 5000 字符以内'),
+});
 
 app.post(
   '/student/ai/polish',
@@ -2354,7 +2408,9 @@ app.post(
   },
 );
 
-const aiUpgradeBodySchema = z.object({ text: z.string().min(1) });
+const aiUpgradeBodySchema = z.object({
+  text: z.string().min(1).max(5000, '文本过长，请控制在 5000 字符以内'),
+});
 
 app.post(
   '/student/ai/upgrade',
@@ -2410,8 +2466,8 @@ app.post(
 );
 
 const aiSynonymBodySchema = z.object({
-  word: z.string().min(1),
-  context: z.string().default(''),
+  word: z.string().min(1).max(100, '单词过长'),
+  context: z.string().max(1000, '上下文过长，请控制在 1000 字符以内').default(''),
 });
 
 app.post(
@@ -2467,7 +2523,9 @@ app.post(
   },
 );
 
-const aiGrammarBodySchema = z.object({ text: z.string().min(1) });
+const aiGrammarBodySchema = z.object({
+  text: z.string().min(1).max(5000, '文本过长，请控制在 5000 字符以内'),
+});
 
 app.post(
   '/student/ai/grammar',
@@ -2620,7 +2678,7 @@ app.get('/student/question-bank/:id', authMiddleware, requireRole(UserRole.STUDE
 
 const practiceBodySchema = z.object({
   questionId: z.string().optional(),
-  content: z.string().min(1),
+  content: z.string().min(1).max(10000, '练习内容过长，请控制在 10000 字符以内'),
   durationMs: z.number().optional(),
   exerciseType: z.string().default(ExerciseType.QUESTION_BANK),
 });
@@ -2911,8 +2969,30 @@ app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), 
     consecutiveProgress: maxStreak,
     errorFreeEssays,
   });
+  const now = new Date().toISOString();
   const unlockedNotRecorded = expectedCodes.filter((code) => !earnedCodes.has(code));
   if (unlockedNotRecorded.length > 0) {
+    const newRecords = unlockedNotRecorded
+      .map((code) => {
+        const item = ACHIEVEMENT_CATALOG.find((c) => c.code === code);
+        if (!item) return null;
+        return {
+          id: randomUUID(),
+          studentId: user.id,
+          code,
+          tier: item.tier,
+          title: item.title,
+          description: item.description,
+          icon: item.icon,
+          earnedAt: now,
+          createdAt: now,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+    await db.insert(achievements).values(newRecords).onConflictDoNothing();
+    for (const rec of newRecords) {
+      earnedMap.set(rec.code, rec);
+    }
     routesLogger.info(
       { userId: user.id, unlockedButNotRecorded: unlockedNotRecorded.join(',') },
       '[API /student/achievements]',

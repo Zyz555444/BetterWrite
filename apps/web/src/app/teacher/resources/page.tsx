@@ -53,7 +53,7 @@ export default function TeacherResourcesPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={[UserRole.TEACHER]}>
+    <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
       <DashboardLayout>
         <div className="space-y-6">
           <div>

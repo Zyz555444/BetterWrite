@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import type { ApiCallLogItem, ApiConfigItem } from '@betterwrite/shared';
 import { UserRole } from '@betterwrite/shared';
 import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
@@ -61,7 +62,7 @@ export default function AdminApisPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载配置失败');
-      console.error('[AdminApis] load configs error', err);
+      clientLogger.error('[AdminApis] load configs error', err);
     } finally {
       setLoadingConfigs(false);
     }
@@ -80,7 +81,7 @@ export default function AdminApisPage() {
         setLogs(res.data);
       }
     } catch (err) {
-      console.error('[AdminApis] load logs error', err);
+      clientLogger.error('[AdminApis] load logs error', err);
     } finally {
       setLoadingLogs(false);
     }
@@ -147,7 +148,7 @@ export default function AdminApisPage() {
       await loadConfigs();
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
-      console.error('[AdminApis] save error', err);
+      clientLogger.error('[AdminApis] save error', err);
     } finally {
       setSaving(false);
     }
@@ -160,7 +161,7 @@ export default function AdminApisPage() {
       await loadConfigs();
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
-      console.error('[AdminApis] delete error', err);
+      clientLogger.error('[AdminApis] delete error', err);
     }
   };
 

@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import { type ErrorBookGroup, UserRole, getErrorTypeLabel } from '@betterwrite/shared';
 import { ArrowRight, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
@@ -29,12 +30,12 @@ export default function StudentErrorBookPage() {
       if (res.success && res.data) {
         setGroups(res.data);
       } else {
-        console.warn('[StudentErrorBook] load failed:', res.error);
+        clientLogger.warn('[StudentErrorBook] load failed:', res.error);
         setError(res.error ?? '获取错题本失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载失败';
-      console.error('[StudentErrorBook] load error:', message);
+      clientLogger.error('[StudentErrorBook] load error:', message);
       setError(message);
     } finally {
       setIsLoading(false);
@@ -48,12 +49,12 @@ export default function StudentErrorBookPage() {
       if (res.success && res.data) {
         await loadGroups();
       } else {
-        console.warn('[StudentErrorBook] sync failed:', res.error);
+        clientLogger.warn('[StudentErrorBook] sync failed:', res.error);
         setError(res.error ?? '同步失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '同步失败';
-      console.error('[StudentErrorBook] sync error:', message);
+      clientLogger.error('[StudentErrorBook] sync error:', message);
       setError(message);
     } finally {
       setIsSyncing(false);

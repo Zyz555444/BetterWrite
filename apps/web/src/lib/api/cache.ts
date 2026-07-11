@@ -1,4 +1,5 @@
 import { logger } from '@betterwrite/shared/logger';
+import type { Redis } from 'ioredis';
 import { getRedis } from './redis';
 
 const cacheLogger = logger.child({ component: 'cache' });
@@ -59,16 +60,24 @@ export async function memoizeAsync<T>(
   return value;
 }
 
+async function deleteRedisKeysByPrefix(redis: Redis, prefix: string): Promise<void> {
+  const pattern = `${prefix}*`;
+  let cursor = '0';
+  do {
+    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = nextCursor;
+    if (keys.length > 0) {
+      await redis.del(...keys);
+    }
+  } while (cursor !== '0');
+}
+
 export function invalidateCache(prefix: string): void {
   const redis = getRedis();
   if (redis) {
-    redis
-      .eval(
-        "local keys = redis.call('keys', ARGV[1] .. '*')\nfor i=1,#keys,1 do\n  redis.call('del', keys[i])\nend\nreturn #keys",
-        0,
-        `cache:${prefix}`,
-      )
-      .catch((err) => cacheLogger.warn({ err }, '[Cache] Redis invalidation failed'));
+    deleteRedisKeysByPrefix(redis, `cache:${prefix}`).catch((err) =>
+      cacheLogger.warn({ err }, '[Cache] Redis invalidation failed'),
+    );
   }
 
   for (const key of memoryStore.keys()) {

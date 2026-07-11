@@ -1,16 +1,24 @@
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { type TeacherClass, serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
 import type { ClassAnalytics } from '@betterwrite/shared';
-import { UserRole } from '@betterwrite/shared';
+import { UserRole, type UserRoleType } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import { redirect } from 'next/navigation';
 import { AnalyticsClient } from './analytics-client';
 
 export default async function TeacherAnalyticsPage() {
   const { user } = await validateRequest();
   if (!user) redirect('/login');
-  if (user.role !== UserRole.TEACHER) redirect(getDashboardPath(user.role));
+  const allowedRoles = new Set<UserRoleType>([
+    UserRole.TEACHER,
+    UserRole.SCHOOL_ADMIN,
+    UserRole.SUPER_ADMIN,
+  ]);
+  if (!allowedRoles.has(user.role)) {
+    redirect(getDashboardPath(user.role));
+  }
 
   let classes: TeacherClass[] = [];
   let analytics: ClassAnalytics | null = null;
@@ -27,27 +35,27 @@ export default async function TeacherAnalyticsPage() {
           if (analyticsRes.success && analyticsRes.data) {
             analytics = analyticsRes.data;
           } else {
-            console.warn('[TeacherAnalytics] getClassAnalytics failed:', analyticsRes.error);
+            logger.warn(
+              { error: analyticsRes.error },
+              '[TeacherAnalytics] getClassAnalytics failed',
+            );
           }
         } catch (err) {
-          console.error(
-            '[TeacherAnalytics] getClassAnalytics error:',
-            err instanceof Error ? err.message : 'unknown',
-          );
+          logger.error({ err }, '[TeacherAnalytics] getClassAnalytics error');
         }
       }
     } else {
-      console.warn('[TeacherAnalytics] listTeacherClasses failed:', classesRes.error);
+      logger.warn({ error: classesRes.error }, '[TeacherAnalytics] listTeacherClasses failed');
       error = classesRes.error ?? '获取班级列表失败';
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : '加载失败';
-    console.error('[TeacherAnalytics] listTeacherClasses error:', message);
+    logger.error({ message }, '[TeacherAnalytics] listTeacherClasses error');
     error = message;
   }
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <AnalyticsClient
         initialClasses={classes}
         initialAnalytics={analytics}

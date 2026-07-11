@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type CorrectionDetail, type Essay, fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import { UserRole, getEssayStatusLabel } from '@betterwrite/shared';
 import { ArrowLeft, Clock, RefreshCw, Save } from 'lucide-react';
 import Link from 'next/link';
@@ -26,6 +27,7 @@ export default function TeacherEssayDetailPage() {
 
   const [review, setReview] = useState('');
   const [teacherScore, setTeacherScore] = useState('');
+  const [isReviewDirty, setIsReviewDirty] = useState(false);
   const [isSavingReview, setIsSavingReview] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey 用于手动触发重新加载
@@ -43,14 +45,16 @@ export default function TeacherEssayDetailPage() {
 
         if (essayRes.success && essayRes.data) {
           setEssay(essayRes.data);
-          setReview(essayRes.data.teacherReview ?? '');
-          setTeacherScore(
-            essayRes.data.teacherScore !== null && essayRes.data.teacherScore !== undefined
-              ? String(essayRes.data.teacherScore)
-              : '',
-          );
+          if (!isReviewDirty) {
+            setReview(essayRes.data.teacherReview ?? '');
+            setTeacherScore(
+              essayRes.data.teacherScore !== null && essayRes.data.teacherScore !== undefined
+                ? String(essayRes.data.teacherScore)
+                : '',
+            );
+          }
         } else {
-          console.warn('[TeacherEssayDetail] getEssay failed:', essayRes.error);
+          clientLogger.warn('[TeacherEssayDetail] getEssay failed:', essayRes.error);
           setError(essayRes.error ?? '获取作文失败');
         }
 
@@ -62,7 +66,7 @@ export default function TeacherEssayDetailPage() {
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : '加载失败';
-        console.error('[TeacherEssayDetail] loadData error:', message);
+        clientLogger.error('[TeacherEssayDetail] loadData error:', message);
         setError(message);
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -112,6 +116,7 @@ export default function TeacherEssayDetailPage() {
             ? String(res.data.teacherScore)
             : '',
         );
+        setIsReviewDirty(false);
       } else {
         setError(res.error ?? '保存复核失败');
       }
@@ -124,7 +129,7 @@ export default function TeacherEssayDetailPage() {
   };
 
   return (
-    <RoleGuard allowedRoles={[UserRole.TEACHER]}>
+    <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
       <DashboardLayout>
         <div className="max-w-4xl mx-auto space-y-6">
           <div className="flex items-center gap-2">
@@ -230,7 +235,10 @@ export default function TeacherEssayDetailPage() {
                         <textarea
                           id="teacherReview"
                           value={review}
-                          onChange={(e) => setReview(e.target.value)}
+                          onChange={(e) => {
+                            setReview(e.target.value);
+                            setIsReviewDirty(true);
+                          }}
                           placeholder="输入针对该作文的评语或修改建议..."
                           className="w-full min-h-[100px] rounded-md bg-paper p-3 text-copy-14 text-neutral-10 ring-1 ring-border placeholder:text-neutral-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
                         />
@@ -248,7 +256,10 @@ export default function TeacherEssayDetailPage() {
                           min={0}
                           max={100}
                           value={teacherScore}
-                          onChange={(e) => setTeacherScore(e.target.value)}
+                          onChange={(e) => {
+                            setTeacherScore(e.target.value);
+                            setIsReviewDirty(true);
+                          }}
                           placeholder="0-100"
                         />
                       </div>

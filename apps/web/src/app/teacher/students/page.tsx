@@ -2,15 +2,23 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import type { StudentListItem } from '@/lib/api/fetcher-types';
 import { type TeacherClass, serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
-import { UserRole } from '@betterwrite/shared';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
+import { UserRole, type UserRoleType } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import { redirect } from 'next/navigation';
 import { StudentsClient } from './students-client';
 
 export default async function TeacherStudentsPage() {
   const { user } = await validateRequest();
   if (!user) redirect('/login');
-  if (user.role !== UserRole.TEACHER) redirect(getDashboardPath(user.role));
+  const allowedRoles = new Set<UserRoleType>([
+    UserRole.TEACHER,
+    UserRole.SCHOOL_ADMIN,
+    UserRole.SUPER_ADMIN,
+  ]);
+  if (!allowedRoles.has(user.role)) {
+    redirect(getDashboardPath(user.role));
+  }
 
   let classes: TeacherClass[] = [];
   let students: StudentListItem[] = [];
@@ -25,25 +33,33 @@ export default async function TeacherStudentsPage() {
     if (classesRes.value.success && classesRes.value.data) {
       classes = classesRes.value.data;
     } else {
-      console.warn('[TeacherStudents] failed to load classes:', classesRes.value.error);
+      logger.warn({ error: classesRes.value.error }, '[TeacherStudents] failed to load classes');
     }
   } else {
-    console.error('[TeacherStudents] loadClasses error:', classesRes.reason);
+    logger.error(
+      { err: classesRes.reason instanceof Error ? classesRes.reason.message : classesRes.reason },
+      '[TeacherStudents] loadClasses error',
+    );
   }
   if (studentsRes.status === 'fulfilled') {
     if (studentsRes.value.success && studentsRes.value.data) {
       students = studentsRes.value.data;
     } else {
       error = studentsRes.value.error ?? '获取学生失败';
-      console.warn('[TeacherStudents] failed to load students:', error);
+      logger.warn({ error }, '[TeacherStudents] failed to load students');
     }
   } else {
     error = '获取学生失败';
-    console.error('[TeacherStudents] loadStudents error:', studentsRes.reason);
+    logger.error(
+      {
+        err: studentsRes.reason instanceof Error ? studentsRes.reason.message : studentsRes.reason,
+      },
+      '[TeacherStudents] loadStudents error',
+    );
   }
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <StudentsClient initialClasses={classes} initialStudents={students} initialError={error} />
     </DashboardLayout>
   );

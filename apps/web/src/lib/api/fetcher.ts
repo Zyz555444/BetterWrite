@@ -1,3 +1,4 @@
+import { clientLogger } from '@/lib/client-logger';
 import type { ClassAnalytics, StudentAnalytics } from '@betterwrite/shared';
 import type {
   Achievement,
@@ -186,7 +187,7 @@ export const fetcher = {
       credentials: 'include',
     });
     if (!res.ok) {
-      console.warn(`[Fetcher] exportClassAnalytics failed status=${res.status}`);
+      clientLogger.warn(`[Fetcher] exportClassAnalytics failed status=${res.status}`);
       throw new Error('导出失败');
     }
     const blob = await res.blob();

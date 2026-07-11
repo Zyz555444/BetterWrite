@@ -6,6 +6,7 @@ import { ErrorCard } from '@/components/student';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import { type ErrorBookItem, UserRole, getErrorTypeLabel } from '@betterwrite/shared';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -31,12 +32,12 @@ export default function StudentErrorBookTypePage() {
         if (res.success && res.data) {
           setErrors(res.data);
         } else {
-          console.warn('[StudentErrorBookType] load failed:', res.error);
+          clientLogger.warn('[StudentErrorBookType] load failed:', res.error);
           setError(res.error ?? '获取错题失败');
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : '加载失败';
-        console.error('[StudentErrorBookType] load error:', message);
+        clientLogger.error('[StudentErrorBookType] load error:', message);
         setError(message);
       } finally {
         setIsLoading(false);
@@ -63,12 +64,12 @@ export default function StudentErrorBookTypePage() {
           ),
         );
       } else {
-        console.warn('[StudentErrorBookType] master failed:', res.error);
+        clientLogger.warn('[StudentErrorBookType] master failed:', res.error);
         setError(res.error ?? '标记失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '标记失败';
-      console.error('[StudentErrorBookType] master error:', message);
+      clientLogger.error('[StudentErrorBookType] master error:', message);
       setError(message);
     } finally {
       setMasteringId(null);

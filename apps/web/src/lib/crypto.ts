@@ -1,8 +1,11 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { logger } from '@betterwrite/shared/logger';
 
 const ALGO = 'aes-256-gcm';
 const IV_LEN = 12;
 const AUTH_TAG_LEN = 16;
+
+let devKey: Buffer | null = null;
 
 function getKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
@@ -12,10 +15,13 @@ function getKey(): Buffer {
         '[Crypto] ENCRYPTION_KEY 未设置或长度不正确（需要 64 hex 字符 = 256-bit），生产环境必须设置。',
       );
     }
-    console.warn(
-      '[Crypto] ENCRYPTION_KEY 未设置或长度非 64 hex 字符（256-bit），使用随机开发兜底密钥。生产环境必须设置。',
-    );
-    return randomBytes(32);
+    if (!devKey) {
+      logger.warn(
+        '[Crypto] ENCRYPTION_KEY 未设置或长度非 64 hex 字符（256-bit），使用随机开发兜底密钥。生产环境必须设置。',
+      );
+      devKey = randomBytes(32);
+    }
+    return devKey;
   }
   return Buffer.from(raw, 'hex');
 }

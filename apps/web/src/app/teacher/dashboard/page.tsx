@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type TeacherDashboardData, serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
-import { UserRole, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
+import { UserRole, type UserRoleType, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import {
   BarChart3,
   BookOpen,
@@ -28,7 +29,14 @@ const statusColors: Record<string, string> = {
 export default async function TeacherDashboardPage() {
   const { user } = await validateRequest();
   if (!user) redirect('/login');
-  if (user.role !== UserRole.TEACHER) redirect(getDashboardPath(user.role));
+  const allowedRoles = new Set<UserRoleType>([
+    UserRole.TEACHER,
+    UserRole.SCHOOL_ADMIN,
+    UserRole.SUPER_ADMIN,
+  ]);
+  if (!allowedRoles.has(user.role)) {
+    redirect(getDashboardPath(user.role));
+  }
 
   let data: TeacherDashboardData | null = null;
   let error: string | null = null;
@@ -39,11 +47,11 @@ export default async function TeacherDashboardPage() {
       data = res.data;
     } else {
       error = res.error ?? '加载失败';
-      console.warn('[TeacherDashboard] load failed:', error);
+      logger.warn({ error }, '[TeacherDashboard] load failed');
     }
   } catch (err) {
     error = err instanceof Error ? err.message : '加载失败';
-    console.error('[TeacherDashboard] load error:', err);
+    logger.error({ err }, '[TeacherDashboard] load error');
   }
 
   const stats = data
@@ -72,7 +80,7 @@ export default async function TeacherDashboardPage() {
     : [];
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>

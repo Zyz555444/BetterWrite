@@ -33,7 +33,7 @@ function resolveClientIp(headers: Record<string, string | undefined>): string {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
+    if (parts.length > 0) return parts[0];
   }
   return '127.0.0.1';
 }

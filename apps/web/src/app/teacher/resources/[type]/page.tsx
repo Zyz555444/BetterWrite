@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type TeachingResourceWithCreator, fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import {
   TeachingResourceDifficultyLabels,
   TeachingResourceTypeLabels,
@@ -87,12 +88,12 @@ export default function TeacherResourcesListPage() {
       if (res.success && res.data) {
         setList(res.data);
       } else {
-        console.warn('[TeacherResourcesList] failed to load:', res.error);
+        clientLogger.warn('[TeacherResourcesList] failed to load:', res.error);
         setError(res.error ?? '获取资源列表失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '加载失败';
-      console.error('[TeacherResourcesList] load error:', message);
+      clientLogger.error('[TeacherResourcesList] load error:', message);
       setError(message);
     } finally {
       setIsLoading(false);
@@ -156,7 +157,7 @@ export default function TeacherResourcesListPage() {
 
     if (!form.title.trim() || !form.content.trim()) {
       const msg = '请填写标题和正文内容';
-      console.warn('[TeacherResourcesList] submit validation failed:', msg);
+      clientLogger.warn('[TeacherResourcesList] submit validation failed:', msg);
       setFormError(msg);
       return;
     }
@@ -192,7 +193,7 @@ export default function TeacherResourcesListPage() {
           setList((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
           handleCloseForm();
         } else {
-          console.warn('[TeacherResourcesList] update failed:', res.error);
+          clientLogger.warn('[TeacherResourcesList] update failed:', res.error);
           if (
             res.error?.includes('409') ||
             res.error?.includes('冲突') ||
@@ -210,7 +211,7 @@ export default function TeacherResourcesListPage() {
           setList((prev) => [created, ...prev]);
           handleCloseForm();
         } else {
-          console.warn('[TeacherResourcesList] create failed:', res.error);
+          clientLogger.warn('[TeacherResourcesList] create failed:', res.error);
           if (
             res.error?.includes('409') ||
             res.error?.includes('冲突') ||
@@ -224,7 +225,7 @@ export default function TeacherResourcesListPage() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '操作失败';
-      console.error('[TeacherResourcesList] submit error:', message);
+      clientLogger.error('[TeacherResourcesList] submit error:', message);
       if (message.includes('409') || message.includes('冲突') || message.includes('已存在')) {
         setFormError('该类型下已存在同名资源');
       } else {
@@ -258,12 +259,12 @@ export default function TeacherResourcesListPage() {
         if (expandedId === id) setExpandedId(null);
         setShowDeleteConfirm(null);
       } else {
-        console.warn('[TeacherResourcesList] delete failed:', res.error);
+        clientLogger.warn('[TeacherResourcesList] delete failed:', res.error);
         setError(res.error ?? '删除失败');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : '删除失败';
-      console.error('[TeacherResourcesList] delete error:', message);
+      clientLogger.error('[TeacherResourcesList] delete error:', message);
       setError(message);
     } finally {
       setIsDeleting(false);
@@ -287,7 +288,7 @@ export default function TeacherResourcesListPage() {
 
   if (!type) {
     return (
-      <RoleGuard allowedRoles={[UserRole.TEACHER]}>
+      <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
         <DashboardLayout>
           <div className="space-y-4">
             <h1 className="text-title-24 font-serif font-medium text-neutral-10">教学资源</h1>
@@ -299,7 +300,7 @@ export default function TeacherResourcesListPage() {
   }
 
   return (
-    <RoleGuard allowedRoles={[UserRole.TEACHER]}>
+    <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
       <DashboardLayout>
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

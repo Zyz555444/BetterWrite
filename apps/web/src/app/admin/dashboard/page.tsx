@@ -3,9 +3,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
 import type { AdminDashboardStats } from '@betterwrite/shared';
 import { UserRole } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import { Activity, BookOpen, School, Users } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
@@ -33,7 +34,7 @@ export default async function AdminDashboardPage() {
     }
   } catch (err) {
     error = err instanceof Error ? err.message : '加载失败';
-    console.error('[AdminDashboard] load error', err);
+    logger.error({ err }, '[AdminDashboard] load error');
   }
 
   const cards: DashboardCard[] = stats
@@ -85,7 +86,7 @@ export default async function AdminDashboardPage() {
     : [];
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <div className="space-y-6">
         <div>
           <h1 className="text-title-24 font-serif font-medium text-neutral-10">超级管理员控制台</h1>

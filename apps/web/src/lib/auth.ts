@@ -1,5 +1,6 @@
 import { db, sessions, users } from '@betterwrite/db';
 import type { UserRoleType } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import { DrizzleSQLiteAdapter } from '@lucia-auth/adapter-drizzle';
 import { Lucia } from 'lucia';
 import { cookies } from 'next/headers';
@@ -45,9 +46,9 @@ export const validateRequest = cache(async () => {
       (await cookies()).set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes);
     }
   } catch (err) {
-    console.error(
-      '[Auth] validateRequest cookie error:',
-      err instanceof Error ? err.message : 'unknown',
+    logger.warn(
+      { err: err instanceof Error ? err.message : 'unknown' },
+      '[Auth] validateRequest cookie error',
     );
   }
   return result;

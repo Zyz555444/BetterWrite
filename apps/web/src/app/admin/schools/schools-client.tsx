@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
 import type { SchoolWithStats } from '@betterwrite/shared';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -61,7 +62,7 @@ export function SchoolsClient({ initialSchools, initialRegion, initialError }: S
     } catch (err) {
       if (requestId !== latestRequestRef.current) return;
       setError(err instanceof Error ? err.message : '加载失败');
-      console.error('[AdminSchools] reload error', err);
+      clientLogger.error('[AdminSchools] reload error', err);
     } finally {
       if (requestId === latestRequestRef.current) setLoading(false);
     }
@@ -122,7 +123,7 @@ export function SchoolsClient({ initialSchools, initialRegion, initialError }: S
       await loadSchools(regionFilter);
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存失败');
-      console.error('[AdminSchools] save error', err);
+      clientLogger.error('[AdminSchools] save error', err);
     } finally {
       setSaving(false);
     }
@@ -135,7 +136,7 @@ export function SchoolsClient({ initialSchools, initialRegion, initialError }: S
       await loadSchools(regionFilter);
     } catch (err) {
       setError(err instanceof Error ? err.message : '删除失败');
-      console.error('[AdminSchools] delete error', err);
+      clientLogger.error('[AdminSchools] delete error', err);
     }
   };
 

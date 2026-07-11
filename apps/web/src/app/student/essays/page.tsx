@@ -5,8 +5,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import type { Essay } from '@/lib/api/fetcher-types';
 import { serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
-import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
+import { getDashboardPath, toAuthUser } from '@/lib/auth-store';
 import { UserRole, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
+import { logger } from '@betterwrite/shared/logger';
 import { BookOpen, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -32,15 +33,15 @@ export default async function StudentEssaysPage() {
       essays = res.data;
     } else {
       error = res.error ?? '获取作文失败';
-      console.warn('[StudentEssays] load failed:', error);
+      logger.warn({ error }, '[StudentEssays] load failed');
     }
   } catch (err) {
     error = err instanceof Error ? err.message : '获取作文失败';
-    console.error('[StudentEssays] load error:', err);
+    logger.error({ err: err instanceof Error ? err.message : err }, '[StudentEssays] load error');
   }
 
   return (
-    <DashboardLayout user={user as AuthUser}>
+    <DashboardLayout user={toAuthUser(user)}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-title-24 font-serif font-medium text-neutral-10">我的作文</h1>

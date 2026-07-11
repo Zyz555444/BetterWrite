@@ -33,11 +33,7 @@
         "android.permission.RECORD_AUDIO"
       ]
     },
-    "plugins": [
-      "expo-router",
-      "expo-camera",
-      "expo-notifications"
-    ],
+    "plugins": ["expo-router", "expo-camera", "expo-notifications"],
     "experiments": {
       "typedRoutes": true
     },

@@ -1,4 +1,4 @@
-import { formatScore, getTopicTypeLabel } from '@betterwrite/shared';
+import { formatScore, getEssayStatusLabel, getTopicTypeLabel } from '@betterwrite/shared';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -20,13 +20,6 @@ interface DashboardData {
   recentTasks: EssayTask[];
   recentEssays: Essay[];
 }
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 const taskStatusLabels: Record<string, string> = {
   draft: '草稿',
@@ -220,7 +213,7 @@ export default function TeacherDashboardPage() {
                     }
                     colors={colors}
                   >
-                    {statusLabels[essay.status] ?? essay.status}
+                    {getEssayStatusLabel(essay.status)}
                   </Badge>
                   {essay.status === 'completed' ? (
                     <Text style={[styles.scoreText, { color: colors.accent }]}>

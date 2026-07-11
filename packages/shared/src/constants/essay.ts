@@ -103,6 +103,15 @@ export const ErrorBookStatus = {
 
 export type ErrorBookStatusValue = (typeof ErrorBookStatus)[keyof typeof ErrorBookStatus];
 
+export const EssayStatus = {
+  PENDING: 'pending',
+  CORRECTING: 'correcting',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+} as const;
+
+export type EssayStatusValue = (typeof EssayStatus)[keyof typeof EssayStatus];
+
 export const TopicTypeLabels: Record<TopicTypeValue, string> = {
   [TopicType.LETTER]: '书信',
   [TopicType.SPEECH]: '演讲稿',
@@ -184,6 +193,13 @@ export const ErrorBookStatusLabels: Record<ErrorBookStatusValue, string> = {
   [ErrorBookStatus.MASTERED]: '已掌握',
 };
 
+export const EssayStatusLabels: Record<EssayStatusValue, string> = {
+  [EssayStatus.PENDING]: '等待批改',
+  [EssayStatus.CORRECTING]: '批改中',
+  [EssayStatus.COMPLETED]: '已完成',
+  [EssayStatus.FAILED]: '批改失败',
+};
+
 export function getTopicTypeLabel(topicType: string): string {
   return TopicTypeLabels[topicType as TopicTypeValue] ?? topicType;
 }
@@ -228,4 +244,8 @@ export function getAiAssistantModeLabel(mode: string): string {
 
 export function getErrorBookStatusLabel(status: string): string {
   return ErrorBookStatusLabels[status as ErrorBookStatusValue] ?? status;
+}
+
+export function getEssayStatusLabel(status: string): string {
+  return EssayStatusLabels[status as EssayStatusValue] ?? status;
 }

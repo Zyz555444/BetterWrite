@@ -6,17 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type Essay, fetcher } from '@/lib/api/fetcher';
-import { UserRole, formatScore } from '@betterwrite/shared';
+import { UserRole, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
 import { FileText, Filter, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 const statusColors: Record<string, string> = {
   pending: 'bg-warning/10 text-warning',
@@ -191,7 +184,7 @@ export default function TeacherEssaysPage() {
                         <span
                           className={`text-label-12 px-2 py-0.5 rounded-full ${statusColors[essay.status] ?? 'bg-neutral-3 text-neutral-8'}`}
                         >
-                          {statusLabels[essay.status] ?? essay.status}
+                          {getEssayStatusLabel(essay.status)}
                         </span>
                         {essay.status === 'completed' && (
                           <span className="text-copy-14 font-medium text-neutral-10">

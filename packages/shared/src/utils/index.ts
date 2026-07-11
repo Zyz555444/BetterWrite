@@ -54,10 +54,10 @@ export function calculateAbilityRadar(
   }>,
 ): Array<{ label: string; value: number; max: number }> {
   const dims = [
-    { label: 'TopicAdherence', key: 'topicAdherenceScore' as const, max: 3 },
-    { label: 'Content', key: 'contentScore' as const, max: 1.5 },
-    { label: 'Language', key: 'languageScore' as const, max: 6 },
-    { label: 'Structure', key: 'structureScore' as const, max: 3 },
+    { label: 'TopicAdherence', key: 'topicAdherenceScore' as const, max: 2 },
+    { label: 'Content', key: 'contentScore' as const, max: 5 },
+    { label: 'Language', key: 'languageScore' as const, max: 4 },
+    { label: 'Structure', key: 'structureScore' as const, max: 2.5 },
     { label: 'Presentation', key: 'presentationScore' as const, max: 1.5 },
   ];
   if (essays.length === 0) {

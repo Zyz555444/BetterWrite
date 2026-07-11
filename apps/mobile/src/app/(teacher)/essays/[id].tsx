@@ -1,4 +1,4 @@
-import { formatScore } from '@betterwrite/shared';
+import { formatScore, getEssayStatusLabel } from '@betterwrite/shared';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -8,13 +8,6 @@ import { Card } from '../../../components/ui/Card';
 import { Loading } from '../../../components/ui/Loading';
 import { type CorrectionDetail, type Essay, fetcher } from '../../../lib/api/fetcher';
 import { useTheme } from '../../../theme/dark-mode';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 export default function TeacherEssayDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -81,7 +74,7 @@ export default function TeacherEssayDetailPage() {
           }
           colors={colors}
         >
-          {statusLabels[essay.status] ?? essay.status}
+          {getEssayStatusLabel(essay.status)}
         </Badge>
         {essay.status === 'pending' || essay.status === 'correcting' ? (
           <Button

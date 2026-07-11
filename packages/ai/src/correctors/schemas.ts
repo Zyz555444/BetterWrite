@@ -35,7 +35,7 @@ export const contentAnalysisSchema = z.object({
   pointCoverage: z.array(contentPointSchema),
   expansionScore: z.number().min(0).max(4.5),
   relevanceScore: z.number().min(0).max(4.5),
-  contentScore: z.number().min(0).max(1.5),
+  contentScore: z.number().min(0).max(5),
   comment: z.string(),
 });
 
@@ -72,7 +72,7 @@ export const languageAnalysisSchema = z.object({
   }),
   highlights: z.array(highlightSchema),
   revisedEssay: z.string(),
-  languageScore: z.number().min(0).max(6),
+  languageScore: z.number().min(0).max(4),
   comment: z.string(),
 });
 
@@ -88,7 +88,7 @@ export const paragraphStructureSchema = z.object({
 export const connectiveUsageSchema = z.object({
   usedConnectives: z.array(z.string()),
   missingTypes: z.array(z.string()),
-  score: z.number().min(0).max(3),
+  score: z.number().min(0).max(2.5),
 });
 
 export const formatCheckSchema = z.object({
@@ -104,8 +104,8 @@ export const structureAnalysisSchema = z.object({
   connectiveUsage: connectiveUsageSchema,
   formatCheck: formatCheckSchema,
   wordCount: z.number().int().min(0),
-  wordCountScore: z.number().min(0).max(3),
-  structureScore: z.number().min(0).max(3),
+  wordCountScore: z.number().min(0).max(2.5),
+  structureScore: z.number().min(0).max(2.5),
   comment: z.string(),
 });
 
@@ -123,17 +123,17 @@ export const topicAdherenceAnalysisSchema = z.object({
     score: z.number().min(0).max(5),
     comment: z.string(),
   }),
-  topicAdherenceScore: z.number().min(0).max(3),
+  topicAdherenceScore: z.number().min(0).max(2),
   issues: z.array(topicIssueSchema),
   suggestions: z.array(suggestionSchema),
   comment: z.string(),
 });
 
 export const dimensionScoresSchema = z.object({
-  topicAdherence: z.number().min(0).max(3),
-  content: z.number().min(0).max(1.5),
-  language: z.number().min(0).max(6),
-  structure: z.number().min(0).max(3),
+  topicAdherence: z.number().min(0).max(2),
+  content: z.number().min(0).max(5),
+  language: z.number().min(0).max(4),
+  structure: z.number().min(0).max(2.5),
   presentation: z.number().min(0).max(1.5),
 });
 

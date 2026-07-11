@@ -11,7 +11,7 @@ if (fs.existsSync(backupPath)) {
   fs.copyFileSync(backupPath, pkgPath);
 }
 
-fs.writeFileSync(backupPath, JSON.stringify(originalPkg, null, 2) + '\n');
+fs.writeFileSync(backupPath, `${JSON.stringify(originalPkg, null, 2)}\n`);
 
 const rewriteDeps = (deps) => {
   if (!deps) return deps;
@@ -34,5 +34,5 @@ const newPkg = {
   devDependencies: rewriteDeps(originalPkg.devDependencies),
 };
 
-fs.writeFileSync(pkgPath, JSON.stringify(newPkg, null, 2) + '\n');
+fs.writeFileSync(pkgPath, `${JSON.stringify(newPkg, null, 2)}\n`);
 console.log(`Rewrote ${pkgPath} for EAS build (backup: ${backupPath})`);

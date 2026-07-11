@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { type TeacherDashboardData, serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
 import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
-import { UserRole, formatScore } from '@betterwrite/shared';
+import { UserRole, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
 import {
   BarChart3,
   BookOpen,
@@ -17,13 +17,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 const statusColors: Record<string, string> = {
   pending: 'bg-warning/10 text-warning',
@@ -227,7 +220,7 @@ export default async function TeacherDashboardPage() {
                       <span
                         className={`text-label-12 px-2 py-0.5 rounded-full ${statusColors[essay.status] ?? 'bg-neutral-3 text-neutral-8'}`}
                       >
-                        {statusLabels[essay.status] ?? essay.status}
+                        {getEssayStatusLabel(essay.status)}
                       </span>
                       {essay.status === 'completed' && (
                         <span className="text-copy-14 font-medium text-neutral-10">

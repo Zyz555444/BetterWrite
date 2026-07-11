@@ -8,18 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type CorrectionDetail, type Essay, fetcher } from '@/lib/api/fetcher';
-import { UserRole } from '@betterwrite/shared';
+import { UserRole, getEssayStatusLabel } from '@betterwrite/shared';
 import { ArrowLeft, Clock, RefreshCw, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 export default function TeacherEssayDetailPage() {
   const params = useParams();
@@ -152,7 +145,7 @@ export default function TeacherEssayDetailPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge>{statusLabels[essay.status] ?? essay.status}</Badge>
+                    <Badge>{getEssayStatusLabel(essay.status)}</Badge>
                     <span className="text-copy-14 text-neutral-8 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       提交于 {new Date(essay.submittedAt).toLocaleString()}

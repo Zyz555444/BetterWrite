@@ -100,29 +100,29 @@ describe('calculateAbilityRadar', () => {
   it('calculates average for each dimension', () => {
     const result = calculateAbilityRadar([
       {
-        topicAdherenceScore: 2,
-        contentScore: 1,
-        languageScore: 5,
+        topicAdherenceScore: 1.5,
+        contentScore: 4,
+        languageScore: 3,
         structureScore: 2,
         presentationScore: 1,
       },
       {
-        topicAdherenceScore: 3,
-        contentScore: 1.5,
+        topicAdherenceScore: 2,
+        contentScore: 5,
         languageScore: 4,
-        structureScore: 3,
+        structureScore: 2.5,
         presentationScore: 1,
       },
     ]);
     const topicAdherence = result.find((d) => d.label === 'TopicAdherence');
     const content = result.find((d) => d.label === 'Content');
     const language = result.find((d) => d.label === 'Language');
-    expect(topicAdherence?.value).toBe(2.5);
-    expect(topicAdherence?.max).toBe(3);
-    expect(content?.value).toBe(1.25);
-    expect(content?.max).toBe(1.5);
-    expect(language?.value).toBe(4.5);
-    expect(language?.max).toBe(6);
+    expect(topicAdherence?.value).toBe(1.75);
+    expect(topicAdherence?.max).toBe(2);
+    expect(content?.value).toBe(4.5);
+    expect(content?.max).toBe(5);
+    expect(language?.value).toBe(3.5);
+    expect(language?.max).toBe(4);
   });
 
   it('skips null scores in average calculation', () => {

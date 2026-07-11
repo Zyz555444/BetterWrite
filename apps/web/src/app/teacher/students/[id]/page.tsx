@@ -9,6 +9,7 @@ import {
   StudentTagLabels,
   UserRole,
   formatScore,
+  getEssayStatusLabel,
   getStudentTagLabel,
   getTopicTypeLabel,
 } from '@betterwrite/shared';
@@ -22,13 +23,6 @@ const tagColors: Record<string, string> = {
   good: 'bg-info/10 text-info',
   improving: 'bg-warning/10 text-warning',
   attention: 'bg-error/10 text-error',
-};
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
 };
 
 const statusColors: Record<string, string> = {
@@ -304,7 +298,7 @@ export default function TeacherStudentDetailPage() {
                                 <span
                                   className={`text-label-12 px-2 py-0.5 rounded-full ${statusColors[essay.status] ?? 'bg-neutral-3 text-neutral-8'}`}
                                 >
-                                  {statusLabels[essay.status] ?? essay.status}
+                                  {getEssayStatusLabel(essay.status)}
                                 </span>
                               </td>
                               <td className="px-2 py-3 text-neutral-10">

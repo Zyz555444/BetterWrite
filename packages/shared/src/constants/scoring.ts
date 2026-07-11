@@ -1,9 +1,9 @@
 export const SCORING_WEIGHTS = {
-  topicAdherence: 0.2,
-  content: 0.1,
-  language: 0.4,
-  structure: 0.2,
-  presentation: 0.1,
+  topicAdherence: 0.133, // 审题扣题 2.0 / 15
+  content: 0.333, // 内容要点 5.0 / 15
+  language: 0.267, // 语言运用 4.0 / 15
+  structure: 0.167, // 结构连贯 2.5 / 15
+  presentation: 0.1, // 卷面规范 1.5 / 15
 } as const;
 
 export const SCORE_TIERS = [

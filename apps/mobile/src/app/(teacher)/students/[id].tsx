@@ -1,4 +1,9 @@
-import { formatScore, getStudentTagLabel, getTopicTypeLabel } from '@betterwrite/shared';
+import {
+  formatScore,
+  getEssayStatusLabel,
+  getStudentTagLabel,
+  getTopicTypeLabel,
+} from '@betterwrite/shared';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -8,13 +13,6 @@ import { Card } from '../../../components/ui/Card';
 import { Loading } from '../../../components/ui/Loading';
 import { type StudentDetail, fetcher } from '../../../lib/api/fetcher';
 import { useTheme } from '../../../theme/dark-mode';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 const tagVariants: Record<string, 'success' | 'info' | 'warning' | 'error' | 'secondary'> = {
   excellent: 'success',
@@ -163,7 +161,7 @@ export default function TeacherStudentDetailPage() {
                   }
                   colors={colors}
                 >
-                  {statusLabels[essay.status] ?? essay.status}
+                  {getEssayStatusLabel(essay.status)}
                 </Badge>
               </View>
               <View style={styles.essayFooter}>

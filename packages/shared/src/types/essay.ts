@@ -3,6 +3,7 @@ import type {
   AiAssistantModeValue,
   ErrorBookStatusValue,
   ErrorTypeValue,
+  EssayStatusValue,
   ExerciseTypeValue,
   PracticeDifficultyValue,
   StudentTagValue,
@@ -38,7 +39,7 @@ export interface Essay {
   content: string;
   wordCount: number;
   submitType: 'typed' | 'ocr';
-  status: 'pending' | 'correcting' | 'completed' | 'failed';
+  status: EssayStatusValue;
   totalScore: number | null;
   scoreTier: string | null;
   submittedAt: string;

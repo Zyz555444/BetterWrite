@@ -6,17 +6,10 @@ import type { Essay } from '@/lib/api/fetcher-types';
 import { serverFetcher } from '@/lib/api/server';
 import { validateRequest } from '@/lib/auth';
 import { type AuthUser, getDashboardPath } from '@/lib/auth-store';
-import { UserRole, formatScore } from '@betterwrite/shared';
+import { UserRole, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
 import { BookOpen, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 const statusVariants: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   pending: 'secondary',
@@ -81,7 +74,7 @@ export default async function StudentEssaysPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <Badge variant={statusVariants[essay.status] ?? 'secondary'}>
-                          {statusLabels[essay.status] ?? essay.status}
+                          {getEssayStatusLabel(essay.status)}
                         </Badge>
                         <span className="text-label-12 text-neutral-7">
                           {new Date(essay.submittedAt).toLocaleDateString()}

@@ -35,7 +35,7 @@ ${essay}
   "connectiveUsage": {
     "usedConnectives": ["First of all", "Besides"],
     "missingTypes": ["总结词"],
-    "score": 3.0
+    "score": 2.5
   },
   "formatCheck": {
     "type": "letter",
@@ -45,7 +45,7 @@ ${essay}
     "isCorrect": true
   },
   "wordCount": 102,
-  "wordCountScore": 3.0,
+  "wordCountScore": 2.5,
   "structureScore": 2.5,
   "comment": "结构维度的评语"
 }`;

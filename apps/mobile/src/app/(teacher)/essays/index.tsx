@@ -1,4 +1,4 @@
-import { formatScore } from '@betterwrite/shared';
+import { formatScore, getEssayStatusLabel } from '@betterwrite/shared';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -9,13 +9,6 @@ import { Input } from '../../../components/ui/Input';
 import { Loading } from '../../../components/ui/Loading';
 import { type Essay, fetcher } from '../../../lib/api/fetcher';
 import { useTheme } from '../../../theme/dark-mode';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 type FilterKey = 'all' | 'pending' | 'correcting' | 'completed' | 'failed';
 
@@ -159,7 +152,7 @@ export default function TeacherEssaysPage() {
                 }
                 colors={colors}
               >
-                {statusLabels[essay.status] ?? essay.status}
+                {getEssayStatusLabel(essay.status)}
               </Badge>
             </View>
             <Text style={[styles.essayMeta, { color: colors.textSecondary }]} numberOfLines={1}>

@@ -32,7 +32,7 @@ ${essay}
 2. keyPointCoverage: 逐条检查 task.keyPoints 中的要点覆盖情况（fully/partially/missing），并引用原文证据
 3. requiredElements: 识别题目是否要求并检测"个人经历"、"观点论述"、"利弊分析"、"建议措施"、"情感表达"等要素
 4. topicRelevance: 作文是否始终围绕主题，有无偏题/套作
-5. topicAdherenceScore: 按深圳中考15分制中审题扣题维度评分，满分3.0分
+5. topicAdherenceScore: 按深圳中考15分制中审题扣题维度评分，满分2.0分
 6. issues: 列出具体的审题扣题问题
 7. suggestions: 给出针对性的改进建议
 
@@ -55,7 +55,7 @@ ${essay}
     "score": 4.5,
     "comment": "全文紧扣主题，无偏离内容"
   },
-  "topicAdherenceScore": 2.5,
+  "topicAdherenceScore": 1.5,
   "issues": [
     { "severity": "high", "category": "要点遗漏", "description": "未分享参赛收获与感悟", "evidence": "全文只描述照片，缺少感悟部分" }
   ],

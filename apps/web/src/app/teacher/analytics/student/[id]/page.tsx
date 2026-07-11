@@ -11,18 +11,12 @@ import {
   UserRole,
   formatScore,
   getErrorTypeLabel,
+  getEssayStatusLabel,
 } from '@betterwrite/shared';
 import { AlertCircle, ArrowLeft, Award, FileText, PenLine, Target } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-
-const statusLabels: Record<string, string> = {
-  pending: '等待批改',
-  correcting: '批改中',
-  completed: '已完成',
-  failed: '批改失败',
-};
 
 const statusColors: Record<string, string> = {
   pending: 'bg-warning/10 text-warning',
@@ -261,7 +255,7 @@ export default function TeacherStudentAnalyticsPage() {
                           <span
                             className={`text-label-12 px-2 py-0.5 rounded-full shrink-0 ${statusColors[essay.status] ?? 'bg-neutral-3 text-neutral-8'}`}
                           >
-                            {statusLabels[essay.status] ?? essay.status}
+                            {getEssayStatusLabel(essay.status)}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-label-12 text-neutral-8 mt-2">

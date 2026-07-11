@@ -39,10 +39,10 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
   const [activeTab, setActiveTab] = useState<'overview' | 'errors' | 'revised'>('overview');
 
   const radarData = [
-    { subject: '审题扣题', A: (correction.topicAdherenceScore / 3) * 100, fullMark: 100 },
-    { subject: '内容', A: (correction.contentScore / 1.5) * 100, fullMark: 100 },
-    { subject: '语言', A: (correction.languageScore / 6) * 100, fullMark: 100 },
-    { subject: '结构', A: (correction.structureScore / 3) * 100, fullMark: 100 },
+    { subject: '审题扣题', A: (correction.topicAdherenceScore / 2) * 100, fullMark: 100 },
+    { subject: '内容', A: (correction.contentScore / 5) * 100, fullMark: 100 },
+    { subject: '语言', A: (correction.languageScore / 4) * 100, fullMark: 100 },
+    { subject: '结构', A: (correction.structureScore / 2.5) * 100, fullMark: 100 },
     { subject: '卷面', A: (correction.presentationScore / 1.5) * 100, fullMark: 100 },
   ];
 
@@ -79,11 +79,11 @@ export function CorrectionResultView({ correction, originalEssay }: CorrectionRe
                   key: 'topicAdherence',
                   label: '审题扣题',
                   score: correction.topicAdherenceScore,
-                  max: 3,
+                  max: 2,
                 },
-                { key: 'content', label: '内容', score: correction.contentScore, max: 1.5 },
-                { key: 'language', label: '语言', score: correction.languageScore, max: 6 },
-                { key: 'structure', label: '结构', score: correction.structureScore, max: 3 },
+                { key: 'content', label: '内容', score: correction.contentScore, max: 5 },
+                { key: 'language', label: '语言', score: correction.languageScore, max: 4 },
+                { key: 'structure', label: '结构', score: correction.structureScore, max: 2.5 },
                 {
                   key: 'presentation',
                   label: '卷面',

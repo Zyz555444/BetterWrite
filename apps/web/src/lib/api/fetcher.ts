@@ -13,7 +13,7 @@ import type {
   ErrorBookItem,
   EssayDraft,
   PracticeExercise,
-  QuestionBankItem,
+  QuestionItem,
   SchoolStats,
   SchoolWithStats,
   StudentProgress,
@@ -79,7 +79,7 @@ export const fetcher = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
-  register: (body: {
+  register: (data: {
     email: string;
     password: string;
     name: string;
@@ -89,7 +89,7 @@ export const fetcher = {
   }) =>
     request<ApiResponse<AuthUserResponse>>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   logout: () => request<ApiResponse<null>>('/api/auth/logout', { method: 'POST' }),
   me: () =>
@@ -102,23 +102,23 @@ export const fetcher = {
         schoolId: string | null;
       }>
     >('/api/auth/me'),
-  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
     request<ApiResponse<null>>('/api/auth/password', {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
 
   // Essays
-  submitEssay: (body: { content: string; taskId?: string; title?: string }) =>
-    request<ApiResponse<Essay>>('/api/essays', { method: 'POST', body: JSON.stringify(body) }),
+  submitEssay: (data: { content: string; taskId?: string; title?: string }) =>
+    request<ApiResponse<Essay>>('/api/essays', { method: 'POST', body: JSON.stringify(data) }),
   listMyEssays: () => request<ApiResponse<Essay[]>>('/api/essays/my'),
   getEssay: (id: string) => request<ApiResponse<Essay>>(`/api/essays/${id}`),
   getCorrection: (id: string) =>
     request<ApiResponse<CorrectionDetail>>(`/api/essays/${id}/correction`),
-  reviewEssay: (id: string, body: { teacherReview?: string; teacherScore?: number }) =>
+  reviewEssay: (id: string, data: { teacherReview?: string; teacherScore?: number }) =>
     request<ApiResponse<Essay>>(`/api/essays/${id}/review`, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
 
   // Tasks
@@ -148,7 +148,7 @@ export const fetcher = {
 
   listTeacherEssays: () => request<ApiResponse<Essay[]>>('/api/essays'),
 
-  createTask: (body: {
+  createTask: (data: {
     title: string;
     topicType: string;
     requirements: string;
@@ -158,8 +158,8 @@ export const fetcher = {
     wordLimitMax: number;
     dueDate?: string;
   }) =>
-    request<ApiResponse<EssayTask>>('/api/tasks', { method: 'POST', body: JSON.stringify(body) }),
-  aiGenerateTask: (body: {
+    request<ApiResponse<EssayTask>>('/api/tasks', { method: 'POST', body: JSON.stringify(data) }),
+  aiGenerateTask: (data: {
     topic: string;
     topicType?: string;
     gradeLevel?: string;
@@ -168,7 +168,7 @@ export const fetcher = {
   }) =>
     request<ApiResponse<AiGeneratedTask>>('/api/tasks/ai-generate', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   publishTask: (id: string) =>
     request<ApiResponse<EssayTask>>(`/api/tasks/${id}/publish`, { method: 'PUT' }),
@@ -213,10 +213,10 @@ export const fetcher = {
   getStudentDetail: (id: string) =>
     request<ApiResponse<StudentDetail>>(`/api/teacher/students/${id}`),
 
-  importStudents: (body: { classId: string; csv: string }) =>
+  importStudents: (data: { classId: string; csv: string }) =>
     request<ApiResponse<ImportResult>>('/api/teacher/students/import', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
 
   updateStudentTag: (id: string, tag: string) =>
@@ -246,7 +246,7 @@ export const fetcher = {
   getResource: (id: string) =>
     request<ApiResponse<TeachingResourceWithCreator>>(`/api/teacher/resources/${id}`),
 
-  createResource: (body: {
+  createResource: (data: {
     type: string;
     title: string;
     topicType?: string;
@@ -257,12 +257,12 @@ export const fetcher = {
   }) =>
     request<ApiResponse<TeachingResourceWithCreator>>('/api/teacher/resources', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
 
   updateResource: (
     id: string,
-    body: {
+    data: {
       title?: string;
       topicType?: string;
       difficulty?: string;
@@ -273,7 +273,7 @@ export const fetcher = {
   ) =>
     request<ApiResponse<TeachingResourceWithCreator>>(`/api/teacher/resources/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
 
   deleteResource: (id: string) =>
@@ -334,7 +334,7 @@ export const fetcher = {
     return request<ApiResponse<AiConversation[]>>(`/api/student/ai/history${qs ? `?${qs}` : ''}`);
   },
 
-  getQuestionBank: (params?: {
+  getQuestions: (params?: {
     topicType?: string;
     difficulty?: string;
     offset?: number;
@@ -346,13 +346,13 @@ export const fetcher = {
     if (params?.offset !== undefined) query.set('offset', String(params.offset));
     if (params?.limit !== undefined) query.set('limit', String(params.limit));
     const qs = query.toString();
-    return request<ApiResponse<QuestionBankItem[]>>(
+    return request<ApiResponse<QuestionItem[]>>(
       `/api/student/question-bank${qs ? `?${qs}` : ''}`,
     );
   },
   getQuestion: (id: string) =>
-    request<ApiResponse<QuestionBankItem>>(`/api/student/question-bank/${id}`),
-  submitPractice: (body: {
+    request<ApiResponse<QuestionItem>>(`/api/student/question-bank/${id}`),
+  submitPractice: (data: {
     questionId?: string;
     content: string;
     durationMs?: number;
@@ -372,9 +372,9 @@ export const fetcher = {
       }>
     >('/api/student/practice', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
-  submitPracticeDeep: (body: {
+  submitPracticeDeep: (data: {
     questionId?: string;
     content: string;
     durationMs?: number;
@@ -382,7 +382,7 @@ export const fetcher = {
   }) =>
     request<ApiResponse<{ essayId: string }>>('/api/student/practice/deep', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   getPracticeHistory: (params?: { offset?: number; limit?: number }) => {
     const query = new URLSearchParams();
@@ -405,10 +405,10 @@ export const fetcher = {
     >('/api/student/dashboard'),
   getDraft: (taskId: string) =>
     request<ApiResponse<EssayDraft | null>>(`/api/student/drafts/${taskId}`),
-  saveDraft: (taskId: string, body: { content: string; wordCount: number; durationMs: number }) =>
+  saveDraft: (taskId: string, data: { content: string; wordCount: number; durationMs: number }) =>
     request<ApiResponse<EssayDraft>>(`/api/student/drafts/${taskId}`, {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   deleteDraft: (taskId: string) =>
     request<ApiResponse<null>>(`/api/student/drafts/${taskId}`, { method: 'DELETE' }),
@@ -426,7 +426,7 @@ export const fetcher = {
     const qs = query.toString();
     return request<ApiResponse<SchoolWithStats[]>>(`/api/admin/schools${qs ? `?${qs}` : ''}`);
   },
-  createAdminSchool: (body: {
+  createAdminSchool: (data: {
     code: string;
     name: string;
     region: string;
@@ -435,11 +435,11 @@ export const fetcher = {
   }) =>
     request<ApiResponse<{ id: string }>>('/api/admin/schools', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   updateAdminSchool: (
     id: string,
-    body: {
+    data: {
       code?: string;
       name?: string;
       region?: string;
@@ -450,7 +450,7 @@ export const fetcher = {
   ) =>
     request<ApiResponse<null>>(`/api/admin/schools/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   deleteAdminSchool: (id: string) =>
     request<ApiResponse<null>>(`/api/admin/schools/${id}`, { method: 'DELETE' }),
@@ -459,7 +459,7 @@ export const fetcher = {
 
   // Admin: API Configs
   listAdminApiConfigs: () => request<ApiResponse<ApiConfigItem[]>>('/api/admin/api-configs'),
-  createAdminApiConfig: (body: {
+  createAdminApiConfig: (data: {
     provider: string;
     apiKey: string;
     baseUrl?: string;
@@ -472,11 +472,11 @@ export const fetcher = {
   }) =>
     request<ApiResponse<{ id: string }>>('/api/admin/api-configs', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   updateAdminApiConfig: (
     id: string,
-    body: {
+    data: {
       provider?: string;
       apiKey?: string;
       baseUrl?: string;
@@ -490,7 +490,7 @@ export const fetcher = {
   ) =>
     request<ApiResponse<null>>(`/api/admin/api-configs/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   deleteAdminApiConfig: (id: string) =>
     request<ApiResponse<null>>(`/api/admin/api-configs/${id}`, { method: 'DELETE' }),
@@ -516,7 +516,7 @@ export const fetcher = {
   // Admin: Announcements
   listAdminAnnouncements: () =>
     request<ApiResponse<AnnouncementItem[]>>('/api/admin/announcements'),
-  createAdminAnnouncement: (body: {
+  createAdminAnnouncement: (data: {
     title: string;
     content: string;
     targetRole?: string;
@@ -524,11 +524,11 @@ export const fetcher = {
   }) =>
     request<ApiResponse<{ id: string }>>('/api/admin/announcements', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   updateAdminAnnouncement: (
     id: string,
-    body: {
+    data: {
       title?: string;
       content?: string;
       targetRole?: string;
@@ -537,13 +537,13 @@ export const fetcher = {
   ) =>
     request<ApiResponse<null>>(`/api/admin/announcements/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   deleteAdminAnnouncement: (id: string) =>
     request<ApiResponse<null>>(`/api/admin/announcements/${id}`, { method: 'DELETE' }),
 
   // Admin: Question Bank
-  listAdminQuestionBank: (params?: {
+  listAdminQuestions: (params?: {
     topicType?: string;
     difficulty?: string;
     offset?: number;
@@ -555,17 +555,17 @@ export const fetcher = {
     if (params?.offset !== undefined) query.set('offset', String(params.offset));
     if (params?.limit !== undefined) query.set('limit', String(params.limit));
     const qs = query.toString();
-    return request<ApiResponse<QuestionBankItem[]>>(
+    return request<ApiResponse<QuestionItem[]>>(
       `/api/admin/question-bank${qs ? `?${qs}` : ''}`,
     );
   },
-  createAdminQuestion: (body: {
+  createAdminQuestion: (data: {
     topicType: string;
     title: string;
     requirements: string;
     topicCategory?: string;
     keyPoints?: string[];
-    referenceEssay?: string;
+    modelEssay?: string;
     wordLimitMin?: number;
     wordLimitMax?: number;
     timeLimitMinutes?: number;
@@ -574,17 +574,17 @@ export const fetcher = {
   }) =>
     request<ApiResponse<{ id: string }>>('/api/admin/question-bank', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   updateAdminQuestion: (
     id: string,
-    body: {
+    data: {
       topicType?: string;
       title?: string;
       requirements?: string;
       topicCategory?: string;
       keyPoints?: string[];
-      referenceEssay?: string;
+      modelEssay?: string;
       wordLimitMin?: number;
       wordLimitMax?: number;
       timeLimitMinutes?: number;
@@ -594,7 +594,7 @@ export const fetcher = {
   ) =>
     request<ApiResponse<null>>(`/api/admin/question-bank/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(body),
+      body: JSON.stringify(data),
     }),
   deleteAdminQuestion: (id: string) =>
     request<ApiResponse<null>>(`/api/admin/question-bank/${id}`, { method: 'DELETE' }),

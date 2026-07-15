@@ -8,6 +8,7 @@ node_modules
 .env.local
 .env.development.local
 .env.test.local
+.env.production
 .env.production.local
 
 # Turbo
@@ -45,3 +46,5 @@ coverage
 # Misc
 *.log
 .cache
+.pnpm-store/
+local.db

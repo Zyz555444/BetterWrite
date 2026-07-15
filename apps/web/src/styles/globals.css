@@ -10,7 +10,8 @@
  */
 
 /* @theme inline: runtime-overridable tokens (resolved at use-site).
-   Inter is loaded via next/font in app/layout.tsx → exposes --font-inter.
+   Sans uses the system font fallback chain to avoid external font requests
+   (better for offline builds and China network environments).
    Serif uses the system CJK fallback chain (Noto Serif CJK SC / Source Han Serif / SongTi SC)
    to avoid self-hosting multi-MB CJK font files. */
 @theme inline {

@@ -134,14 +134,14 @@ docker compose --env-file .env.production -f docker/docker-compose.yml down
 
 ## 默认账号
 
-执行 `pnpm db:seed` 或 Docker `seed` 服务后，系统会创建以下账号：
+执行 `pnpm db:seed` 或 Docker `seed` 服务后，系统会创建以下账号（密码随机生成，详见命令行输出）：
 
-| 角色 | 邮箱 | 密码 |
-|------|------|------|
-| 超级管理员 | `superadmin@betterwrite.cn` | `admin123` |
-| 学校管理员 | `admin@school.com` | `admin123` |
-| 教师 | `teacher@school.com` | `admin123` |
-| 学生 | `student@school.com` | `admin123` |
+| 角色 | 邮箱 |
+|------|------|
+| 超级管理员 | `superadmin@betterwrite.cn` |
+| 学校管理员 | `admin@school.com` |
+| 教师 | `teacher@school.com` |
+| 学生 | `student@school.com` |
 
 > 生产环境务必修改默认密码或删除默认账号。
 

@@ -51,14 +51,12 @@ export default function StudentPracticeMockPage() {
     remainingRef.current = remaining;
   }, [remaining]);
 
-  useEffect(() => {}, []);
-
   useEffect(() => {
     setIsLoading(true);
     setLoadError(null);
     fetcher
-      .getQuestionBank({ limit: 50 })
-      .then((res) => {
+      .getQuestions({ limit: 50 })
+      .then((res: Awaited<ReturnType<typeof fetcher.getQuestions>>) => {
         if (res.success && res.data && res.data.length > 0) {
           const picked = res.data[Math.floor(Math.random() * res.data.length)];
           setQuestion(picked);
@@ -66,7 +64,7 @@ export default function StudentPracticeMockPage() {
           setLoadError(res.error ?? '题库为空，无法开始模拟');
         }
       })
-      .catch((err) => setLoadError(err instanceof Error ? err.message : '获取题目失败'))
+      .catch((err: unknown) => setLoadError(err instanceof Error ? err.message : '获取题目失败'))
       .finally(() => setIsLoading(false));
   }, []);
 

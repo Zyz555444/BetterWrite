@@ -7,7 +7,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { UserRole } from '@betterwrite/shared';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 
 interface ResourceCategory {
   type: string;
@@ -45,8 +44,6 @@ const categories: ResourceCategory[] = [
 
 export default function TeacherResourcesPage() {
   const router = useRouter();
-
-  useEffect(() => {}, []);
 
   const handleNavigate = (type: string) => {
     router.push(`/teacher/resources/${type}`);

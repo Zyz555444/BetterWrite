@@ -250,7 +250,7 @@ function ImportModal({
               />
               <p className="text-label-12 text-neutral-8">
                 CSV 格式：<code className="text-neutral-10">name,email,studentNo</code>
-                （表头必须一致），默认密码 123456
+                （表头必须一致），每位学生将生成随机 8 位密码
               </p>
             </div>
 

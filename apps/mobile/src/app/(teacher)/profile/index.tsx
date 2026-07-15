@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
@@ -31,8 +30,6 @@ export default function TeacherProfilePage() {
   const router = useRouter();
   const { colors } = useTheme();
   const { user, isHydrated, logout } = useAuth();
-
-  useEffect(() => {}, []);
 
   const handleLogout = async () => {
     await logout();

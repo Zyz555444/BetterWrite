@@ -62,7 +62,7 @@ export default function AdminQuestionBankPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetcher.listAdminQuestionBank({
+      const res = await fetcher.listAdminQuestions({
         topicType: topicTypeFilter || undefined,
         difficulty: difficultyFilter || undefined,
         limit: 100,

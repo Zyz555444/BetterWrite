@@ -43,8 +43,6 @@ export default function StudentPracticePage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  useEffect(() => {}, []);
-
   useEffect(() => {
     setIsLoadingBank(true);
     setBankError(null);
@@ -52,15 +50,15 @@ export default function StudentPracticePage() {
     if (topicType) params.topicType = topicType;
     if (difficulty) params.difficulty = difficulty;
     fetcher
-      .getQuestionBank(params)
-      .then((res) => {
+      .getQuestions(params)
+      .then((res: Awaited<ReturnType<typeof fetcher.getQuestions>>) => {
         if (res.success && res.data) {
           setQuestions(res.data);
         } else {
           setBankError(res.error ?? '获取题库失败');
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         setBankError(err instanceof Error ? err.message : '获取题库失败');
       })
       .finally(() => setIsLoadingBank(false));

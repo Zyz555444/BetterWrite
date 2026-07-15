@@ -54,13 +54,11 @@ export default function StudentPracticeMockPage() {
     remainingRef.current = remaining;
   }, [remaining]);
 
-  useEffect(() => {}, []);
-
   useEffect(() => {
     setIsLoading(true);
     setLoadError(null);
     fetcher
-      .getQuestionBank({ limit: 50 })
+      .getQuestions({ limit: 50 })
       .then((res) => {
         if (res.success && res.data && res.data.length > 0) {
           const picked = res.data[Math.floor(Math.random() * res.data.length)];

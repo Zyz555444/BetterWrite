@@ -1,0 +1,211 @@
+'use client';
+
+import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { RoleGuard } from '@/components/layout/role-guard';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { type Essay, fetcher } from '@/lib/api/fetcher';
+import { clientLogger } from '@/lib/client-logger';
+import { UserRole, formatScore, getEssayStatusLabel } from '@betterwrite/shared';
+import { FileText, Filter, Search } from 'lucide-react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+
+const statusColors: Record<string, string> = {
+  pending: 'bg-warning/10 text-warning',
+  correcting: 'bg-info/10 text-info',
+  completed: 'bg-success/10 text-success',
+  failed: 'bg-error/10 text-error',
+};
+
+export default function TeacherEssaysPage() {
+  const [essays, setEssays] = useState<Essay[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetcher.listTeacherEssays();
+        if (cancelled) return;
+        if (res.success && res.data) {
+          setEssays(res.data);
+        } else {
+          clientLogger.warn('[TeacherEssays] failed to load essays:', res.error);
+          setError(res.error ?? '获取作文失败');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : '加载失败';
+        clientLogger.error('[TeacherEssays] loadData error:', message);
+        setError(message);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    loadData();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetcher.listTeacherEssays();
+      if (res.success && res.data) {
+        setEssays(res.data);
+      } else {
+        clientLogger.warn('[TeacherEssays] failed to load essays:', res.error);
+        setError(res.error ?? '获取作文失败');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '加载失败';
+      clientLogger.error('[TeacherEssays] loadData error:', message);
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredEssays = useMemo(() => {
+    const list = essays.filter((essay) => {
+      const matchStatus = statusFilter === 'all' || essay.status === statusFilter;
+      const keyword = search.trim().toLowerCase();
+      const matchSearch =
+        !keyword ||
+        (essay.title ?? essay.task?.title ?? '').toLowerCase().includes(keyword) ||
+        (essay.student?.name ?? '').toLowerCase().includes(keyword) ||
+        (essay.student?.studentNo ?? '').toLowerCase().includes(keyword);
+      return matchStatus && matchSearch;
+    });
+    return list;
+  }, [essays, statusFilter, search]);
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+  };
+
+  return (
+    <RoleGuard allowedRoles={[UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN]}>
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-title-24 font-serif font-medium text-neutral-10">批改中心</h1>
+              <p className="text-copy-14 text-neutral-8 mt-1">查看、筛选班级学生提交的作文</p>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                loadData();
+              }}
+            >
+              刷新
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-7" />
+                  <Input
+                    placeholder="搜索学生姓名、学号或作文标题"
+                    value={search}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-neutral-7" />
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => handleStatusChange(e.target.value)}
+                    className="h-10 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
+                  >
+                    <option value="all">全部状态</option>
+                    <option value="pending">等待批改</option>
+                    <option value="correcting">批改中</option>
+                    <option value="completed">已完成</option>
+                    <option value="failed">批改失败</option>
+                  </select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {error && <p className="text-error text-copy-14">{error}</p>}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-title-20 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-accent" />
+                作文列表
+                <span className="text-label-12 font-normal text-neutral-8 ml-2">
+                  共 {filteredEssays.length} 篇
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <p className="text-neutral-8 text-copy-14">加载中...</p>
+              ) : filteredEssays.length === 0 ? (
+                <p className="text-neutral-8 text-copy-14">没有匹配的作文</p>
+              ) : (
+                <ul className="space-y-3">
+                  {filteredEssays.map((essay) => (
+                    <li
+                      key={essay.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-neutral-2 rounded-md"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-neutral-10 truncate">
+                          {essay.title ?? essay.task?.title ?? '未命名作文'}
+                        </p>
+                        <p className="text-label-12 text-neutral-8 mt-1">
+                          {essay.student?.name ?? '未知学生'}
+                          {essay.student?.studentNo ? ` (${essay.student.studentNo})` : ''} ·{' '}
+                          {essay.wordCount} 词 · {new Date(essay.submittedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`text-label-12 px-2 py-0.5 rounded-full ${statusColors[essay.status] ?? 'bg-neutral-3 text-neutral-8'}`}
+                        >
+                          {getEssayStatusLabel(essay.status)}
+                        </span>
+                        {essay.status === 'completed' && (
+                          <span className="text-copy-14 font-medium text-neutral-10">
+                            {formatScore(essay.totalScore)} 分
+                          </span>
+                        )}
+                        <Link href={`/teacher/essays/${essay.id}`}>
+                          <Button variant="ghost" size="sm">
+                            查看
+                          </Button>
+                        </Link>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    </RoleGuard>
+  );
+}

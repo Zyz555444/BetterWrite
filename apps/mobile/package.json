@@ -1,0 +1,48 @@
+{
+  "name": "@betterwrite/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev:mobile": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "build": "echo 'Mobile app uses Expo build, no tsc build step'",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "setup-node-modules": "node scripts/setup-node-modules.js",
+    "prebuild": "node scripts/prepare-workspace.js",
+    "eas-build-pre-install": "node scripts/prepare-eas-build.js",
+    "eas-build-post-build": "node scripts/restore-package-json.js || true"
+  },
+  "dependencies": {
+    "@betterwrite/design-system": "workspace:*",
+    "@betterwrite/shared": "workspace:*",
+    "@expo/vector-icons": "^14.0.2",
+    "@react-native-async-storage/async-storage": "2.1.2",
+    "expo": "^57.0.1",
+    "expo-camera": "~16.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-device": "~7.0.0",
+    "expo-image-picker": "~16.0.0",
+    "expo-notifications": "~0.29.0",
+    "expo-router": "~4.0.17",
+    "expo-secure-store": "~15.0.0",
+    "expo-status-bar": "~2.2.0",
+    "expo-system-ui": "~5.0.0",
+    "expo-updates": "~57.0.6",
+    "react": "^19.0.0",
+    "react-native": "^0.86.0",
+    "react-native-safe-area-context": "5.4.0",
+    "react-native-screens": "~4.10.0",
+    "react-native-svg": "15.11.2",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@betterwrite/tsconfig": "workspace:*",
+    "@biomejs/biome": "^1.9.4",
+    "@types/react": "^19.0.0",
+    "babel-preset-expo": "^57.0.2",
+    "typescript": "^5.7.3"
+  }
+}

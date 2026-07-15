@@ -1,0 +1,61 @@
+# ============================================================
+# BetterWrite 低内存服务器部署覆盖配置
+#
+# 服务器硬件：2核 CPU / 1.9 GB RAM / 12 GB 磁盘
+# 默认 docker-compose.yml 中 web=1G + worker=2G + redis=512M = 3.5G
+# 在本机不可能启动，因此下修内存限制以适配：
+#   - redis:   512M → 256M
+#   - web:     1G   → 512M
+#   - worker:  2G   → 768M (AI 批改推理有压力，可后续升配)
+#   - nginx:   -    → 64M  (使用宝塔反代，可选)
+#
+# 用法：
+#   docker compose --env-file .env.production \
+#     -f docker/docker-compose.yml \
+#     -f docker/docker-compose.lowmem.yml \
+#     up -d
+# ============================================================
+
+services:
+  redis:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  web:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    healthcheck:
+      # SQLite 启动需要更长就绪时间
+      start_period: 60s
+      interval: 30s
+
+  worker:
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
+    healthcheck:
+      start_period: 60s
+      interval: 30s
+
+  migrate:
+    # 限制单次执行时间，避免占位内存累积
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  seed:
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M

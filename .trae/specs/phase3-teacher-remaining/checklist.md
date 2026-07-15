@@ -1,0 +1,31 @@
+- [x] 数据库新增 `teaching_resources` 表，字段完整且与 users 建立 createdBy 外键
+- [x] 数据库新增 `student_tags` 表，对 studentId 加唯一索引
+- [x] 迁移文件已生成并执行成功，新表在 SQLite 中可见
+- [x] `packages/shared` 导出 `TeachingResourceType`、`StudentTag`、`TeachingResource`、`ClassAnalytics`、`StudentAnalytics` 类型
+- [x] `calculateScoreDistribution`、`calculateErrorStats` 工具函数存在且有单元可用性验证
+- [x] `GET /api/teacher/analytics/class/:classId` 返回趋势、分布、高频错误、体裁对比四项数据
+- [x] `GET /api/teacher/analytics/student/:studentId` 返回四维能力、进步曲线、错误分布、近期作文
+- [x] `GET /api/teacher/analytics/class/:classId/export` 可下载 CSV/Excel 文件
+- [x] `GET /api/teacher/students` 支持 classId 与 keyword 参数，返回含标签与统计
+- [x] `GET /api/teacher/students/:id` 返回学生详情与近期作文
+- [x] `POST /api/teacher/students/import` 能正确解析 CSV 并批量创建，失败时返回明细
+- [x] `PATCH /api/teacher/students/:id/tags` 能更新标签并持久化
+- [x] `GET /api/teacher/resources` 支持 type/topicType/difficulty 筛选与分页
+- [x] `POST /api/teacher/resources` 含同类型同名去重校验，冲突返回 409
+- [x] `GET/PATCH/DELETE /api/teacher/resources/:id` 均正常工作
+- [x] 所有新增 API 路由打印 `[API /xxx]` 前缀结构化日志，含 user、关键参数、数量、耗时
+- [x] fetcher 新增 12 个方法，TS 类型完整
+- [x] `/teacher/analytics` 页面展示 4 类图表，空数据时显示空状态
+- [x] `/teacher/analytics/student/[id]` 页面展示雷达图、曲线、饼图、作文列表
+- [x] `/teacher/students` 页面支持筛选、搜索、标签编辑
+- [x] `/teacher/students/[id]` 页面展示学生详情与作文
+- [x] `/teacher/students` 提供 CSV 批量导入入口，含模板下载
+- [x] `/teacher/resources` 页面展示四个分类卡片
+- [x] `/teacher/resources/[type]` 页面支持列表、筛选、搜索、新增
+- [x] 资源新增/编辑弹窗与详情查看组件可用
+- [x] 图表组件（Line/Bar/Radar/Pie）独立可用，样式符合 Yohaku Design System
+- [x] 侧边栏教师导航含「数据分析」「教学资源」，顺序正确
+- [x] 所有新前端页面在交互处打印 `[TeacherXxx]` 前缀日志
+- [x] 教师账号登录后可完整访问 5 个新页面，无运行时错误
+- [x] CSV 导入导出流程端到端验证通过
+- [x] Biome lint 通过，无 type error

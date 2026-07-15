@@ -1,0 +1,19 @@
+CREATE INDEX `users_school_idx` ON `users` (`school_id`);--> statement-breakpoint
+CREATE INDEX `users_role_idx` ON `users` (`role`);--> statement-breakpoint
+CREATE INDEX `class_enrollments_class_idx` ON `class_enrollments` (`class_id`);--> statement-breakpoint
+CREATE INDEX `class_enrollments_user_idx` ON `class_enrollments` (`user_id`);--> statement-breakpoint
+CREATE INDEX `class_enrollments_role_idx` ON `class_enrollments` (`role`);--> statement-breakpoint
+CREATE INDEX `classes_school_idx` ON `classes` (`school_id`);--> statement-breakpoint
+CREATE INDEX `classes_teacher_idx` ON `classes` (`teacher_id`);--> statement-breakpoint
+CREATE INDEX `corrections_essay_idx` ON `corrections` (`essay_id`);--> statement-breakpoint
+CREATE INDEX `api_call_logs_endpoint_idx` ON `api_call_logs` (`endpoint`);--> statement-breakpoint
+CREATE INDEX `api_call_logs_status_idx` ON `api_call_logs` (`status`);--> statement-breakpoint
+CREATE INDEX `api_configs_provider_idx` ON `api_configs` (`provider`);--> statement-breakpoint
+CREATE INDEX `api_configs_active_idx` ON `api_configs` (`is_active`);--> statement-breakpoint
+CREATE INDEX `teaching_resources_creator_idx` ON `teaching_resources` (`created_by`);--> statement-breakpoint
+CREATE INDEX `teaching_resources_type_idx` ON `teaching_resources` (`type`);--> statement-breakpoint
+CREATE INDEX `student_tags_tag_idx` ON `student_tags` (`tag`);--> statement-breakpoint
+CREATE INDEX `question_bank_topic_type_idx` ON `question_bank` (`topic_type`);--> statement-breakpoint
+CREATE INDEX `question_bank_difficulty_idx` ON `question_bank` (`difficulty`);--> statement-breakpoint
+CREATE INDEX `announcements_target_role_idx` ON `announcements` (`target_role`);--> statement-breakpoint
+CREATE INDEX `announcements_active_idx` ON `announcements` (`is_active`);

@@ -1,0 +1,47 @@
+{
+  "name": "betterwrite",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BetterWrite — 深圳中考英语作文AI辅导系统",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:mobile": "turbo run dev:mobile",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "db:generate": "turbo run db:generate",
+    "db:migrate": "turbo run db:migrate",
+    "db:seed": "turbo run db:seed",
+    "db:studio": "turbo run db:studio"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@commitlint/cli": "^19.7.1",
+    "@commitlint/config-conventional": "^19.7.1",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "2.1.8",
+    "lefthook": "^1.10.10",
+    "ssh2": "^1.17.0",
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.3",
+    "vitest": "2.1.8"
+  },
+  "packageManager": "pnpm@10.0.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@biomejs/biome",
+      "esbuild",
+      "lefthook",
+      "msgpackr-extract",
+      "sharp"
+    ]
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  }
+}

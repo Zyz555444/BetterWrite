@@ -1,0 +1,1 @@
+ALTER TABLE `corrections` ADD COLUMN `topic_adherence_score` real;

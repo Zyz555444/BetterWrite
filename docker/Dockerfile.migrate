@@ -1,0 +1,30 @@
+FROM node:24-alpine AS base
+
+RUN corepack enable && corepack prepare pnpm@10.0.0 --activate
+
+FROM base AS runner
+WORKDIR /app
+
+COPY --chown=node:node package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json .npmrc ./
+COPY --chown=node:node packages ./packages
+
+# Use --no-frozen-lockfile to avoid lockfile issues in Docker build context
+RUN pnpm install --no-frozen-lockfile
+
+RUN mkdir -p /app/data && chown -R node:node /app/data /app/packages
+
+RUN printf '%s\n' \
+  '#!/bin/sh' \
+  'for i in 1 2 3; do' \
+  '  echo "Migration attempt $i..."' \
+  '  pnpm turbo run db:migrate && exit 0' \
+  '  sleep 5' \
+  'done' \
+  'echo "Migration failed after 3 attempts"' \
+  'exit 1' > /app/migrate.sh \
+  && chmod +x /app/migrate.sh \
+  && chown -R node:node /app
+
+USER node
+
+CMD ["/app/migrate.sh"]

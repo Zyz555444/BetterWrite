@@ -1,0 +1,36 @@
+{
+  "name": "@betterwrite/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "default": "./dist/providers/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "biome check .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@betterwrite/shared": "workspace:*",
+    "ai": "^7.0.11",
+    "@ai-sdk/deepseek": "^3.0.3",
+    "@ai-sdk/openai": "^4.0.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@betterwrite/tsconfig": "workspace:*",
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.7.3"
+  }
+}

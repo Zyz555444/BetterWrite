@@ -1,0 +1,332 @@
+'use client';
+
+import { BarChart, LineChart } from '@/components/charts';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { fetcher } from '@/lib/api/fetcher';
+import type { TeacherClass } from '@/lib/api/server';
+import { clientLogger } from '@/lib/client-logger';
+import {
+  type ClassAnalytics,
+  formatScore,
+  getErrorTypeLabel,
+  getTopicTypeLabel,
+} from '@betterwrite/shared';
+import {
+  AlertCircle,
+  BarChart3,
+  Download,
+  FileText,
+  School,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+interface AnalyticsClientProps {
+  initialClasses: TeacherClass[];
+  initialAnalytics: ClassAnalytics | null;
+  initialClassId: string;
+  initialError: string | null;
+}
+
+export function AnalyticsClient({
+  initialClasses,
+  initialAnalytics,
+  initialClassId,
+  initialError,
+}: AnalyticsClientProps) {
+  const [classes] = useState<TeacherClass[]>(initialClasses);
+  const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId);
+  const [analytics, setAnalytics] = useState<ClassAnalytics | null>(initialAnalytics);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [error, setError] = useState<string | null>(initialError);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const analyticsRequestRef = useRef(0);
+
+  const loadAnalytics = useCallback(async (classId: string) => {
+    if (!classId) return;
+    const requestId = ++analyticsRequestRef.current;
+    setIsLoadingAnalytics(true);
+    setError(null);
+    try {
+      const res = await fetcher.getClassAnalytics(classId);
+      if (requestId !== analyticsRequestRef.current) return;
+      if (res.success && res.data) {
+        setAnalytics(res.data);
+      } else {
+        clientLogger.warn('[TeacherAnalytics] getClassAnalytics failed:', res.error);
+        setError(res.error ?? '获取班级分析数据失败');
+        setAnalytics(null);
+      }
+    } catch (err) {
+      if (requestId !== analyticsRequestRef.current) return;
+      const message = err instanceof Error ? err.message : '加载失败';
+      clientLogger.error('[TeacherAnalytics] getClassAnalytics error:', message);
+      setError(message);
+      setAnalytics(null);
+    } finally {
+      if (requestId === analyticsRequestRef.current) setIsLoadingAnalytics(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedClassId && selectedClassId !== initialClassId) {
+      loadAnalytics(selectedClassId);
+    }
+  }, [selectedClassId, initialClassId, loadAnalytics]);
+
+  const handleClassChange = (value: string) => {
+    setSelectedClassId(value);
+  };
+
+  const handleExport = async () => {
+    if (!selectedClassId) return;
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      await fetcher.exportClassAnalytics(selectedClassId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '导出失败';
+      clientLogger.error('[TeacherAnalytics] export error:', message);
+      setExportError(message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const selectedClass = useMemo(
+    () => classes.find((c) => c.id === selectedClassId),
+    [classes, selectedClassId],
+  );
+
+  const scoreTrendData = useMemo(
+    () =>
+      (analytics?.scoreTrend ?? []).map((item) => ({
+        label: item.taskTitle,
+        value: item.averageScore,
+      })),
+    [analytics],
+  );
+
+  const scoreDistData = useMemo(
+    () =>
+      (analytics?.scoreDistribution ?? []).map((item) => ({
+        label: item.range,
+        value: item.count,
+      })),
+    [analytics],
+  );
+
+  const topicTypeData = useMemo(
+    () =>
+      (analytics?.topicTypeComparison ?? []).map((item) => ({
+        label: getTopicTypeLabel(item.topicType),
+        value: item.averageScore,
+      })),
+    [analytics],
+  );
+
+  const topErrors = analytics?.topErrors ?? [];
+  const maxErrorCount = useMemo(
+    () => topErrors.reduce((max, e) => Math.max(max, e.count), 0) || 1,
+    [topErrors],
+  );
+
+  const stats = useMemo(() => {
+    return [
+      {
+        label: '班级人数',
+        value: isLoadingAnalytics ? '-' : String(analytics?.totalStudents ?? 0),
+        icon: <Users className="w-4 h-4" />,
+      },
+      {
+        label: '作文总数',
+        value: isLoadingAnalytics ? '-' : String(analytics?.totalEssays ?? 0),
+        icon: <FileText className="w-4 h-4" />,
+      },
+      {
+        label: '平均分',
+        value: isLoadingAnalytics ? '-' : formatScore(analytics?.averageScore ?? null),
+        icon: <BarChart3 className="w-4 h-4" />,
+      },
+      {
+        label: '任务数',
+        value: isLoadingAnalytics ? '-' : String(analytics?.scoreTrend?.length ?? 0),
+        icon: <TrendingUp className="w-4 h-4" />,
+      },
+    ];
+  }, [analytics, isLoadingAnalytics]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-title-24 font-serif font-medium text-neutral-10">数据分析</h1>
+          <p className="text-copy-14 text-neutral-8 mt-1">
+            查看班级作文成绩分布、错误类型与体裁对比
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={handleExport}
+          disabled={!selectedClassId || isExporting}
+        >
+          <Download className="w-4 h-4 mr-2" />
+          {isExporting ? '导出中...' : '导出 CSV'}
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-2">
+              <School className="w-4 h-4 text-accent" />
+              <span className="text-copy-14 font-medium text-neutral-10">选择班级</span>
+            </div>
+            <select
+              value={selectedClassId}
+              onChange={(e) => handleClassChange(e.target.value)}
+              className="h-10 flex-1 rounded-md ring-1 ring-border bg-paper px-3 text-copy-14 text-neutral-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-all duration-fast ease-yohaku"
+            >
+              {classes.length === 0 ? (
+                <option value="">暂无任教班级</option>
+              ) : (
+                classes.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    {cls.grade} · {cls.name}（{cls.studentCount} 人）
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+          {exportError && <p className="text-error text-label-12 mt-3">{exportError}</p>}
+        </CardContent>
+      </Card>
+
+      {error && (
+        <div className="flex items-center gap-2 text-error text-copy-14">
+          <AlertCircle className="w-4 h-4" />
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat) => (
+          <Card key={stat.label}>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-copy-14 font-medium text-neutral-8">
+                {stat.label}
+              </CardTitle>
+              <span className="text-neutral-7">{stat.icon}</span>
+            </CardHeader>
+            <CardContent>
+              <p className="text-title-28 font-medium text-neutral-10">{stat.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {selectedClass && (
+        <p className="text-label-12 text-neutral-7">
+          当前班级：{selectedClass.grade} · {selectedClass.name}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-title-20 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-accent" />
+              平均分趋势
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingAnalytics ? (
+              <p className="text-neutral-8 text-copy-14 h-[200px] flex items-center">加载中...</p>
+            ) : (
+              <LineChart data={scoreTrendData} height={220} color="var(--accent)" />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-title-20 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-accent" />
+              分数段分布
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingAnalytics ? (
+              <p className="text-neutral-8 text-copy-14 h-[200px] flex items-center">加载中...</p>
+            ) : (
+              <BarChart data={scoreDistData} height={220} color="var(--accent)" />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-title-20 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-accent" />
+              高频错误 Top 10
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingAnalytics ? (
+              <p className="text-neutral-8 text-copy-14">加载中...</p>
+            ) : topErrors.length === 0 ? (
+              <p className="text-neutral-8 text-copy-14">暂无数据</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {topErrors.slice(0, 10).map((err, i) => (
+                  <li key={`${err.type}-${i}`} className="space-y-1">
+                    <div className="flex items-center justify-between text-copy-14">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-neutral-7 tabular-nums w-5 shrink-0">{i + 1}</span>
+                        <Badge variant="secondary" className="shrink-0">
+                          {getErrorTypeLabel(err.type)}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 text-neutral-8 tabular-nums">
+                        <span>{err.count} 次</span>
+                        <span className="text-neutral-7">{err.percentage}%</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full bg-neutral-2 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-accent rounded-full"
+                        style={{ width: `${(err.count / maxErrorCount) * 100}%` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-title-20 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-accent" />
+              体裁平均分对比
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoadingAnalytics ? (
+              <p className="text-neutral-8 text-copy-14 h-[220px] flex items-center">加载中...</p>
+            ) : (
+              <BarChart data={topicTypeData} height={220} color="var(--accent)" />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

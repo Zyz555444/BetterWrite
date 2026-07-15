@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "BetterWrite",
+    "slug": "betterwrite",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "betterwrite",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#fefefb"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.betterwrite.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "BetterWrite 需要相机权限以拍照识别手写作文",
+        "NSPhotoLibraryUsageDescription": "BetterWrite 需要相册权限以选择作文照片",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.betterwrite.app",
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": ["expo-router", "expo-camera", "expo-notifications"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "https://api.cosky.top",
+      "easProjectId": "",
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "d9524f93-f889-44d5-80fc-3dbc2aa56c93"
+      }
+    },
+    "owner": "codesky",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d9524f93-f889-44d5-80fc-3dbc2aa56c93"
+    }
+  }
+}

@@ -13,7 +13,7 @@ import type {
   ErrorBookItem,
   EssayDraft,
   PracticeExercise,
-  QuestionItem,
+  QuestionBankItem,
   SchoolStats,
   SchoolWithStats,
   StudentProgress,
@@ -346,12 +346,12 @@ export const fetcher = {
     if (params?.offset !== undefined) query.set('offset', String(params.offset));
     if (params?.limit !== undefined) query.set('limit', String(params.limit));
     const qs = query.toString();
-    return request<ApiResponse<QuestionItem[]>>(
+    return request<ApiResponse<QuestionBankItem[]>>(
       `/api/student/question-bank${qs ? `?${qs}` : ''}`,
     );
   },
   getQuestion: (id: string) =>
-    request<ApiResponse<QuestionItem>>(`/api/student/question-bank/${id}`),
+    request<ApiResponse<QuestionBankItem>>(`/api/student/question-bank/${id}`),
   submitPractice: (data: {
     questionId?: string;
     content: string;
@@ -555,7 +555,7 @@ export const fetcher = {
     if (params?.offset !== undefined) query.set('offset', String(params.offset));
     if (params?.limit !== undefined) query.set('limit', String(params.limit));
     const qs = query.toString();
-    return request<ApiResponse<QuestionItem[]>>(
+    return request<ApiResponse<QuestionBankItem[]>>(
       `/api/admin/question-bank${qs ? `?${qs}` : ''}`,
     );
   },

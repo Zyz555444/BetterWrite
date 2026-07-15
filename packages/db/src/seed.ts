@@ -3,11 +3,24 @@ import bcrypt from 'bcryptjs';
 import { db } from './index.js';
 import { classEnrollments, classes, essayTasks, schools, users } from './schema/index.js';
 
+function generateRandomPassword(length = 10): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
 async function seed() {
   console.log('🌱 Seeding database...');
 
   const now = new Date().toISOString();
-  const passwordHash = await bcrypt.hash('admin123', 10);
+  const superAdminPassword = generateRandomPassword();
+  const schoolAdminPassword = generateRandomPassword();
+  const teacherPassword = generateRandomPassword();
+  const studentPassword = generateRandomPassword();
+
+  const superAdminHash = await bcrypt.hash(superAdminPassword, 10);
+  const schoolAdminHash = await bcrypt.hash(schoolAdminPassword, 10);
+  const teacherHash = await bcrypt.hash(teacherPassword, 10);
+  const studentHash = await bcrypt.hash(studentPassword, 10);
 
   const schoolId = randomUUID();
   const superAdminId = randomUUID();
@@ -33,7 +46,7 @@ async function seed() {
       {
         id: superAdminId,
         email: 'superadmin@betterwrite.cn',
-        passwordHash,
+        passwordHash: superAdminHash,
         name: '超级管理员',
         role: 'super_admin',
         createdAt: now,
@@ -42,7 +55,7 @@ async function seed() {
       {
         id: schoolAdminId,
         email: 'admin@school.com',
-        passwordHash,
+        passwordHash: schoolAdminHash,
         name: '学校管理员',
         role: 'school_admin',
         schoolId,
@@ -52,7 +65,7 @@ async function seed() {
       {
         id: teacherId,
         email: 'teacher@school.com',
-        passwordHash,
+        passwordHash: teacherHash,
         name: '张老师',
         role: 'teacher',
         schoolId,
@@ -62,7 +75,7 @@ async function seed() {
       {
         id: studentId,
         email: 'student@school.com',
-        passwordHash,
+        passwordHash: studentHash,
         name: '李同学',
         role: 'student',
         schoolId,
@@ -110,10 +123,10 @@ async function seed() {
   });
 
   console.log('✅ Seed completed');
-  console.log('  Super Admin: superadmin@betterwrite.cn / admin123');
-  console.log('  School Admin: admin@school.com / admin123');
-  console.log('  Teacher: teacher@school.com / admin123');
-  console.log('  Student: student@school.com / admin123');
+  console.log(`  Super Admin: superadmin@betterwrite.cn / ${superAdminPassword}`);
+  console.log(`  School Admin: admin@school.com / ${schoolAdminPassword}`);
+  console.log(`  Teacher: teacher@school.com / ${teacherPassword}`);
+  console.log(`  Student: student@school.com / ${studentPassword}`);
 }
 
 seed().catch((error) => {

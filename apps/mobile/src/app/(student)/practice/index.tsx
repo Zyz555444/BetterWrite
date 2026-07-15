@@ -46,8 +46,6 @@ export default function StudentPracticePage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
-  useEffect(() => {}, []);
-
   useEffect(() => {
     setIsLoadingBank(true);
     setBankError(null);
@@ -55,7 +53,7 @@ export default function StudentPracticePage() {
     if (topicType) params.topicType = topicType;
     if (difficulty) params.difficulty = difficulty;
     fetcher
-      .getQuestionBank(params)
+      .getQuestions(params)
       .then((res) => {
         if (res.success && res.data) {
           setQuestions(res.data);

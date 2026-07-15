@@ -441,7 +441,7 @@ export const fetcher = {
   },
 
   // ----- Question bank & practice -----
-  getQuestionBank: (params?: {
+  getQuestions: (params?: {
     topicType?: string;
     difficulty?: string;
     offset?: number;

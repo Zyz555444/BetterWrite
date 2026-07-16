@@ -382,6 +382,9 @@ app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSche
     return c.json({ success: false, error: weakErr }, 400);
   }
 
+  // Bug #200: findFirst+insert 是 TOCTOU 竞态，两个并发请求都读到 null → 都 INSERT
+  // → 第二次被 users.email UNIQUE 拦截抛 500。改为先尝试 INSERT 并捕获 UNIQUE 冲突
+  // 转为 409。
   const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (existing) {
     return c.json({ success: false, error: '该邮箱已被注册' }, 409);
@@ -411,16 +414,25 @@ app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSche
     schoolId = school.id;
   }
 
-  await db.insert(users).values({
-    id: userId,
-    email,
-    passwordHash,
-    name,
-    role,
-    schoolId,
-    createdAt: now,
-    updatedAt: now,
-  });
+  try {
+    await db.insert(users).values({
+      id: userId,
+      email,
+      passwordHash,
+      name,
+      role,
+      schoolId,
+      createdAt: now,
+      updatedAt: now,
+    });
+  } catch (insertErr) {
+    const msg = insertErr instanceof Error ? insertErr.message : String(insertErr);
+    if (/UNIQUE.*users_email|users\.email/i.test(msg) || /UNIQUE.*constraint/i.test(msg)) {
+      routesLogger.warn({ email: email }, '[API /auth/register] duplicate email race');
+      return c.json({ success: false, error: '该邮箱已被注册' }, 409);
+    }
+    throw insertErr;
+  }
 
   if (classCode && schoolId) {
     const classRecord = await db.query.classes.findFirst({
@@ -687,31 +699,40 @@ const deviceTokenSchema = z.object({
   platform: z.enum(['ios', 'android']),
 });
 
-app.post('/auth/device-token', authMiddleware, zValidator('json', deviceTokenSchema), async (c) => {
-  const user = c.get('user');
-  const { token, platform } = c.req.valid('json');
-  routesLogger.info({ userId: user.id, platform: platform }, '[API /auth/device-token]');
-  const now = new Date().toISOString();
+app.post(
+  '/auth/device-token',
+  // Bug #202: 注册设备无 rateLimit + 之前 findFirst+insert 是 TOCTOU 竞态。
+  // 限制 10/min + 50/day（每用户绑定设备数量本就有限）。
+  rateLimit(10, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
+  authMiddleware,
+  zValidator('json', deviceTokenSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { token, platform } = c.req.valid('json');
+    routesLogger.info({ userId: user.id, platform: platform }, '[API /auth/device-token]');
+    const now = new Date().toISOString();
 
-  const existing = await db.query.deviceTokens.findFirst({
-    where: and(eq(deviceTokens.userId, user.id), eq(deviceTokens.token, token)),
-  });
+    // Bug #202 续: 改用 onConflictDoUpdate 原子 upsert，避免并发注册同 token
+    // 触发两个 INSERT（device_tokens 已有 uniqueIndex(userId, token) 约束）。
+    await db
+      .insert(deviceTokens)
+      .values({
+        id: randomUUID(),
+        userId: user.id,
+        token,
+        platform,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [deviceTokens.userId, deviceTokens.token],
+        set: { updatedAt: now },
+      });
 
-  if (existing) {
-    await db.update(deviceTokens).set({ updatedAt: now }).where(eq(deviceTokens.id, existing.id));
-  } else {
-    await db.insert(deviceTokens).values({
-      id: randomUUID(),
-      userId: user.id,
-      token,
-      platform,
-      createdAt: now,
-      updatedAt: now,
-    });
-  }
-
-  return c.json({ success: true });
-});
+    return c.json({ success: true });
+  },
+);
 
 // ========== OCR ==========
 // Next.js App Router API route body 上限 ~4.5MB；base64 膨胀约 4/3，限制为 4MB base64 ≈ 3MB 原图。
@@ -2228,6 +2249,10 @@ const tagSchema = z.object({
 
 app.patch(
   '/teacher/students/:id/tags',
+  // Bug #203: 打标无 rateLimit + 之前 findFirst+insert 是 TOCTOU 竞态。
+  // 限制 30/min + 500/day（一个班 30-50 人，频繁调重也不应超 500）。
+  rateLimit(30, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   zValidator('json', tagSchema),
@@ -2248,24 +2273,21 @@ app.patch(
     }
 
     const now = new Date().toISOString();
-    const existing = await db.query.studentTags.findFirst({
-      where: eq(studentTags.studentId, studentId),
-    });
-
-    if (existing) {
-      await db
-        .update(studentTags)
-        .set({ tag, updatedBy: user.id, updatedAt: now })
-        .where(eq(studentTags.id, existing.id));
-    } else {
-      await db.insert(studentTags).values({
+    // Bug #203 续: 改用 onConflictDoUpdate 原子 upsert（student_tags.studentId
+    // 有 unique 约束），避免并发打标触发 UNIQUE 冲突。
+    await db
+      .insert(studentTags)
+      .values({
         id: randomUUID(),
         studentId,
         tag,
         updatedBy: user.id,
         updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: studentTags.studentId,
+        set: { tag, updatedBy: user.id, updatedAt: now },
       });
-    }
 
     const duration = Date.now() - start;
     routesLogger.info(
@@ -2335,6 +2357,9 @@ const resourceSchema = z.object({
 
 app.post(
   '/teacher/resources',
+  // Bug #201: 资源创建无 rateLimit；teacher 脚本失控或前端 bug 可批量刷资源。
+  rateLimit(20, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   zValidator('json', resourceSchema),
@@ -2347,37 +2372,72 @@ app.post(
       '[API POST /teacher/resources]',
     );
 
-    // 去重校验
-    const existing = await db.query.teachingResources.findFirst({
-      where: and(eq(teachingResources.type, data.type), eq(teachingResources.title, data.title)),
-    });
-    if (existing) {
+    const now = new Date().toISOString();
+    const id = randomUUID();
+    // Bug #201 续: 之前 findFirst+insert 是 TOCTOU 竞态——两个并发请求都通过
+    // findFirst 检查，又都成功 INSERT。teaching_resources 表目前没有 (type, title)
+    // 的 UNIQUE 约束（加 unique index 需要 DB 迁移），所以必须在事务里包住。
+    // better-sqlite3 同一进程事务是串行的（SQLite 写锁），所以事务内 findFirst
+    // 之后另一个并发请求会被阻塞直到本次提交，第二次进入事务时 findFirst 就能
+    // 看到上一笔记录，从而返回 409。
+    type ResourceRow = typeof teachingResources.$inferSelect;
+    let resource: ResourceRow | null = null;
+    let duplicate: { id: string } | null = null;
+    try {
+      const result = await db.transaction(async (tx) => {
+        // 用 tx.select 而非 tx.query，兼容 Drizzle 0.38 中 tx 对象的 query API 行为。
+        const existingRows = await tx
+          .select({ id: teachingResources.id })
+          .from(teachingResources)
+          .where(
+            and(
+              eq(teachingResources.type, data.type),
+              eq(teachingResources.title, data.title),
+            ),
+          )
+          .limit(1);
+        if (existingRows.length > 0) {
+          return { resource: null, duplicate: { id: existingRows[0]!.id } } as const;
+        }
+        const [row] = await tx
+          .insert(teachingResources)
+          .values({
+            id,
+            type: data.type,
+            title: data.title,
+            topicType: data.topicType ?? null,
+            difficulty: data.difficulty,
+            content: data.content,
+            highlights: data.highlights,
+            tags: JSON.stringify(data.tags),
+            createdBy: user.id,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+        return { resource: row, duplicate: null } as const;
+      });
+      resource = result.resource;
+      duplicate = result.duplicate;
+    } catch (txErr) {
+      // 事务回滚后抛出统一 500，避免泄漏内部错误。
+      routesLogger.error(
+        { err: txErr instanceof Error ? txErr.message : 'unknown' },
+        '[API POST /teacher/resources] transaction error',
+      );
+      return c.json({ success: false, error: '创建资源失败' }, 500);
+    }
+
+    if (duplicate) {
       routesLogger.warn(
         { userId: user.id, type: data.type, title: data.title },
         '[API POST /teacher/resources] duplicate title',
       );
       return c.json({ success: false, error: '该类型下已存在同名资源' }, 409);
     }
-
-    const now = new Date().toISOString();
-    const id = randomUUID();
-    const [resource] = await db
-      .insert(teachingResources)
-      .values({
-        id,
-        type: data.type,
-        title: data.title,
-        topicType: data.topicType ?? null,
-        difficulty: data.difficulty,
-        content: data.content,
-        highlights: data.highlights,
-        tags: JSON.stringify(data.tags),
-        createdBy: user.id,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning();
-
+    if (!resource) {
+      return c.json({ success: false, error: '创建资源失败' }, 500);
+    }
     const duration = Date.now() - start;
     routesLogger.info(
       { id: resource.id, duration: duration },
@@ -3735,15 +3795,32 @@ app.post(
   },
 );
 
-app.delete('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
-  const user = c.get('user');
-  const taskId = c.req.param('taskId');
-  routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId DELETE]');
-  await db
-    .delete(essayDrafts)
-    .where(and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)));
-  return c.json({ success: true });
-});
+app.delete(
+  '/student/drafts/:taskId',
+  // Bug #204: 删草稿无 rateLimit + 不存在也返 success，导致脚本可狂点接口浪费
+  // DB 资源并让前端无法区分。限制 10/min + 50/day。
+  rateLimit(10, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
+    const user = c.get('user');
+    const taskId = c.req.param('taskId');
+    routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId DELETE]');
+    // 先校验存在性，避免"删了不存在的草稿"也返 success 的问题。
+    const existing = await db.query.essayDrafts.findFirst({
+      where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
+      columns: { id: true },
+    });
+    if (!existing) {
+      return c.json({ success: false, error: '草稿不存在' }, 404);
+    }
+    await db
+      .delete(essayDrafts)
+      .where(and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)));
+    return c.json({ success: true });
+  },
+);
 
 // ========== Admin: Dashboard ==========
 app.get('/admin/dashboard/stats', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
@@ -3944,23 +4021,34 @@ app.post(
     try {
       // Bug #95: 规范化 code（trim + 大写），避免同一所学校因大小写重复或前后空格产生重复记录。
       const code = body.code.trim().toUpperCase();
-      const existing = await db.query.schools.findFirst({ where: eq(schools.code, code) });
-      if (existing) {
-        return c.json({ success: false, error: '学校代码已存在' }, 409);
-      }
       const now = new Date().toISOString();
       const id = randomUUID();
-      await db.insert(schools).values({
-        id,
-        code,
-        name: body.name,
-        region: body.region,
-        contactName: body.contactName ?? null,
-        contactPhone: body.contactPhone ?? null,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      });
+      // Bug #200 续: schools.code 有 UNIQUE 约束，findFirst+insert 仍可能并发双写
+      // （两个 admin 同时提交都通过 findFirst 检查，第二次 INSERT 抛 UNIQUE 5xx）。
+      // 改为直接 INSERT 并捕获 UNIQUE 冲突，错误转 409。
+      try {
+        await db.insert(schools).values({
+          id,
+          code,
+          name: body.name,
+          region: body.region,
+          contactName: body.contactName ?? null,
+          contactPhone: body.contactPhone ?? null,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      } catch (insertErr) {
+        const msg = insertErr instanceof Error ? insertErr.message : String(insertErr);
+        if (/UNIQUE.*schools_code|schools\.code/i.test(msg) || /UNIQUE.*constraint/i.test(msg)) {
+          routesLogger.warn(
+            { code: code },
+            '[API /admin/schools POST] duplicate code race',
+          );
+          return c.json({ success: false, error: '学校代码已存在' }, 409);
+        }
+        throw insertErr;
+      }
       routesLogger.info(
         { duration: Date.now() - startedAt, id: id },
         '[API /admin/schools POST] exit',
@@ -4010,18 +4098,32 @@ app.put(
       const normalizedCode =
         body.code !== undefined ? body.code.trim().toUpperCase() : undefined;
       const now = new Date().toISOString();
-      await db
-        .update(schools)
-        .set({
-          ...(normalizedCode !== undefined && { code: normalizedCode }),
-          ...(body.name !== undefined && { name: body.name }),
-          ...(body.region !== undefined && { region: body.region }),
-          ...(body.contactName !== undefined && { contactName: body.contactName }),
-          ...(body.contactPhone !== undefined && { contactPhone: body.contactPhone }),
-          ...(body.isActive !== undefined && { isActive: body.isActive }),
-          updatedAt: now,
-        })
-        .where(eq(schools.id, id));
+      // Bug #200 续: 同样可能并发两 admin 都通过 findFirst 检查（dup 查不到），
+      // 然后都 UPDATE，第二次抛 UNIQUE 5xx。捕获并转 409。
+      try {
+        await db
+          .update(schools)
+          .set({
+            ...(normalizedCode !== undefined && { code: normalizedCode }),
+            ...(body.name !== undefined && { name: body.name }),
+            ...(body.region !== undefined && { region: body.region }),
+            ...(body.contactName !== undefined && { contactName: body.contactName }),
+            ...(body.contactPhone !== undefined && { contactPhone: body.contactPhone }),
+            ...(body.isActive !== undefined && { isActive: body.isActive }),
+            updatedAt: now,
+          })
+          .where(eq(schools.id, id));
+      } catch (updateErr) {
+        const msg = updateErr instanceof Error ? updateErr.message : String(updateErr);
+        if (/UNIQUE.*schools_code|schools\.code/i.test(msg) || /UNIQUE.*constraint/i.test(msg)) {
+          routesLogger.warn(
+            { id: id, code: normalizedCode },
+            '[API /admin/schools/:id PUT] duplicate code race',
+          );
+          return c.json({ success: false, error: '学校代码已存在' }, 409);
+        }
+        throw updateErr;
+      }
       routesLogger.info({ duration: Date.now() - startedAt }, '[API /admin/schools/:id PUT] exit');
       return c.json({ success: true });
     } catch (err) {

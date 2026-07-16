@@ -458,19 +458,27 @@ app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSche
   );
 });
 
-app.post('/auth/logout', authMiddleware, async (c) => {
-  // Bug #53: 用 lucia.readSessionCookie 解析 cookie header，避免自己写 regex 漏掉
-  // URL 编码、引号、空格等边界情况。
-  const cookieHeader = c.req.header('cookie');
-  const sessionId = lucia.readSessionCookie(cookieHeader ?? '');
-  if (sessionId) {
-    await lucia.invalidateSession(sessionId);
-  }
-  const sessionCookie = lucia.createBlankSessionCookie();
-  return c.json({ success: true }, 200, {
-    'Set-Cookie': sessionCookie.serialize(),
-  });
-});
+// Bug #192: /auth/logout 无 rateLimit，被登录状态可被刷废 DB session 表 + 写日志风暴。
+// 限制 10/min + 50/day（正常用户不会一天登出 50 次）。
+app.post(
+  '/auth/logout',
+  rateLimit(10, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
+    // Bug #53: 用 lucia.readSessionCookie 解析 cookie header，避免自己写 regex 漏掉
+    // URL 编码、引号、空格等边界情况。
+    const cookieHeader = c.req.header('cookie');
+    const sessionId = lucia.readSessionCookie(cookieHeader ?? '');
+    if (sessionId) {
+      await lucia.invalidateSession(sessionId);
+    }
+    const sessionCookie = lucia.createBlankSessionCookie();
+    return c.json({ success: true }, 200, {
+      'Set-Cookie': sessionCookie.serialize(),
+    });
+  },
+);
 
 const passwordChangeSchema = z.object({
   currentPassword: z.string().min(1, '请输入当前密码'),
@@ -1042,6 +1050,9 @@ const essayReviewSchema = z
 
 app.put(
   '/essays/:id/review',
+  // Bug #199: 教师复核作文无 rateLimit，可被脚本反复触发写库。
+  rateLimit(30, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   zValidator('json', essayReviewSchema),
@@ -1327,6 +1338,9 @@ app.post(
 
 app.put(
   '/tasks/:id/publish',
+  // Bug #198: publish/close 缺限流；教师脚本失控可反复切状态。
+  rateLimit(20, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -1366,6 +1380,9 @@ app.put(
 
 app.put(
   '/tasks/:id/close',
+  // Bug #198: 同 publish，加 20/min + 200/day。
+  rateLimit(20, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -2798,21 +2815,30 @@ app.get('/student/errors/:type', authMiddleware, requireRole(UserRole.STUDENT), 
   return c.json({ success: true, data: list });
 });
 
-app.post('/student/errors/:id/master', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
-  const user = c.get('user');
-  const id = c.req.param('id');
-  const now = new Date().toISOString();
-  routesLogger.info({ userId: user.id, id: id }, '[API /student/errors/:id/master]');
-  const existing = await db.query.errorBooks.findFirst({
-    where: and(eq(errorBooks.id, id), eq(errorBooks.studentId, user.id)),
-  });
-  if (!existing) return c.json({ success: false, error: '错题不存在' }, 404);
-  await db
-    .update(errorBooks)
-    .set({ status: 'mastered', masteredAt: now, updatedAt: now })
-    .where(eq(errorBooks.id, id));
-  return c.json({ success: true, data: { studentId: user.id, id, status: 'mastered' } });
-});
+// Bug #191: 标"掌握"无 rateLimit，脚本可无限点击错题本制造 update 风暴。
+// 限制 10/min + 200/day（与 /student/drafts 一致）。
+app.post(
+  '/student/errors/:id/master',
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    const now = new Date().toISOString();
+    routesLogger.info({ userId: user.id, id: id }, '[API /student/errors/:id/master]');
+    const existing = await db.query.errorBooks.findFirst({
+      where: and(eq(errorBooks.id, id), eq(errorBooks.studentId, user.id)),
+    });
+    if (!existing) return c.json({ success: false, error: '错题不存在' }, 404);
+    await db
+      .update(errorBooks)
+      .set({ status: 'mastered', masteredAt: now, updatedAt: now })
+      .where(eq(errorBooks.id, id));
+    return c.json({ success: true, data: { studentId: user.id, id, status: 'mastered' } });
+  },
+);
 
 // ========== Student AI Assistant ==========
 const aiPolishBodySchema = z.object({
@@ -2823,7 +2849,10 @@ app.post(
   '/student/ai/polish',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  // Bug #173: 只有 5/min 没有 day-level 限流，学生可日调用 7200 次（5*60*24），
+  // AI 单次成本高（≥1k tokens）。加 30/day 与 /student/errors/practice 对齐。
   rateLimit(5, 60_000),
+  rateLimit(30, 24 * 60 * 60_000),
   zValidator('json', aiPolishBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -2879,7 +2908,9 @@ app.post(
   '/student/ai/upgrade',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  // Bug #173: 同 polish，5/min 缺 day-level 限流；加 30/day。
   rateLimit(5, 60_000),
+  rateLimit(30, 24 * 60 * 60_000),
   zValidator('json', aiUpgradeBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -2937,7 +2968,9 @@ app.post(
   '/student/ai/synonym',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  // Bug #173: 同 polish/upgrade，加 30/day。
   rateLimit(5, 60_000),
+  rateLimit(30, 24 * 60 * 60_000),
   zValidator('json', aiSynonymBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -2994,7 +3027,9 @@ app.post(
   '/student/ai/grammar',
   authMiddleware,
   requireRole(UserRole.STUDENT),
+  // Bug #173: 同其他 AI 助手，5/min 缺 day-level 限流；加 30/day。
   rateLimit(5, 60_000),
+  rateLimit(30, 24 * 60 * 60_000),
   zValidator('json', aiGrammarBodySchema),
   async (c) => {
     const user = c.get('user');
@@ -3170,9 +3205,15 @@ app.post(
     const now = new Date().toISOString();
     let question = null;
     if (questionId) {
+      // Bug #171: 之前不校验 isPublic，若 admin 后续创建私有题目，学生可直接用其 ID
+      // 触发 AI 批改并把 questionId 写入 practice_exercises，未来 admin 查学生历史
+      // 时私有题会通过 questionId 泄露。防御性加 isPublic=1。
       question = await db.query.questionBank.findFirst({
-        where: eq(questionBank.id, questionId),
+        where: and(eq(questionBank.id, questionId), eq(questionBank.isPublic, 1)),
       });
+      if (!question) {
+        return c.json({ success: false, error: '题目不存在' }, 404);
+      }
     }
     const router = getAiRouter();
     let feedback: GrammarResult = { errors: [] };
@@ -3657,35 +3698,30 @@ app.post(
       return c.json({ success: false, error: '无权保存该任务的草稿' }, 403);
     }
 
-    const existing = await db.query.essayDrafts.findFirst({
-      where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
-    });
-    let row: typeof essayDrafts.$inferSelect;
-    if (existing) {
-      [row] = await db
-        .update(essayDrafts)
-        .set({
+    // Bug #172: 之前 findFirst → insert/update 存在 TOCTOU 竞态：两个并发请求
+    // 都读到空 existing → 都尝试 INSERT → 第二次被 UNIQUE(studentId, taskId) 拦截抛
+    // 500 错误。改为基于 uniqueIndex 的 INSERT ... ON CONFLICT DO UPDATE 原子 upsert。
+    const [row] = await db
+      .insert(essayDrafts)
+      .values({
+        id: randomUUID(),
+        studentId: user.id,
+        taskId,
+        content,
+        wordCount: wordCount ?? null,
+        durationMs: durationMs ?? null,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [essayDrafts.studentId, essayDrafts.taskId],
+        set: {
           content,
           wordCount: wordCount ?? null,
           durationMs: durationMs ?? null,
           updatedAt: now,
-        })
-        .where(eq(essayDrafts.id, existing.id))
-        .returning();
-    } else {
-      [row] = await db
-        .insert(essayDrafts)
-        .values({
-          id: randomUUID(),
-          studentId: user.id,
-          taskId,
-          content,
-          wordCount: wordCount ?? null,
-          durationMs: durationMs ?? null,
-          updatedAt: now,
-        })
-        .returning();
-    }
+        },
+      })
+      .returning();
     const data: EssayDraft = {
       id: row.id,
       studentId: row.studentId,

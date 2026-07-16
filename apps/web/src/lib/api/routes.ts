@@ -393,8 +393,22 @@ app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSche
 
   let schoolId: string | null = null;
   if (schoolCode) {
-    const school = await db.query.schools.findFirst({ where: eq(schools.code, schoolCode) });
-    if (school) schoolId = school.id;
+    // Bug #128 + #129: 之前 schoolCode 任意值都被静默忽略，导致：
+    // 1) 用户以为已加入学校，实际孤儿用户
+    // 2) 停用学校（isActive=false）仍能被人注册进去
+    // 改为：先按 code（统一大写）查学校；不存在/停用/未传 classCode 但 class 找不到都返回 400。
+    const normalizedCode = schoolCode.trim().toUpperCase();
+    const school = await db.query.schools.findFirst({
+      where: eq(schools.code, normalizedCode),
+      columns: { id: true, isActive: true },
+    });
+    if (!school) {
+      return c.json({ success: false, error: '学校代码不存在' }, 400);
+    }
+    if (!school.isActive) {
+      return c.json({ success: false, error: '学校已停用，无法注册' }, 400);
+    }
+    schoolId = school.id;
   }
 
   await db.insert(users).values({
@@ -539,57 +553,83 @@ const tokenLoginSchema = z.object({
   deviceName: z.string().optional(),
 });
 
-app.post('/auth/token', rateLimit(10, 60_000), zValidator('json', tokenLoginSchema), async (c) => {
-  // Bug #55: 邮箱小写规范化；Bug #49: 假用户不存在时也走一次 bcrypt 假比对，
-  // 让响应时长不可用于枚举有效邮箱。
-  const raw = c.req.valid('json');
-  const { platform, deviceName } = raw;
-  const email = raw.email.toLowerCase().trim();
-  const password = raw.password;
-  routesLogger.info({ email: email, platform: platform }, '[API /auth/token]');
+app.post(
+  '/auth/token',
+  // Bug #131: 移动端 token 登录的限流比 /auth/login 宽松（10/min），对移动端
+  // 攻击者相当于绕过；收紧到 5/min + 30/day，与 /auth/login 一致。
+  rateLimit(5, 60_000),
+  rateLimit(30, 24 * 60 * 60_000),
+  zValidator('json', tokenLoginSchema),
+  async (c) => {
+    // Bug #55: 邮箱小写规范化；Bug #49: 假用户不存在时也走一次 bcrypt 假比对，
+    // 让响应时长不可用于枚举有效邮箱。
+    const raw = c.req.valid('json');
+    const { platform, deviceName } = raw;
+    const email = raw.email.toLowerCase().trim();
+    const password = raw.password;
+    routesLogger.info({ email: email, platform: platform }, '[API /auth/token]');
 
-  const DUMMY_HASH =
-    '$2a$10$CwTycUXWue0Thq9StjUM0uJ8jG4dNiQB2nCsjC/9o7RXh2v7Z8g6u';
-  const user = await db.query.users.findFirst({ where: eq(users.email, email) });
-  const hashToCompare = user?.passwordHash ?? DUMMY_HASH;
-  const passwordValid = await bcrypt.compare(password, hashToCompare);
+    // Bug #130: 移动端 token 登录必须复用 #123 渐进式锁定，否则攻击者只需
+    // 切换到 /auth/token 即可绕过对 /auth/login 的失败计数。
+    const lockKey = `login:${email}`;
+    const lockState = isLoginLocked(lockKey);
+    if (lockState.locked) {
+      return c.json(
+        {
+          success: false,
+          error: `登录失败次数过多，请 ${Math.ceil(lockState.retryAfterSec / 60)} 分钟后再试`,
+        },
+        429,
+        { 'Retry-After': String(lockState.retryAfterSec) },
+      );
+    }
 
-  if (!user || !user.isActive || !passwordValid) {
-    return c.json({ success: false, error: '邮箱或密码错误' }, 401);
-  }
+    const DUMMY_HASH =
+      '$2a$10$CwTycUXWue0Thq9StjUM0uJ8jG4dNiQB2nCsjC/9o7RXh2v7Z8g6u';
+    const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+    const hashToCompare = user?.passwordHash ?? DUMMY_HASH;
+    const passwordValid = await bcrypt.compare(password, hashToCompare);
 
-  const now = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
-  const token = randomUUID();
+    if (!user || !user.isActive || !passwordValid) {
+      // Bug #130: 同样记录失败次数，统一与 /auth/login 的失败窗口合并。
+      recordLoginFailure(lockKey);
+      return c.json({ success: false, error: '邮箱或密码错误' }, 401);
+    }
+    clearLoginFailures(lockKey);
 
-  await db.insert(apiTokens).values({
-    id: randomUUID(),
-    userId: user.id,
-    token,
-    platform,
-    deviceName: deviceName ?? null,
-    expiresAt,
-    lastUsedAt: now,
-    createdAt: now,
-  });
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+    const token = randomUUID();
 
-  await db.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id));
-
-  routesLogger.info({ userId: user.id }, '[API /auth/token] login success');
-  return c.json({
-    success: true,
-    data: {
+    await db.insert(apiTokens).values({
+      id: randomUUID(),
+      userId: user.id,
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        schoolId: user.schoolId,
+      platform,
+      deviceName: deviceName ?? null,
+      expiresAt,
+      lastUsedAt: now,
+      createdAt: now,
+    });
+
+    await db.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id));
+
+    routesLogger.info({ userId: user.id }, '[API /auth/token] login success');
+    return c.json({
+      success: true,
+      data: {
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          schoolId: user.schoolId,
+        },
       },
-    },
-  });
-});
+    });
+  },
+);
 
 app.get('/auth/tokens', authMiddleware, async (c) => {
   const user = c.get('user');
@@ -688,47 +728,55 @@ app.post(
 );
 
 // ========== Notifications ==========
-app.post('/notifications/test', authMiddleware, async (c) => {
-  const user = c.get('user');
-  routesLogger.info({ userId: user.id }, '[API /notifications/test]');
+app.post(
+  '/notifications/test',
+  // Bug #133: 测试推送无 rateLimit，攻击者可点爆 Expo 推送配额/被计费。
+  // 限制 3/min + 20/day。
+  rateLimit(3, 60_000),
+  rateLimit(20, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
+    const user = c.get('user');
+    routesLogger.info({ userId: user.id }, '[API /notifications/test]');
 
-  const tokens = await db.query.deviceTokens.findMany({
-    where: eq(deviceTokens.userId, user.id),
-  });
+    const tokens = await db.query.deviceTokens.findMany({
+      where: eq(deviceTokens.userId, user.id),
+    });
 
-  if (tokens.length === 0) {
-    return c.json({ success: false, error: '未注册推送设备' }, 400);
-  }
+    if (tokens.length === 0) {
+      return c.json({ success: false, error: '未注册推送设备' }, 400);
+    }
 
-  const expoAccessToken = process.env.EXPO_ACCESS_TOKEN;
-  if (!expoAccessToken) {
-    return c.json({ success: false, error: '推送服务未配置' }, 503);
-  }
+    const expoAccessToken = process.env.EXPO_ACCESS_TOKEN;
+    if (!expoAccessToken) {
+      return c.json({ success: false, error: '推送服务未配置' }, 503);
+    }
 
-  const messages = tokens.map((t) => ({
-    to: t.token,
-    title: 'BetterWrite 测试推送',
-    body: '这是一条测试推送通知',
-    sound: 'default' as const,
-  }));
+    const messages = tokens.map((t) => ({
+      to: t.token,
+      title: 'BetterWrite 测试推送',
+      body: '这是一条测试推送通知',
+      sound: 'default' as const,
+    }));
 
-  const res = await fetch('https://exp.host/--/api/v2/push/send', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${expoAccessToken}`,
-    },
-    body: JSON.stringify(messages),
-  });
+    const res = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${expoAccessToken}`,
+      },
+      body: JSON.stringify(messages),
+    });
 
-  if (!res.ok) {
-    routesLogger.error({ status: res.status }, '[API /notifications/test] push failed');
-    return c.json({ success: false, error: '推送发送失败' }, 500);
-  }
+    if (!res.ok) {
+      routesLogger.error({ status: res.status }, '[API /notifications/test] push failed');
+      return c.json({ success: false, error: '推送发送失败' }, 500);
+    }
 
-  routesLogger.info({ userId: user.id, sent: messages.length }, '[API /notifications/test]');
-  return c.json({ success: true, data: { sent: messages.length } });
-});
+    routesLogger.info({ userId: user.id, sent: messages.length }, '[API /notifications/test]');
+    return c.json({ success: true, data: { sent: messages.length } });
+  },
+);
 
 // ========== Essays ==========
 // 作文内容最大 50KB（远超过正常 200 词作文的 1KB 上限，足够覆盖附件/格式但拦截 DoS）。
@@ -833,12 +881,23 @@ app.post(
       );
     }
 
-    // 将状态重置为 pending，并清空旧的 correctionId 引用，避免 correction 表残留孤儿。
+    // Bug #141: 之前先 read 再 write 无原子保证，并发两次 retry 都会读到 'failed'
+    // 然后都入队，导致同一篇作文在 worker 队列里出现两次。
+    // 改为：UPDATE 仅在 status='failed' 时才落 status='pending'，影响 0 行说明
+    // 被并发抢占，立即放弃入队。
     const now = new Date().toISOString();
-    await db
+    const claim = await db
       .update(essays)
       .set({ status: 'pending', updatedAt: now, correctedAt: null })
-      .where(eq(essays.id, id));
+      .where(and(eq(essays.id, id), eq(essays.status, 'failed')))
+      .returning({ id: essays.id });
+
+    if (claim.length === 0) {
+      return c.json(
+        { success: false, error: '该作文已被其他操作重试或状态已变更' },
+        409,
+      );
+    }
 
     await addCorrectionJob(id);
 
@@ -1172,6 +1231,8 @@ app.post(
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   rateLimit(5, 60_000),
+  // Bug #134: AI 生成题目单次成本高（≥1k tokens），加 50/day 防止误用/滥用把预算打光。
+  rateLimit(50, 24 * 60 * 60_000),
   zValidator('json', aiTopicGenerateSchema),
   async (c) => {
     const user = c.get('user');
@@ -2582,10 +2643,13 @@ app.post('/student/errors/sync', authMiddleware, requireRole(UserRole.STUDENT), 
   return c.json({ success: true, data: { synced } });
 });
 
-const errorPracticeBodySchema = z.object({ errorType: z.string().min(1) });
+const errorPracticeBodySchema = z.object({ errorType: z.string().min(1).max(50) });
 
 app.post(
   '/student/errors/practice',
+  // Bug #127: 学生可无限调用 AI 生成练习，限制 5/min + 30/day 防滥用/超预算。
+  rateLimit(5, 60_000),
+  rateLimit(30, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.STUDENT),
   zValidator('json', errorPracticeBodySchema),
@@ -3412,6 +3476,17 @@ app.get('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT)
   const user = c.get('user');
   const taskId = c.req.param('taskId');
   routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId GET]');
+  // Bug #132 续: 读取草稿同样需要校验学生在该 task 所属班级。
+  // 任务不存在/学生未在班级 → 返回空草稿（与未写过草稿一致），避免泄露任务存在性。
+  const task = await db.query.essayTasks.findFirst({
+    where: eq(essayTasks.id, taskId),
+    columns: { id: true, classId: true },
+  });
+  if (!task) return c.json({ success: true, data: null });
+  const enrolled = await db.query.classEnrollments.findFirst({
+    where: and(eq(classEnrollments.classId, task.classId), eq(classEnrollments.userId, user.id)),
+  });
+  if (!enrolled) return c.json({ success: true, data: null });
   const draft = await db.query.essayDrafts.findFirst({
     where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
   });
@@ -3445,6 +3520,24 @@ app.post(
     const { content, wordCount, durationMs } = c.req.valid('json');
     const now = new Date().toISOString();
     routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId POST]');
+
+    // Bug #132: 之前没有校验学生是否在 task 所属班级。学生可以传入任意 taskId
+    // 写一篇"草稿"（也可能成为以后 getDraft 时的越权读取向量）；
+    // 改为：必须先存在该 task 且学生在其 classId 中已 enrollment。
+    const task = await db.query.essayTasks.findFirst({
+      where: eq(essayTasks.id, taskId),
+      columns: { id: true, classId: true },
+    });
+    if (!task) {
+      return c.json({ success: false, error: '作文任务不存在' }, 404);
+    }
+    const enrolled = await db.query.classEnrollments.findFirst({
+      where: and(eq(classEnrollments.classId, task.classId), eq(classEnrollments.userId, user.id)),
+    });
+    if (!enrolled) {
+      return c.json({ success: false, error: '无权保存该任务的草稿' }, 403);
+    }
+
     const existing = await db.query.essayDrafts.findFirst({
       where: and(eq(essayDrafts.studentId, user.id), eq(essayDrafts.taskId, taskId)),
     });
@@ -3678,6 +3771,9 @@ app.get('/admin/schools', authMiddleware, requireRole(UserRole.SUPER_ADMIN), asy
 
 app.post(
   '/admin/schools',
+  // Bug #136: 学校创建无 rateLimit；admin 失误可瞬间塞几百条。
+  rateLimit(10, 60_000),
+  rateLimit(100, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', schoolCreateSchema),
@@ -4108,6 +4204,20 @@ app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), as
   // 真正的长期保留策略应在 worker 中加 retention 任务定期清理（> 90 天）。
   const offset = parseNonNegativeInt(c.req.query('offset'), 0);
   const limit = parsePositiveInt(c.req.query('limit'), 50, 500);
+
+  // Bug #137: dateFrom > dateTo 时整段 SQL 必然返回 0，但前端会误以为没有数据；
+  // 解析为可比较的时间字符串后显式拒绝，提示用户修正。
+  if (dateFrom && dateTo) {
+    const fromMs = Date.parse(dateFrom);
+    const toMs = Date.parse(dateTo);
+    if (Number.isFinite(fromMs) && Number.isFinite(toMs) && fromMs > toMs) {
+      return c.json(
+        { success: false, error: 'dateFrom 不能晚于 dateTo' },
+        400,
+      );
+    }
+  }
+
   routesLogger.info(
     {
       userId: user.id,
@@ -4216,6 +4326,9 @@ app.get('/admin/announcements', authMiddleware, requireRole(UserRole.SUPER_ADMIN
 
 app.post(
   '/admin/announcements',
+  // Bug #135: 公告发布无 rateLimit；脚本/admin 失误可能批量刷屏。加 10/min + 200/day。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', announcementCreateSchema),

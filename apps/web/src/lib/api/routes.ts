@@ -143,6 +143,21 @@ async function assertStudentAccess(user: AuthUser, studentId: string): Promise<b
   return false;
 }
 
+// Bug #109: 多个 endpoint 直接 Number(query ?? '50') 在传入 ?limit=abc 时得到 NaN，
+// 会导致 DB 报错或被 LIMIT NaN 静默忽略。这里集中处理并兜底。
+function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
+  if (!value) return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.floor(n), max);
+}
+function parseNonNegativeInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.floor(n);
+}
+
 // ========== Health ==========
 app.get('/health', async (c) => {
   const timestamp = new Date().toISOString();
@@ -187,12 +202,80 @@ const loginSchema = z.object({
   password: z.string().min(1, '请输入密码'),
 });
 
+// Bug #123: 渐进式登录失败锁定 —— 同一 email 在 15 分钟窗口内连续失败 5 次，
+// 锁定 15 分钟，防止攻击者无限次尝试常见密码。
+const LOGIN_FAIL_WINDOW_MS = 15 * 60_000;
+const LOGIN_FAIL_THRESHOLD = 5;
+const LOGIN_LOCKOUT_MS = 15 * 60_000;
+interface LoginFailEntry {
+  count: number;
+  windowStart: number;
+  lockedUntil: number;
+}
+const loginFailStore = new Map<string, LoginFailEntry>();
+
+// 周期性清理过期记录，避免 map 无限增长。
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of loginFailStore) {
+    if (entry.lockedUntil <= now && now - entry.windowStart > LOGIN_FAIL_WINDOW_MS) {
+      loginFailStore.delete(key);
+    }
+  }
+}, 5 * 60_000).unref();
+
+function getLoginFailEntry(key: string): LoginFailEntry {
+  const now = Date.now();
+  let entry = loginFailStore.get(key);
+  if (!entry || now - entry.windowStart > LOGIN_FAIL_WINDOW_MS) {
+    entry = { count: 0, windowStart: now, lockedUntil: 0 };
+    loginFailStore.set(key, entry);
+  }
+  return entry;
+}
+
+function isLoginLocked(key: string): { locked: true; retryAfterSec: number } | { locked: false } {
+  const entry = loginFailStore.get(key);
+  if (!entry || entry.lockedUntil === 0) return { locked: false };
+  const now = Date.now();
+  if (entry.lockedUntil > now) {
+    return { locked: true, retryAfterSec: Math.ceil((entry.lockedUntil - now) / 1000) };
+  }
+  return { locked: false };
+}
+
+function recordLoginFailure(key: string): void {
+  const entry = getLoginFailEntry(key);
+  entry.count += 1;
+  if (entry.count >= LOGIN_FAIL_THRESHOLD) {
+    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+  }
+}
+
+function clearLoginFailures(key: string): void {
+  loginFailStore.delete(key);
+}
+
 app.post('/auth/login', rateLimit(10, 60_000), zValidator('json', loginSchema), async (c) => {
   // Bug #55: 邮箱小写规范化；Bug #49: 在 db 查询前先做一次 bcrypt 假比对，保证
   // 即便用户不存在也走过一次 bcrypt cost，规避攻击者通过响应时差枚举有效邮箱。
   const raw = c.req.valid('json');
   const email = raw.email.toLowerCase().trim();
   const password = raw.password;
+
+  // Bug #123: 渐进式锁定检查 —— 失败次数过多时直接返回 429，避免无限试错。
+  const lockKey = `login:${email}`;
+  const lockState = isLoginLocked(lockKey);
+  if (lockState.locked) {
+    return c.json(
+      {
+        success: false,
+        error: `登录失败次数过多，请 ${Math.ceil(lockState.retryAfterSec / 60)} 分钟后再试`,
+      },
+      429,
+      { 'Retry-After': String(lockState.retryAfterSec) },
+    );
+  }
 
   const DUMMY_HASH =
     '$2a$10$CwTycUXWue0Thq9StjUM0uJ8jG4dNiQB2nCsjC/9o7RXh2v7Z8g6u';
@@ -201,8 +284,14 @@ app.post('/auth/login', rateLimit(10, 60_000), zValidator('json', loginSchema), 
   const passwordValid = await bcrypt.compare(password, hashToCompare);
 
   if (!user || !user.isActive || !passwordValid) {
+    // Bug #123: 同样记录失败次数，无论用户是否存在（让 attacker 无法用
+    // "邮箱不存在" 与 "密码错误" 的差异推断有效账户）。
+    recordLoginFailure(lockKey);
     return c.json({ success: false, error: '邮箱或密码错误' }, 401);
   }
+
+  // 登录成功，清除失败计数。
+  clearLoginFailures(lockKey);
 
   const session = await lucia.createSession(user.id, {});
   const sessionCookie = lucia.createSessionCookie(session.id);
@@ -230,10 +319,50 @@ app.post('/auth/login', rateLimit(10, 60_000), zValidator('json', loginSchema), 
   );
 });
 
+// Bug #126: 弱密码黑名单，常见弱密码必须拒绝（即便长度合规）。
+const WEAK_PASSWORDS = new Set([
+  'password',
+  'password1',
+  '12345678',
+  '123456789',
+  '1234567890',
+  'qwerty12',
+  'qwerty123',
+  'abc12345',
+  'iloveyou1',
+  'admin123',
+  'welcome1',
+  'monkey123',
+  'football1',
+  'letmein12',
+  '1q2w3e4r',
+  'sunshine1',
+  'princess1',
+  'betterwrite',
+  'betterwrite1',
+  'better1234',
+]);
+
+function assertNotWeakPassword(password: string): string | null {
+  if (WEAK_PASSWORDS.has(password.toLowerCase())) {
+    return '密码过于简单，请使用包含字母与数字的更强组合';
+  }
+  // 必须同时包含字母与数字
+  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+    return '密码必须同时包含字母与数字';
+  }
+  return null;
+}
+
 const registerSchema = z.object({
   email: z.string().email('请输入有效邮箱'),
   password: z.string().min(8, '密码至少8位'),
-  name: z.string().min(1, '请输入姓名'),
+  // Bug #121: 限长 + 过滤控制字符，避免 XSS 向量与排版错乱；后续会再过一道 DOMPurify。
+  name: z
+    .string()
+    .min(1, '请输入姓名')
+    .max(100, '姓名过长')
+    .regex(/^[^\u0000-\u001f\u007f]+$/, '姓名包含非法控制字符'),
   // Bug #44: 仅允许注册学生角色；教师/学校管理员必须由 super_admin 后台创建，
   // 防止任何人通过公开注册接口越权获取教师身份。
   role: z.literal(UserRole.STUDENT).default(UserRole.STUDENT),
@@ -246,6 +375,12 @@ app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSche
   const raw = c.req.valid('json');
   const { password, name, role, schoolCode, classCode } = raw;
   const email = raw.email.toLowerCase().trim();
+
+  // Bug #126: 弱密码黑名单
+  const weakErr = assertNotWeakPassword(password);
+  if (weakErr) {
+    return c.json({ success: false, error: weakErr }, 400);
+  }
 
   const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (existing) {
@@ -354,6 +489,12 @@ app.put(
 
     if (currentPassword === newPassword) {
       return c.json({ success: false, error: '新密码不能与当前密码相同' }, 400);
+    }
+
+    // Bug #126: 改密也走弱密码校验
+    const weakErr = assertNotWeakPassword(newPassword);
+    if (weakErr) {
+      return c.json({ success: false, error: weakErr }, 400);
     }
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
@@ -1854,7 +1995,11 @@ app.post(
         results.push({ line: i + 1, name: '', email: '', success: false, error: '字段不足' });
         continue;
       }
-      const [name, email, studentNo] = parts;
+      const [rawName, rawEmail, rawStudentNo] = parts;
+      // Bug #120: 邮箱做小写 + trim 规范化；Bug #121: name 限长防止 XSS 攻击向量/排版错乱。
+      const name = (rawName ?? '').slice(0, 100);
+      const email = (rawEmail ?? '').toLowerCase().trim();
+      const studentNo = (rawStudentNo ?? '').slice(0, 50);
       if (!name || !email) {
         results.push({
           line: i + 1,
@@ -1867,32 +2012,37 @@ app.post(
       }
 
       try {
-        const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
-        if (existing) {
-          results.push({
-            line: i + 1,
-            name,
-            email,
-            success: false,
-            error: '邮箱已存在',
-          });
-          continue;
-        }
-
+        // Bug #122: 之前只查 users.findFirst 做软去重，并发导入同邮箱会双写；
+        // 改为先尝试 INSERT 并捕获 users.email UNIQUE 冲突转为"邮箱已存在"错误。
         const userId = randomUUID();
         const password = generateRandomPassword();
         const passwordHash = await bcrypt.hash(password, 10);
-        await db.insert(users).values({
-          id: userId,
-          email,
-          passwordHash,
-          name,
-          role: UserRole.STUDENT,
-          schoolId: cls.schoolId,
-          studentNo: studentNo || null,
-          createdAt: now,
-          updatedAt: now,
-        });
+        try {
+          await db.insert(users).values({
+            id: userId,
+            email,
+            passwordHash,
+            name,
+            role: UserRole.STUDENT,
+            schoolId: cls.schoolId,
+            studentNo: studentNo || null,
+            createdAt: now,
+            updatedAt: now,
+          });
+        } catch (insertErr) {
+          const msg = insertErr instanceof Error ? insertErr.message : String(insertErr);
+          if (/UNIQUE.*users_email|users\.email/i.test(msg) || msg.includes('UNIQUE')) {
+            results.push({
+              line: i + 1,
+              name,
+              email,
+              success: false,
+              error: '邮箱已存在',
+            });
+            continue;
+          }
+          throw insertErr;
+        }
         await db.insert(classEnrollments).values({
           id: randomUUID(),
           classId,
@@ -1996,7 +2146,7 @@ app.get(
     const type = c.req.query('type');
     const topicType = c.req.query('topicType');
     const difficulty = c.req.query('difficulty');
-    const limit = Number(c.req.query('limit') ?? '50');
+    const limit = parsePositiveInt(c.req.query('limit'), 50, 200);
     const start = Date.now();
     routesLogger.info(
       {
@@ -2019,7 +2169,6 @@ app.get(
       limit: Math.min(limit, 200),
       with: { creator: { columns: { id: true, name: true } } },
     });
-
     const duration = Date.now() - start;
     routesLogger.info(
       { userId: user.id, returning: list.length, duration: duration },
@@ -2235,12 +2384,23 @@ async function syncStudentErrorBook(studentId: string): Promise<number> {
     where: eq(errorBooks.studentId, studentId),
     columns: { correctionId: true, original: true },
   });
-  const seen = new Set<string>();
-  for (const e of existing) {
-    if (e.correctionId) seen.add(`${e.correctionId}::${e.original}`);
-  }
+  // Bug #114: 原用 `${correctionId}::${original}` 字符串拼接，original 包含 `::` 会冲突；
+  // 改为键以 JSON 字符串作为 set key，规避拼接碰撞。
+  const seen = new Set<string>(existing.map((e) => JSON.stringify([e.correctionId, e.original])));
   const now = new Date().toISOString();
-  let synced = 0;
+  const newRows: Array<{
+    id: string;
+    studentId: string;
+    essayId: string;
+    correctionId: string;
+    errorType: string;
+    original: string;
+    corrected: string;
+    explanation: string | null;
+    status: 'unresolved';
+    createdAt: string;
+    updatedAt: string;
+  }> = [];
   for (const essay of completedEssays) {
     const correction = essay.correction;
     if (!correction) continue;
@@ -2259,10 +2419,10 @@ async function syncStudentErrorBook(studentId: string): Promise<number> {
         explanation?: string;
       };
       if (!err.type || !err.original || !err.corrected) continue;
-      const key = `${correction.id}::${err.original}`;
+      const key = JSON.stringify([correction.id, err.original]);
       if (seen.has(key)) continue;
       seen.add(key);
-      await db.insert(errorBooks).values({
+      newRows.push({
         id: randomUUID(),
         studentId,
         essayId: essay.id,
@@ -2275,10 +2435,14 @@ async function syncStudentErrorBook(studentId: string): Promise<number> {
         createdAt: now,
         updatedAt: now,
       });
-      synced++;
     }
   }
-  return synced;
+  // Bug #94: 之前每条 error 一次 INSERT，100 个错误就是 100 次 round-trip；
+  // 改为单次 batch insert（支持 SQLite 多值 VALUES）。
+  if (newRows.length > 0) {
+    await db.insert(errorBooks).values(newRows);
+  }
+  return newRows.length;
 }
 
 const ACHIEVEMENT_CATALOG = [
@@ -2334,11 +2498,22 @@ const ACHIEVEMENT_CATALOG = [
 ];
 
 // ========== Student Error Book ==========
+// Bug #124: 之前 /student/errors 每次 list 都会调一次 syncStudentErrorBook 跑全量 JOIN
+// + JSON 解析 + N+1 INSERT（已优化为 batch insert，见 Bug #94）。但即便这样，每次
+// 列表仍会触发整张 corrections × errorBooks 扫描。改为：30s 内的重复请求跳过 sync。
+const studentErrorSyncCache = new Map<string, number>(); // studentId -> lastSyncedAt(ms)
+const STUDENT_ERROR_SYNC_TTL_MS = 30_000;
+
 app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const start = Date.now();
   routesLogger.info({ userId: user.id }, '[API /student/errors]');
-  await syncStudentErrorBook(user.id);
+  const now = Date.now();
+  const lastSync = studentErrorSyncCache.get(user.id) ?? 0;
+  if (now - lastSync >= STUDENT_ERROR_SYNC_TTL_MS) {
+    await syncStudentErrorBook(user.id);
+    studentErrorSyncCache.set(user.id, now);
+  }
   const all = await db.query.errorBooks.findMany({
     where: eq(errorBooks.studentId, user.id),
     orderBy: desc(errorBooks.createdAt),
@@ -2397,6 +2572,8 @@ app.post('/student/errors/sync', authMiddleware, requireRole(UserRole.STUDENT), 
   const start = Date.now();
   routesLogger.info({ userId: user.id }, '[API /student/errors/sync]');
   const synced = await syncStudentErrorBook(user.id);
+  // Bug #124: 主动 sync 也要刷新缓存，避免下一次 list 又走一遍。
+  studentErrorSyncCache.set(user.id, Date.now());
   const duration = Date.now() - start;
   routesLogger.info(
     { userId: user.id, synced: synced, duration: duration },
@@ -2450,8 +2627,8 @@ app.post(
 app.get('/student/errors/:type', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const type = c.req.param('type');
-  const offset = Number(c.req.query('offset') ?? '0');
-  const limit = Number(c.req.query('limit') ?? '20');
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+  const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
   routesLogger.info(
     { userId: user.id, type: type, offset: offset, limit: limit },
     '[API /student/errors/:type]',
@@ -2712,8 +2889,8 @@ app.post(
 
 app.get('/student/ai/history', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
-  const offset = Number(c.req.query('offset') ?? '0');
-  const limit = Number(c.req.query('limit') ?? '20');
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+  const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
   const mode = c.req.query('mode');
   routesLogger.info(
     { userId: user.id, offset: offset, limit: limit, mode: mode ?? 'all' },
@@ -2747,8 +2924,8 @@ app.get('/student/question-bank', authMiddleware, requireRole(UserRole.STUDENT),
   const user = c.get('user');
   const topicType = c.req.query('topicType');
   const difficulty = c.req.query('difficulty');
-  const offset = Number(c.req.query('offset') ?? '0');
-  const limit = Number(c.req.query('limit') ?? '20');
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+  const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
   routesLogger.info(
     { userId: user.id, topicType: topicType ?? 'all', difficulty: difficulty ?? 'all' },
     '[API /student/question-bank]',
@@ -2815,6 +2992,9 @@ const practiceBodySchema = z.object({
 
 app.post(
   '/student/practice',
+  // Bug #93: 学生可无限提交 practice 触发 AI 调用（语法检查），加 10/min + 100/day 限制。
+  rateLimit(10, 60_000),
+  rateLimit(100, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.STUDENT),
   zValidator('json', practiceBodySchema),
@@ -2877,6 +3057,9 @@ app.post(
 
 app.post(
   '/student/practice/deep',
+  // Bug #93: deep practice 直接入队 essay 批改，限制 3/min + 20/day 防滥用。
+  rateLimit(3, 60_000),
+  rateLimit(20, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.STUDENT),
   zValidator('json', practiceBodySchema),
@@ -2912,8 +3095,8 @@ app.post(
 
 app.get('/student/practice/history', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
-  const offset = Number(c.req.query('offset') ?? '0');
-  const limit = Number(c.req.query('limit') ?? '20');
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+  const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
   routesLogger.info(
     { userId: user.id, offset: offset, limit: limit },
     '[API /student/practice/history]',
@@ -2950,6 +3133,9 @@ app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), asyn
   const user = c.get('user');
   const start = Date.now();
   routesLogger.info({ userId: user.id }, '[API /student/progress]');
+  // Bug #119: 之前硬编码 limit:200，活跃学生单次拉满 200 条作文会触发深 N+1（每条带
+  // correction JOIN），且响应体过大。这里维持 200 上限（满足进度曲线/雷达图的统计
+  // 需求），但加上明确注释并按 completedAt 倒序；后续可改为分页 / 物化视图。
   const studentEssays = await db.query.essays.findMany({
     where: eq(essays.studentId, user.id),
     with: { correction: true },
@@ -3056,6 +3242,8 @@ app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), 
   });
   const earnedMap = new Map(earned.map((a) => [a.code, a]));
   const earnedCodes = new Set(earned.map((a) => a.code));
+  // Bug #119: 硬编码 limit:200 与 /student/progress 同样的考量 —— 满足成就统计的近因
+  // 窗口即可，无需分页；显式注释后续可切换为物化视图或按需增量。
   const studentEssays = await db.query.essays.findMany({
     where: eq(essays.studentId, user.id),
     with: { correction: true },
@@ -3399,8 +3587,8 @@ app.get('/admin/schools', authMiddleware, requireRole(UserRole.SUPER_ADMIN), asy
   const user = c.get('user');
   const startedAt = Date.now();
   const region = c.req.query('region');
-  const offset = Number(c.req.query('offset') ?? '0');
-  const limit = Number(c.req.query('limit') ?? '50');
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+  const limit = parsePositiveInt(c.req.query('limit'), 50, 200);
   routesLogger.info(
     { userId: user.id, region: region ?? 'all', offset: offset, limit: limit },
     '[API /admin/schools]',
@@ -3503,7 +3691,9 @@ app.post(
     );
 
     try {
-      const existing = await db.query.schools.findFirst({ where: eq(schools.code, body.code) });
+      // Bug #95: 规范化 code（trim + 大写），避免同一所学校因大小写重复或前后空格产生重复记录。
+      const code = body.code.trim().toUpperCase();
+      const existing = await db.query.schools.findFirst({ where: eq(schools.code, code) });
       if (existing) {
         return c.json({ success: false, error: '学校代码已存在' }, 409);
       }
@@ -3511,7 +3701,7 @@ app.post(
       const id = randomUUID();
       await db.insert(schools).values({
         id,
-        code: body.code,
+        code,
         name: body.name,
         region: body.region,
         contactName: body.contactName ?? null,
@@ -3552,11 +3742,24 @@ app.put(
       if (!existing) {
         return c.json({ success: false, error: '学校不存在' }, 404);
       }
+      // Bug #106: 改 code 时未做唯一性校验，两所学校可拥有相同 code，违反业务唯一性。
+      if (body.code !== undefined && body.code !== existing.code) {
+        // Bug #95: 同样的规范化规则，保证 POST/PUT 的 code 形态一致。
+        const code = body.code.trim().toUpperCase();
+        if (code !== existing.code) {
+          const dup = await db.query.schools.findFirst({ where: eq(schools.code, code) });
+          if (dup && dup.id !== id) {
+            return c.json({ success: false, error: '学校代码已存在' }, 409);
+          }
+        }
+      }
+      const normalizedCode =
+        body.code !== undefined ? body.code.trim().toUpperCase() : undefined;
       const now = new Date().toISOString();
       await db
         .update(schools)
         .set({
-          ...(body.code !== undefined && { code: body.code }),
+          ...(normalizedCode !== undefined && { code: normalizedCode }),
           ...(body.name !== undefined && { name: body.name }),
           ...(body.region !== undefined && { region: body.region }),
           ...(body.contactName !== undefined && { contactName: body.contactName }),
@@ -3899,8 +4102,12 @@ app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), as
   const provider = c.req.query('provider');
   const dateFrom = c.req.query('dateFrom');
   const dateTo = c.req.query('dateTo');
-  const offset = Number(c.req.query('offset') ?? '0');
-  const limit = Number(c.req.query('limit') ?? '50');
+  // Bug #125: 之前 Number(query ?? '50') 缺 NaN 兜底，且无 total；改为使用统一的
+  // parsePositiveInt/parseNonNegativeInt 兜底异常输入，并返回 total 便于前端翻页。
+  // Bug #125 续: apiCallLogs 表会无限增长，前端只展示最近 N 条；这里限制 max=500，
+  // 真正的长期保留策略应在 worker 中加 retention 任务定期清理（> 90 天）。
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+  const limit = parsePositiveInt(c.req.query('limit'), 50, 500);
   routesLogger.info(
     {
       userId: user.id,
@@ -3925,6 +4132,9 @@ app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), as
       offset,
     });
 
+    const totalRow = await db.select({ c: count() }).from(apiCallLogs).where(where);
+    const total = totalRow[0]?.c ?? 0;
+
     const data: ApiCallLogItem[] = rows.map((r) => ({
       id: r.id,
       provider: r.provider,
@@ -3942,7 +4152,7 @@ app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), as
       { duration: Date.now() - startedAt, count: data.length },
       '[API /admin/api-logs] exit',
     );
-    return c.json({ success: true, data });
+    return c.json({ success: true, data, total, limit, offset });
   } catch (err) {
     routesLogger.error(
       { err: err instanceof Error ? err.message : 'unknown' },
@@ -3967,10 +4177,8 @@ app.get('/admin/announcements', authMiddleware, requireRole(UserRole.SUPER_ADMIN
   const startedAt = Date.now();
   routesLogger.info({ userId: user.id }, '[API /admin/announcements]');
 
-  // Bug #52: 之前无 limit/offset 一次性返回所有公告；公告表长期累积会导致
-  // 单次响应体过大、超时。改为支持分页 + 兼容旧调用（不传参默认 50）。
-  const limit = Math.max(1, Math.min(200, Number(c.req.query('limit') ?? '50')));
-  const offset = Math.max(0, Number(c.req.query('offset') ?? '0'));
+  const limit = Math.max(1, Math.min(200, parsePositiveInt(c.req.query('limit'), 50, 200)));
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
 
   try {
     const rows = await db.query.announcements.findMany({
@@ -4064,6 +4272,13 @@ app.put(
       if (!existing) {
         return c.json({ success: false, error: '公告不存在' }, 404);
       }
+      // Bug #118: 之前没有归属校验，任何 super_admin 都能改别人的公告；
+      // 改为只有创建者本人才可编辑/删除（super_admin 全部可读不限制）。
+      // 说明：业务上如需多 admin 共创公告，可以切到 `createdBy` 角色组判断。
+      // 但默认按 by-id 归属更安全；如运营需要，单独开一个 /admin/announcements/:id/transfer。
+      if (existing.createdBy !== user.id) {
+        return c.json({ success: false, error: '仅创建者可编辑该公告' }, 403);
+      }
       const now = new Date().toISOString();
       await db
         .update(announcements)
@@ -4101,6 +4316,17 @@ app.delete(
     routesLogger.info({ userId: user.id, id: id }, '[API /admin/announcements/:id DELETE]');
 
     try {
+      // Bug #118: 删除同样要求 createdBy 归属，避免误删他人公告。
+      const existing = await db.query.announcements.findFirst({
+        where: eq(announcements.id, id),
+        columns: { id: true, createdBy: true },
+      });
+      if (!existing) {
+        return c.json({ success: false, error: '公告不存在' }, 404);
+      }
+      if (existing.createdBy !== user.id) {
+        return c.json({ success: false, error: '仅创建者可删除该公告' }, 403);
+      }
       await db.delete(announcements).where(eq(announcements.id, id));
       routesLogger.info(
         { duration: Date.now() - startedAt },
@@ -4151,8 +4377,8 @@ app.get('/admin/question-bank', authMiddleware, requireRole(UserRole.SUPER_ADMIN
   const startedAt = Date.now();
   const topicType = c.req.query('topicType');
   const difficulty = c.req.query('difficulty');
-  const offset = Number(c.req.query('offset') ?? '0');
-  const limit = Number(c.req.query('limit') ?? '50');
+  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+  const limit = parsePositiveInt(c.req.query('limit'), 50, 200);
   routesLogger.info(
     { userId: user.id, topicType: topicType ?? 'all', difficulty: difficulty ?? 'all' },
     '[API /admin/question-bank]',

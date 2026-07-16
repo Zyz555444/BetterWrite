@@ -68,7 +68,7 @@ import { logger } from '@betterwrite/shared/logger';
 import { performOcr } from '@betterwrite/worker';
 import { zValidator } from '@hono/zod-validator';
 import bcrypt from 'bcryptjs';
-import { and, count, desc, eq, gt, gte, inArray, lt, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, inArray, lt, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { HTTPException } from 'hono/http-exception';
@@ -188,15 +188,19 @@ const loginSchema = z.object({
 });
 
 app.post('/auth/login', rateLimit(10, 60_000), zValidator('json', loginSchema), async (c) => {
-  const { email, password } = c.req.valid('json');
+  // Bug #55: 邮箱小写规范化；Bug #49: 在 db 查询前先做一次 bcrypt 假比对，保证
+  // 即便用户不存在也走过一次 bcrypt cost，规避攻击者通过响应时差枚举有效邮箱。
+  const raw = c.req.valid('json');
+  const email = raw.email.toLowerCase().trim();
+  const password = raw.password;
 
+  const DUMMY_HASH =
+    '$2a$10$CwTycUXWue0Thq9StjUM0uJ8jG4dNiQB2nCsjC/9o7RXh2v7Z8g6u';
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
-  if (!user || !user.isActive) {
-    return c.json({ success: false, error: '邮箱或密码错误' }, 401);
-  }
+  const hashToCompare = user?.passwordHash ?? DUMMY_HASH;
+  const passwordValid = await bcrypt.compare(password, hashToCompare);
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
+  if (!user || !user.isActive || !passwordValid) {
     return c.json({ success: false, error: '邮箱或密码错误' }, 401);
   }
 
@@ -230,13 +234,18 @@ const registerSchema = z.object({
   email: z.string().email('请输入有效邮箱'),
   password: z.string().min(8, '密码至少8位'),
   name: z.string().min(1, '请输入姓名'),
-  role: z.enum([UserRole.TEACHER, UserRole.STUDENT]).default(UserRole.STUDENT),
+  // Bug #44: 仅允许注册学生角色；教师/学校管理员必须由 super_admin 后台创建，
+  // 防止任何人通过公开注册接口越权获取教师身份。
+  role: z.literal(UserRole.STUDENT).default(UserRole.STUDENT),
   schoolCode: z.string().optional(),
   classCode: z.string().optional(),
 });
 
 app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSchema), async (c) => {
-  const { email, password, name, role, schoolCode, classCode } = c.req.valid('json');
+  // Bug #55: 邮箱小写规范化，避免 "User@x.com" 和 "user@x.com" 视为不同账号。
+  const raw = c.req.valid('json');
+  const { password, name, role, schoolCode, classCode } = raw;
+  const email = raw.email.toLowerCase().trim();
 
   const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (existing) {
@@ -301,9 +310,10 @@ app.post('/auth/register', rateLimit(5, 60_000), zValidator('json', registerSche
 });
 
 app.post('/auth/logout', authMiddleware, async (c) => {
-  const sessionId = c.req
-    .header('cookie')
-    ?.match(new RegExp(`${lucia.sessionCookieName}=([^;]+)`))?.[1];
+  // Bug #53: 用 lucia.readSessionCookie 解析 cookie header，避免自己写 regex 漏掉
+  // URL 编码、引号、空格等边界情况。
+  const cookieHeader = c.req.header('cookie');
+  const sessionId = lucia.readSessionCookie(cookieHeader ?? '');
   if (sessionId) {
     await lucia.invalidateSession(sessionId);
   }
@@ -350,8 +360,19 @@ app.put(
     const now = new Date().toISOString();
     await db.update(users).set({ passwordHash, updatedAt: now }).where(eq(users.id, user.id));
 
+    // Bug #45: 改密后立刻失效该用户的所有 session（保留当前 session），
+    // 避免旧密码仍在其它设备/浏览器生效时被中间人/盗号利用。
+    await lucia.invalidateUserSessions(user.id);
+    // 当前 session 被上面的方法一并失效，重新创建一个新的 session。
+    const newSession = await lucia.createSession(user.id, {});
+    const sessionCookie = lucia.createSessionCookie(newSession.id);
+
     routesLogger.info({ userId: user.id }, '[API PUT /auth/password] password updated');
-    return c.json({ success: true });
+    return c.json(
+      { success: true },
+      200,
+      { 'Set-Cookie': sessionCookie.serialize() },
+    );
   },
 );
 
@@ -378,16 +399,21 @@ const tokenLoginSchema = z.object({
 });
 
 app.post('/auth/token', rateLimit(10, 60_000), zValidator('json', tokenLoginSchema), async (c) => {
-  const { email, password, platform, deviceName } = c.req.valid('json');
+  // Bug #55: 邮箱小写规范化；Bug #49: 假用户不存在时也走一次 bcrypt 假比对，
+  // 让响应时长不可用于枚举有效邮箱。
+  const raw = c.req.valid('json');
+  const { platform, deviceName } = raw;
+  const email = raw.email.toLowerCase().trim();
+  const password = raw.password;
   routesLogger.info({ email: email, platform: platform }, '[API /auth/token]');
 
+  const DUMMY_HASH =
+    '$2a$10$CwTycUXWue0Thq9StjUM0uJ8jG4dNiQB2nCsjC/9o7RXh2v7Z8g6u';
   const user = await db.query.users.findFirst({ where: eq(users.email, email) });
-  if (!user || !user.isActive) {
-    return c.json({ success: false, error: '邮箱或密码错误' }, 401);
-  }
+  const hashToCompare = user?.passwordHash ?? DUMMY_HASH;
+  const passwordValid = await bcrypt.compare(password, hashToCompare);
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
+  if (!user || !user.isActive || !passwordValid) {
     return c.json({ success: false, error: '邮箱或密码错误' }, 401);
   }
 
@@ -486,6 +512,10 @@ const ocrSchema = z.object({
 
 app.post(
   '/essays/ocr',
+  // Bug #54: 学生无限制调用 OCR 会消耗 Google Vision 配额/触发额外费用，
+  // 加一层 10/min + 200/day 的 rate limit。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.STUDENT),
   zValidator('json', ocrSchema),
@@ -630,6 +660,10 @@ app.post('/essays', authMiddleware, zValidator('json', essaySchema), async (c) =
 // 失败作文重试接口（Bug #6 修复）：允许学生 / 老师对 status='failed' 的作文重新入队。
 app.post(
   '/essays/:id/retry',
+  // Bug #57: 之前无 rateLimit，学生可以反复点 retry 把 worker 队列塞满；
+  // 限制每用户 5/min + 30/day，避免滥用。
+  rateLimit(5, 60_000),
+  rateLimit(30, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.STUDENT, UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -826,7 +860,7 @@ app.get(
   async (c) => {
     const user = c.get('user');
     routesLogger.info({ userId: user.id, role: user.role }, '[API /essays]');
-    let conditions = undefined;
+    let conditions: SQL[] = [];
 
     if (user.role === UserRole.TEACHER && user.schoolId) {
       const classIds = await db.query.classes.findMany({
@@ -846,6 +880,18 @@ app.get(
         return c.json({ success: true, data: [] });
       }
       conditions = studentIds.map((id) => eq(essays.studentId, id));
+    } else if (user.role === UserRole.SCHOOL_ADMIN && user.schoolId) {
+      // Bug #47: 之前 SCHOOL_ADMIN 完全没有范围过滤，会读到全校/所有学校的作文；
+      // 改为通过 schoolId 过滤 users → essays。
+      const schoolStudents = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.schoolId, user.schoolId), eq(users.role, UserRole.STUDENT)));
+      const studentIds = schoolStudents.map((s) => s.id);
+      if (studentIds.length === 0) {
+        return c.json({ success: true, data: [] });
+      }
+      conditions = [inArray(essays.studentId, studentIds)];
     }
 
     const all = await db.query.essays.findMany({
@@ -907,16 +953,23 @@ app.get('/tasks/:id', authMiddleware, async (c) => {
   return c.json({ success: true, data: task });
 });
 
-const taskSchema = z.object({
-  title: z.string().min(1, '请输入标题'),
-  topicType: z.string().min(1, '请选择体裁'),
-  requirements: z.string().min(1, '请输入要求'),
-  keyPoints: z.array(z.string()).default([]),
-  classId: z.string().min(1, '请选择班级'),
-  wordLimitMin: z.number().default(80),
-  wordLimitMax: z.number().default(125),
-  dueDate: z.string().optional(),
-});
+const taskSchema = z
+  .object({
+    title: z.string().min(1, '请输入标题'),
+    topicType: z.string().min(1, '请选择体裁'),
+    requirements: z.string().min(1, '请输入要求'),
+    keyPoints: z.array(z.string()).default([]),
+    classId: z.string().min(1, '请选择班级'),
+    wordLimitMin: z.number().int().min(20).max(500).default(80),
+    wordLimitMax: z.number().int().min(20).max(500).default(125),
+    dueDate: z.string().optional(),
+  })
+  .refine((d) => d.wordLimitMin <= d.wordLimitMax, {
+    // Bug #51: 创建/更新 task 时若 min > max，DB 会写入脏数据；前端/服务端字数校验
+    // 会一直触发但后端又接受，这里强制 min <= max 拒绝。
+    path: ['wordLimitMax'],
+    message: '字数上限不能小于下限',
+  });
 
 app.post(
   '/tasks',
@@ -3537,6 +3590,25 @@ app.delete('/admin/schools/:id', authMiddleware, requireRole(UserRole.SUPER_ADMI
     }
     const now = new Date().toISOString();
     await db.update(schools).set({ isActive: false, updatedAt: now }).where(eq(schools.id, id));
+    // Bug #50: 学校软删除后，关联的教师/学生仍能用旧 session 登录、读写数据；
+    // 改为在关停学校的同时级联禁用其下所有用户，并清空其 active sessions。
+    const schoolUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.schoolId, id));
+    const userIds = schoolUsers.map((u) => u.id);
+    if (userIds.length > 0) {
+      await db
+        .update(users)
+        .set({ isActive: false, updatedAt: now })
+        .where(inArray(users.id, userIds));
+      // 失效这些用户的所有 session，强制下线
+      for (const uid of userIds) {
+        await lucia.invalidateUserSessions(uid).catch(() => {
+          /* session 可能本来就不存在，忽略 */
+        });
+      }
+    }
     routesLogger.info({ duration: Date.now() - startedAt }, '[API /admin/schools/:id DELETE] exit');
     return c.json({ success: true });
   } catch (err) {
@@ -3727,7 +3799,12 @@ app.post(
         { duration: Date.now() - startedAt, id: id },
         '[API /admin/api-configs POST] exit',
       );
-      return c.json({ success: true, data: { id } }, 201);
+      // Bug #56: AI provider 配置在 web 端写入，worker 是另一个进程不会感知；
+      // 必须提示 admin 需重启 worker 才生效。reload 字段供前端展示 toast。
+      return c.json(
+        { success: true, data: { id, requiresWorkerReload: true } },
+        201,
+      );
     } catch (err) {
       routesLogger.error(
         { err: err instanceof Error ? err.message : 'unknown' },
@@ -3775,7 +3852,8 @@ app.put(
         { duration: Date.now() - startedAt },
         '[API /admin/api-configs/:id PUT] exit',
       );
-      return c.json({ success: true });
+      // Bug #56: 更新 api config 后 worker 不会热加载；提示需重启。
+      return c.json({ success: true, data: { requiresWorkerReload: true } });
     } catch (err) {
       routesLogger.error(
         { err: err instanceof Error ? err.message : 'unknown' },
@@ -3802,7 +3880,8 @@ app.delete(
         { duration: Date.now() - startedAt },
         '[API /admin/api-configs/:id DELETE] exit',
       );
-      return c.json({ success: true });
+      // Bug #56: 删除后 worker 仍可能继续用旧 provider，提示重启。
+      return c.json({ success: true, data: { requiresWorkerReload: true } });
     } catch (err) {
       routesLogger.error(
         { err: err instanceof Error ? err.message : 'unknown' },
@@ -3888,11 +3967,20 @@ app.get('/admin/announcements', authMiddleware, requireRole(UserRole.SUPER_ADMIN
   const startedAt = Date.now();
   routesLogger.info({ userId: user.id }, '[API /admin/announcements]');
 
+  // Bug #52: 之前无 limit/offset 一次性返回所有公告；公告表长期累积会导致
+  // 单次响应体过大、超时。改为支持分页 + 兼容旧调用（不传参默认 50）。
+  const limit = Math.max(1, Math.min(200, Number(c.req.query('limit') ?? '50')));
+  const offset = Math.max(0, Number(c.req.query('offset') ?? '0'));
+
   try {
     const rows = await db.query.announcements.findMany({
       with: { creator: true },
       orderBy: desc(announcements.createdAt),
+      limit,
+      offset,
     });
+    const totalRow = await db.select({ c: count() }).from(announcements);
+    const total = totalRow[0]?.c ?? 0;
     const data: AnnouncementItem[] = rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -3908,7 +3996,7 @@ app.get('/admin/announcements', authMiddleware, requireRole(UserRole.SUPER_ADMIN
       { duration: Date.now() - startedAt, count: data.length },
       '[API /admin/announcements] exit',
     );
-    return c.json({ success: true, data });
+    return c.json({ success: true, data, total, limit, offset });
   } catch (err) {
     routesLogger.error(
       { err: err instanceof Error ? err.message : 'unknown' },
@@ -4030,19 +4118,31 @@ app.delete(
 );
 
 // ========== Admin: Question Bank ==========
-const questionCreateSchema = z.object({
-  topicType: z.string().min(1, '题目类型不能为空'),
-  topicCategory: z.string().optional(),
-  title: z.string().min(1, '标题不能为空'),
-  requirements: z.string().min(1, '要求不能为空'),
-  keyPoints: z.array(z.string()).optional(),
-  referenceEssay: z.string().optional(),
-  wordLimitMin: z.number().optional(),
-  wordLimitMax: z.number().optional(),
-  timeLimitMinutes: z.number().optional(),
-  difficulty: z.string().optional(),
-  source: z.string().optional(),
-});
+const questionCreateSchema = z
+  .object({
+    topicType: z.string().min(1, '题目类型不能为空'),
+    topicCategory: z.string().optional(),
+    title: z.string().min(1, '标题不能为空'),
+    requirements: z.string().min(1, '要求不能为空'),
+    keyPoints: z.array(z.string()).optional(),
+    referenceEssay: z.string().optional(),
+    wordLimitMin: z.number().int().min(20).max(500).optional(),
+    wordLimitMax: z.number().int().min(20).max(500).optional(),
+    timeLimitMinutes: z.number().optional(),
+    difficulty: z.string().optional(),
+    source: z.string().optional(),
+  })
+  .refine(
+    (d) =>
+      d.wordLimitMin === undefined ||
+      d.wordLimitMax === undefined ||
+      d.wordLimitMin <= d.wordLimitMax,
+    {
+      // Bug #51: 同样规则，min > max 视为脏数据，create/update 都拒绝。
+      path: ['wordLimitMax'],
+      message: '字数上限不能小于下限',
+    },
+  );
 
 const questionUpdateSchema = questionCreateSchema.partial();
 

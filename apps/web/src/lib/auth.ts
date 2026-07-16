@@ -29,6 +29,10 @@ export const lucia = new Lucia(adapter, {
   },
 });
 
+// Bug #46: 统一导出 Lucia 的 session cookie 名称，避免在 middleware.ts 等地方硬编码
+// "auth_session" 与 lucia 实际 cookie 名称不一致导致鉴权失效。
+export const SESSION_COOKIE_NAME = lucia.sessionCookieName;
+
 export const validateRequest = cache(async () => {
   const sessionId = (await cookies()).get(lucia.sessionCookieName)?.value ?? null;
   if (!sessionId) {

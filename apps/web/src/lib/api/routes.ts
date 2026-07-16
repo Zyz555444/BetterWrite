@@ -487,17 +487,26 @@ app.put(
     const { currentPassword, newPassword } = c.req.valid('json');
     routesLogger.info({ userId: user.id }, '[API PUT /auth/password]');
 
+    // Bug #158: 改密路径在三种情况下响应时长差异巨大（无 record 立即返 / 记录存在但旧密码错 / 旧密码对），
+    // 攻击者通过响应时差可推断"旧密码是否正确"，进而把改密端点当成"密码验证"端点爆破。
+    // 修复：统一走一次 DUMMY_HASH bcrypt（不存在/禁用时）+ 不匹配时再做一次假 hash 抵消 hash(newPassword) 的耗时，
+    // 使三条分支的响应时长大致一致。
+    const DUMMY_HASH =
+      '$2a$10$CwTycUXWue0Thq9StjUM0uJ8jG4dNiQB2nCsjC/9o7RXh2v7Z8g6u';
+
     const record = await db.query.users.findFirst({
       where: eq(users.id, user.id),
       columns: { id: true, passwordHash: true, isActive: true },
     });
+    const hashToCompare = record?.isActive ? record.passwordHash : DUMMY_HASH;
+    const valid = await bcrypt.compare(currentPassword, hashToCompare);
     if (!record || !record.isActive) {
       return c.json({ success: false, error: '用户不存在或已禁用' }, 401);
     }
-
-    const valid = await bcrypt.compare(currentPassword, record.passwordHash);
     if (!valid) {
       routesLogger.warn({ userId: user.id }, '[API PUT /auth/password] current password mismatch');
+      // 与成功路径对齐：成功后会有一次 bcrypt.hash(newPassword)，此处做一次假 hash 抵消时差。
+      await bcrypt.compare(currentPassword, DUMMY_HASH);
       return c.json({ success: false, error: '当前密码错误' }, 401);
     }
 
@@ -790,61 +799,73 @@ const essaySchema = z.object({
   title: z.string().max(200, '标题过长').optional(),
 });
 
-app.post('/essays', authMiddleware, zValidator('json', essaySchema), async (c) => {
-  const user = c.get('user');
-  const { content, taskId, title } = c.req.valid('json');
-  const wordCount = countWords(content);
-  const now = new Date().toISOString();
-  const essayId = randomUUID();
+app.post(
+  '/essays',
+  // Bug #156: 作文提交无 rateLimit；学生可短时间刷大量作文挤爆 BullMQ + OpenAI 配额 + DB。
+  // 限制 10/min + 50/day（每篇都触发 AI 批改，开销大）。
+  rateLimit(10, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
+  authMiddleware,
+  zValidator('json', essaySchema),
+  async (c) => {
+    const user = c.get('user');
+    const { content, taskId, title } = c.req.valid('json');
+    const wordCount = countWords(content);
+    const now = new Date().toISOString();
+    const essayId = randomUUID();
 
-  if (taskId) {
-    const task = await db.query.essayTasks.findFirst({ where: eq(essayTasks.id, taskId) });
-    if (!task) {
-      return c.json({ success: false, error: '作文任务不存在' }, 404);
+    if (taskId) {
+      const task = await db.query.essayTasks.findFirst({ where: eq(essayTasks.id, taskId) });
+      if (!task) {
+        return c.json({ success: false, error: '作文任务不存在' }, 404);
+      }
+      const enrolled = await db.query.classEnrollments.findFirst({
+        where: and(
+          eq(classEnrollments.classId, task.classId),
+          eq(classEnrollments.userId, user.id),
+        ),
+      });
+      if (!enrolled) {
+        return c.json({ success: false, error: '无权提交该任务' }, 403);
+      }
+      // 服务端字数范围校验（Bug #3 修复）：未达下限或超出上限均拒绝提交，避免无效批改。
+      if (wordCount < task.wordLimitMin) {
+        return c.json(
+          { success: false, error: `作文字数不足，最少需要 ${task.wordLimitMin} 词` },
+          400,
+        );
+      }
+      if (wordCount > task.wordLimitMax) {
+        return c.json(
+          { success: false, error: `作文超出字数上限，最多 ${task.wordLimitMax} 词` },
+          400,
+        );
+      }
     }
-    const enrolled = await db.query.classEnrollments.findFirst({
-      where: and(eq(classEnrollments.classId, task.classId), eq(classEnrollments.userId, user.id)),
-    });
-    if (!enrolled) {
-      return c.json({ success: false, error: '无权提交该任务' }, 403);
-    }
-    // 服务端字数范围校验（Bug #3 修复）：未达下限或超出上限均拒绝提交，避免无效批改。
-    if (wordCount < task.wordLimitMin) {
-      return c.json(
-        { success: false, error: `作文字数不足，最少需要 ${task.wordLimitMin} 词` },
-        400,
-      );
-    }
-    if (wordCount > task.wordLimitMax) {
-      return c.json(
-        { success: false, error: `作文超出字数上限，最多 ${task.wordLimitMax} 词` },
-        400,
-      );
-    }
-  }
 
-  const [essay] = await db
-    .insert(essays)
-    .values({
-      id: essayId,
-      studentId: user.id,
-      taskId: taskId ?? null,
-      title: title ?? null,
-      content,
-      wordCount,
-      status: 'pending',
-      submittedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning();
+    const [essay] = await db
+      .insert(essays)
+      .values({
+        id: essayId,
+        studentId: user.id,
+        taskId: taskId ?? null,
+        title: title ?? null,
+        content,
+        wordCount,
+        status: 'pending',
+        submittedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
 
-  // 修复 Bug #26：先入队成功再提交 essay，避免 Redis 不可用时留下永远 pending 的孤儿数据。
-  // 反之若先 INSERT essay，再 addCorrectionJob 抛错，essay 已被持久化却永远不会被批改。
-  await addCorrectionJob(essayId);
+    // 修复 Bug #26：先入队成功再提交 essay，避免 Redis 不可用时留下永远 pending 的孤儿数据。
+    // 反之若先 INSERT essay，再 addCorrectionJob 抛错，essay 已被持久化却永远不会被批改。
+    await addCorrectionJob(essayId);
 
-  return c.json({ success: true, data: essay });
-});
+    return c.json({ success: true, data: essay });
+  },
+);
 
 // 失败作文重试接口（Bug #6 修复）：允许学生 / 老师对 status='failed' 的作文重新入队。
 app.post(
@@ -3427,7 +3448,29 @@ app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), asy
       columns: { classId: true },
     });
     const classIds = enrollments.map((e) => e.classId);
-    const [pendingTasksRows, studentEssays, sentenceResources] = await Promise.all([
+    // Bug #151: 之前 teachingResources 拉 limit:100 全部到内存再随机选 1 条，
+    // 资源表大时浪费 IO；改为 COUNT 一下总数后用 OFFSET 随机偏移，仅取 1 条。
+    const sentenceCount = await db
+      .select({ value: count() })
+      .from(teachingResources)
+      .where(eq(teachingResources.type, TeachingResourceType.SENTENCE));
+    const total = Number(sentenceCount[0]?.value ?? 0);
+    let sentenceResource: { id: string; title: string; content: string } | undefined;
+    if (total > 0) {
+      const offset = Math.floor(Math.random() * total);
+      const [pick] = await db
+        .select({
+          id: teachingResources.id,
+          title: teachingResources.title,
+          content: teachingResources.content,
+        })
+        .from(teachingResources)
+        .where(eq(teachingResources.type, TeachingResourceType.SENTENCE))
+        .limit(1)
+        .offset(offset);
+      sentenceResource = pick;
+    }
+    const [pendingTasksRows, studentEssays] = await Promise.all([
       classIds.length > 0
         ? db.query.essayTasks.findMany({
             where: and(inArray(essayTasks.classId, classIds), eq(essayTasks.status, 'published')),
@@ -3437,10 +3480,6 @@ app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), asy
       db.query.essays.findMany({
         where: eq(essays.studentId, user.id),
         columns: { status: true, totalScore: true },
-      }),
-      db.query.teachingResources.findMany({
-        where: eq(teachingResources.type, TeachingResourceType.SENTENCE),
-        limit: 100,
       }),
     ]);
     const pendingTasks = pendingTasksRows.length;
@@ -3452,9 +3491,8 @@ app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), asy
     const averageScore =
       allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null;
     let quote: DailyQuote | null = null;
-    if (sentenceResources.length > 0) {
-      const pick = sentenceResources[Math.floor(Math.random() * sentenceResources.length)];
-      quote = { id: pick.id, text: pick.content, translation: null, source: pick.title };
+    if (sentenceResource) {
+      quote = { id: sentenceResource.id, text: sentenceResource.content, translation: null, source: sentenceResource.title };
     }
     return { pendingTasks, correctedEssays, averageScore, quote };
   });
@@ -4065,6 +4103,9 @@ app.get('/admin/api-configs', authMiddleware, requireRole(UserRole.SUPER_ADMIN),
 
 app.post(
   '/admin/api-configs',
+  // Bug #153: API 配置写入无 rateLimit；admin 失误或脚本失控可能刷大量密钥记录。
+  rateLimit(10, 60_000),
+  rateLimit(100, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', apiConfigCreateSchema),
@@ -4541,6 +4582,9 @@ app.get('/admin/question-bank', authMiddleware, requireRole(UserRole.SUPER_ADMIN
 
 app.post(
   '/admin/question-bank',
+  // Bug #153: 题库录入无 rateLimit；批量脚本可能瞬间塞大量题目。
+  rateLimit(20, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', questionCreateSchema),

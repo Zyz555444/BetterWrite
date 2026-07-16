@@ -133,7 +133,12 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
 
     // 事务保证 correction 写入与 essay 状态更新的原子性；
     // 末尾 UPDATE 附加 status='correcting' 条件，防止并发重复处理写入第二份结果。
+    // Bug #147: BullMQ attempts=3 配置会让 worker 对同一 essay 重新执行该事务，
+    // 每次 retry 都会在 corrections 表里新增一行，但旧的 correction 行不会被清理，
+    // 累积成孤儿。改为：事务首步删除同 essayId 的旧 correction（如果有），再插入新行。
     await db.transaction(async (tx) => {
+      await tx.delete(corrections).where(eq(corrections.essayId, essayId));
+
       await tx.insert(corrections).values({
         id: correctionId,
         essayId,

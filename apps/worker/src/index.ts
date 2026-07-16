@@ -8,7 +8,7 @@ import { env } from '@betterwrite/shared/env';
 import { logger } from '@betterwrite/shared/logger';
 import { CORRECTION_QUEUE, type CorrectionJobData } from '@betterwrite/shared/queue';
 import { Worker } from 'bullmq';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, lt } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 
 export { performOcr, type OcrResult } from './ocr.js';
@@ -20,9 +20,20 @@ export interface CorrectionJob {
 const router = createProviderRouter(process.env);
 const workerLogger = logger.child({ component: 'worker' });
 
-// 启动时恢复卡住的作文：将 'correcting' 状态的作文重置为 'pending'，使其可被重新处理。
+// 启动时恢复卡住的作文：仅当 status='correcting' 且 updatedAt 超过 10 分钟仍未更新时
+// 才重置为 'pending'。10 分钟是基于实际批改耗时（OpenAI 一次流式 + JSON 解析 5-30s）
+// 留出 20x 安全余量；如果某个 worker 真的在 10 分钟内处理不了一篇作文，说明外部问题
+// 直接放行反而会引发双 worker 同时处理同一 essay 的竞态。
+const STUCK_ESSAY_TIMEOUT_MS = 10 * 60 * 1000;
+
 export async function resetStuckEssays(): Promise<number> {
-  const stuck = await db.query.essays.findMany({ where: eq(essays.status, 'correcting') });
+  const cutoff = new Date(Date.now() - STUCK_ESSAY_TIMEOUT_MS).toISOString();
+  // Bug #217: 之前无超时判断，worker 刚启动就可能把"正在被另一个 worker 处理"
+  // 的 'correcting' 作文误判为卡住并重置为 'pending'，造成双 worker 同时处理。
+  // 改为只重置 updatedAt < cutoff 的真正卡住行。
+  const stuck = await db.query.essays.findMany({
+    where: and(eq(essays.status, 'correcting'), lt(essays.updatedAt, cutoff)),
+  });
   if (stuck.length === 0) return 0;
 
   const now = new Date().toISOString();
@@ -30,7 +41,7 @@ export async function resetStuckEssays(): Promise<number> {
     await db
       .update(essays)
       .set({ status: 'pending', updatedAt: now })
-      .where(eq(essays.id, essay.id));
+      .where(and(eq(essays.id, essay.id), eq(essays.status, 'correcting')));
   }
   workerLogger.info(
     { resetCount: stuck.length },
@@ -184,7 +195,20 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
     );
   } catch (error) {
     correctionLogger.error({ err: error }, 'Essay correction failed');
-    await db.update(essays).set({ status: 'failed', updatedAt: now }).where(eq(essays.id, essayId));
+    // Bug #218: 失败兜底更新前附加 status='correcting' 条件，避免覆盖"已被并发 worker
+    // 标记为 completed / 再次重置为 pending"的状态；并 try/catch 自身防止"DB 不可用
+    // 时连兜底都写不进"导致原始错误丢失。
+    try {
+      await db
+        .update(essays)
+        .set({ status: 'failed', updatedAt: new Date().toISOString() })
+        .where(and(eq(essays.id, essayId), eq(essays.status, 'correcting')));
+    } catch (rollbackErr) {
+      correctionLogger.error(
+        { err: rollbackErr },
+        '[API processCorrection] failed to mark essay as failed',
+      );
+    }
     throw error;
   }
 }

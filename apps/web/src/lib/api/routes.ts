@@ -256,7 +256,14 @@ function clearLoginFailures(key: string): void {
   loginFailStore.delete(key);
 }
 
-app.post('/auth/login', rateLimit(10, 60_000), zValidator('json', loginSchema), async (c) => {
+app.post(
+  '/auth/login',
+  // Bug #213: 之前只有 10/min，无 day-level 限流。攻击者通过多 IP 轮换可日尝试
+  // 数万次；10/min × 1440 分钟 = 14,400/day 不够。叠加 200/day 抑制长期暴力破解。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
+  zValidator('json', loginSchema),
+  async (c) => {
   // Bug #55: 邮箱小写规范化；Bug #49: 在 db 查询前先做一次 bcrypt 假比对，保证
   // 即便用户不存在也走过一次 bcrypt cost，规避攻击者通过响应时差枚举有效邮箱。
   const raw = c.req.valid('json');
@@ -1542,6 +1549,10 @@ app.get('/teacher/dashboard', authMiddleware, requireRole(UserRole.TEACHER), asy
 // ========== Teacher Analytics ==========
 app.get(
   '/teacher/analytics/class/:classId',
+  // Bug #215: 班级分析无 rateLimit；教师脚本可定时拉全表做报表脱库。
+  // 限制 20/min + 500/day。
+  rateLimit(20, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -1660,6 +1671,9 @@ app.get(
 
 app.get(
   '/teacher/analytics/student/:studentId',
+  // Bug #215 续: 学生分析加 20/min + 500/day。
+  rateLimit(20, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -1765,6 +1779,10 @@ app.get(
 
 app.get(
   '/teacher/analytics/class/:classId/export',
+  // Bug #214: CSV 导出无 rateLimit + 班级作文全表查询，单班 1000+ 作文时响应体
+  // 巨大。限制 5/min + 50/day。
+  rateLimit(5, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -1798,6 +1816,8 @@ app.get(
               correction: true,
             },
             orderBy: desc(essays.createdAt),
+            // Bug #214 续: 加 limit 防止响应体过大；超出截断并加注释提示。
+            limit: 5000,
           })
         : [];
 

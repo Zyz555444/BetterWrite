@@ -19,6 +19,23 @@ export interface AuthVariables {
   };
 }
 
+// Bug #219: 节流 lastUsedAt 写入阈值（5 分钟）。移动端高频请求（如每秒 1 次心跳
+// / 自动同步）会触发 authMiddleware，每个请求都同步更新 lastUsedAt 字段相当于
+// 每秒/每次都写一次 api_tokens 行，是无意义的 IO 浪费（lastUsedAt 只用于"最近活跃
+// 设备"展示，分钟级精度已足够）。在 5 分钟内只写一次，显著降低 DB 写压力。
+const LAST_USED_THROTTLE_MS = 5 * 60_000;
+const lastUsedWriteCache = new Map<string, number>(); // tokenId -> lastWriteMs
+
+// 周期性清理过期 tokenId 缓存，避免 map 随 token 增长无限膨胀。
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, lastWrite] of lastUsedWriteCache) {
+    if (now - lastWrite > LAST_USED_THROTTLE_MS * 2) {
+      lastUsedWriteCache.delete(key);
+    }
+  }
+}, 10 * 60_000).unref();
+
 export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(async (c, next) => {
   const authHeader = c.req.header('authorization');
   if (authHeader?.startsWith('Bearer ')) {
@@ -31,7 +48,22 @@ export const authMiddleware = createMiddleware<{ Variables: AuthVariables }>(asy
     if (!record || !record.user || !record.user.isActive) {
       throw new HTTPException(401, { message: 'Token 无效或已过期' });
     }
-    await db.update(apiTokens).set({ lastUsedAt: now }).where(eq(apiTokens.id, record.id));
+    // Bug #219: 仅当 lastUsedAt 距今超过 5 分钟才写库；高频请求降为低频写。
+    // 用 tokenId 作缓存 key（不是 token 全文，减少 map entry 体积）。
+    const nowMs = Date.now();
+    const lastWrite = lastUsedWriteCache.get(record.id) ?? 0;
+    if (nowMs - lastWrite >= LAST_USED_THROTTLE_MS) {
+      lastUsedWriteCache.set(record.id, nowMs);
+      // fire-and-forget 写入；即便失败也不影响请求本身
+      void db
+        .update(apiTokens)
+        .set({ lastUsedAt: now })
+        .where(eq(apiTokens.id, record.id))
+        .catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error('[Auth] failed to update lastUsedAt', err);
+        });
+    }
     c.set('user', {
       id: record.user.id,
       email: record.user.email,

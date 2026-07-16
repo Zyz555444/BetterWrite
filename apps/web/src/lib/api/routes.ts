@@ -207,6 +207,13 @@ const loginSchema = z.object({
 const LOGIN_FAIL_WINDOW_MS = 15 * 60_000;
 const LOGIN_FAIL_THRESHOLD = 5;
 const LOGIN_LOCKOUT_MS = 15 * 60_000;
+// Bug #225: IP 维度辅助限流。email 锁定只能让"同 email"被攻击者锁，但攻击者知道
+// 真实用户 email 后可以故意输错 5 次 → 真实用户被锁 15 分钟（DoS）。增加 IP 维度
+// "短时间内大量 email 失败" 阈值（5 分钟内 30 次失败 → 锁该 IP 30 分钟），挡掉
+// 这种针对性 DoS 流量；正常用户登录不会触发（无论对错都低频）。
+const LOGIN_IP_FAIL_WINDOW_MS = 5 * 60_000;
+const LOGIN_IP_FAIL_THRESHOLD = 30;
+const LOGIN_IP_LOCKOUT_MS = 30 * 60_000;
 interface LoginFailEntry {
   count: number;
   windowStart: number;
@@ -224,10 +231,10 @@ setInterval(() => {
   }
 }, 5 * 60_000).unref();
 
-function getLoginFailEntry(key: string): LoginFailEntry {
+function getLoginFailEntry(key: string, windowMs: number): LoginFailEntry {
   const now = Date.now();
   let entry = loginFailStore.get(key);
-  if (!entry || now - entry.windowStart > LOGIN_FAIL_WINDOW_MS) {
+  if (!entry || now - entry.windowStart > windowMs) {
     entry = { count: 0, windowStart: now, lockedUntil: 0 };
     loginFailStore.set(key, entry);
   }
@@ -244,16 +251,37 @@ function isLoginLocked(key: string): { locked: true; retryAfterSec: number } | {
   return { locked: false };
 }
 
-function recordLoginFailure(key: string): void {
-  const entry = getLoginFailEntry(key);
-  entry.count += 1;
-  if (entry.count >= LOGIN_FAIL_THRESHOLD) {
-    entry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+function recordLoginFailure(
+  emailKey: string,
+  ipKey: string,
+): void {
+  const emailEntry = getLoginFailEntry(emailKey, LOGIN_FAIL_WINDOW_MS);
+  emailEntry.count += 1;
+  if (emailEntry.count >= LOGIN_FAIL_THRESHOLD) {
+    emailEntry.lockedUntil = Date.now() + LOGIN_LOCKOUT_MS;
+  }
+  // Bug #225: IP 维度也累计次数（共用 fail counter），阈值更高、窗口更短。
+  const ipEntry = getLoginFailEntry(ipKey, LOGIN_IP_FAIL_WINDOW_MS);
+  ipEntry.count += 1;
+  if (ipEntry.count >= LOGIN_IP_FAIL_THRESHOLD) {
+    ipEntry.lockedUntil = Date.now() + LOGIN_IP_LOCKOUT_MS;
   }
 }
 
-function clearLoginFailures(key: string): void {
-  loginFailStore.delete(key);
+function clearLoginFailures(emailKey: string, ipKey: string): void {
+  // Bug #225: 成功登录只清 email 维度；IP 维度保留累计避免攻击者换 email 继续刷。
+  loginFailStore.delete(emailKey);
+}
+
+function resolveClientIp(c: { req: { header: (k: string) => string | undefined } }): string {
+  const xRealIp = c.req.header('x-real-ip');
+  if (xRealIp) return xRealIp.trim();
+  const xff = c.req.header('x-forwarded-for');
+  if (xff) {
+    const first = xff.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return '127.0.0.1';
 }
 
 app.post(
@@ -270,8 +298,23 @@ app.post(
   const email = raw.email.toLowerCase().trim();
   const password = raw.password;
 
-  // Bug #123: 渐进式锁定检查 —— 失败次数过多时直接返回 429，避免无限试错。
-  const lockKey = `login:${email}`;
+  // Bug #225: 同时检查 email 维度（保护真实用户）和 IP 维度（防 DoS 流量）。
+  const clientIp = resolveClientIp(c);
+  const lockKey = `login:email:${email}`;
+  const ipLockKey = `login:ip:${clientIp}`;
+  // IP 维度被锁时优先于 email 检查（避免攻击者用 IP 锁把真实用户也拖下水，
+  // 因为 IP 锁的触发条件是 30 次失败，远超正常使用模式）。
+  const ipLock = isLoginLocked(ipLockKey);
+  if (ipLock.locked) {
+    return c.json(
+      {
+        success: false,
+        error: `登录失败次数过多，请 ${Math.ceil(ipLock.retryAfterSec / 60)} 分钟后再试`,
+      },
+      429,
+      { 'Retry-After': String(ipLock.retryAfterSec) },
+    );
+  }
   const lockState = isLoginLocked(lockKey);
   if (lockState.locked) {
     return c.json(
@@ -293,12 +336,13 @@ app.post(
   if (!user || !user.isActive || !passwordValid) {
     // Bug #123: 同样记录失败次数，无论用户是否存在（让 attacker 无法用
     // "邮箱不存在" 与 "密码错误" 的差异推断有效账户）。
-    recordLoginFailure(lockKey);
+    // Bug #225: 同步累计 IP 维度。
+    recordLoginFailure(lockKey, ipLockKey);
     return c.json({ success: false, error: '邮箱或密码错误' }, 401);
   }
 
-  // 登录成功，清除失败计数。
-  clearLoginFailures(lockKey);
+  // 登录成功，清除失败计数（仅 email 维度；IP 维度保留累计防刷）。
+  clearLoginFailures(lockKey, ipLockKey);
 
   const session = await lucia.createSession(user.id, {});
   const sessionCookie = lucia.createSessionCookie(session.id);
@@ -567,19 +611,27 @@ app.put(
   },
 );
 
-app.get('/auth/me', authMiddleware, async (c) => {
-  const user = c.get('user');
-  return c.json({
-    success: true,
-    data: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      schoolId: user.schoolId,
-    },
-  });
-});
+app.get(
+  '/auth/me',
+  // Bug #226: /auth/me 无 rateLimit；移动端轮询（每 30s 拉一次 user info）会被放大
+  // 拖慢 DB。限制 60/min + 1000/day（高频读取，宽松一些）。
+  rateLimit(60, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
+    const user = c.get('user');
+    return c.json({
+      success: true,
+      data: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        schoolId: user.schoolId,
+      },
+    });
+  },
+);
 
 // ========== Mobile Auth (Bearer Token) ==========
 const tokenLoginSchema = z.object({
@@ -605,9 +657,22 @@ app.post(
     const password = raw.password;
     routesLogger.info({ email: email, platform: platform }, '[API /auth/token]');
 
-    // Bug #130: 移动端 token 登录必须复用 #123 渐进式锁定，否则攻击者只需
-    // 切换到 /auth/token 即可绕过对 /auth/login 的失败计数。
-    const lockKey = `login:${email}`;
+    // Bug #225: 与 /auth/login 共享锁定存储（同一 email 5 次失败 → 锁 15 分钟），
+    // 防止攻击者通过 /auth/token 端点绕过 /auth/login 的失败计数。同时检查 IP 维度。
+    const clientIp = resolveClientIp(c);
+    const lockKey = `login:email:${email}`;
+    const ipLockKey = `login:ip:${clientIp}`;
+    const ipLock = isLoginLocked(ipLockKey);
+    if (ipLock.locked) {
+      return c.json(
+        {
+          success: false,
+          error: `登录失败次数过多，请 ${Math.ceil(ipLock.retryAfterSec / 60)} 分钟后再试`,
+        },
+        429,
+        { 'Retry-After': String(ipLock.retryAfterSec) },
+      );
+    }
     const lockState = isLoginLocked(lockKey);
     if (lockState.locked) {
       return c.json(
@@ -627,11 +692,11 @@ app.post(
     const passwordValid = await bcrypt.compare(password, hashToCompare);
 
     if (!user || !user.isActive || !passwordValid) {
-      // Bug #130: 同样记录失败次数，统一与 /auth/login 的失败窗口合并。
-      recordLoginFailure(lockKey);
+      // Bug #130 + #225: 同样记录失败次数（email + IP 双维度），统一与 /auth/login 合并。
+      recordLoginFailure(lockKey, ipLockKey);
       return c.json({ success: false, error: '邮箱或密码错误' }, 401);
     }
-    clearLoginFailures(lockKey);
+    clearLoginFailures(lockKey, ipLockKey);
 
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
@@ -687,19 +752,26 @@ app.get('/auth/tokens', authMiddleware, async (c) => {
 
 // Bug #161: /auth/tokens 只读，无法注销。设备丢失/离职时用户必须能撤销自己的 token。
 // 仅允许撤销自己 userId 下的 token，避免越权。
-app.delete('/auth/tokens/:id', authMiddleware, async (c) => {
-  const user = c.get('user');
-  const id = c.req.param('id');
-  routesLogger.info({ userId: user.id, id: id }, '[API DELETE /auth/tokens/:id]');
-  const deleted = await db
-    .delete(apiTokens)
-    .where(and(eq(apiTokens.id, id), eq(apiTokens.userId, user.id)))
-    .returning({ id: apiTokens.id });
-  if (deleted.length === 0) {
-    return c.json({ success: false, error: 'Token 不存在或无权操作' }, 404);
-  }
-  return c.json({ success: true });
-});
+// Bug #220: 加 rateLimit，撤销 token 失败会返 404，被登录用户可被脚本狂点造成 DB IO。
+app.delete(
+  '/auth/tokens/:id',
+  rateLimit(10, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    routesLogger.info({ userId: user.id, id: id }, '[API DELETE /auth/tokens/:id]');
+    const deleted = await db
+      .delete(apiTokens)
+      .where(and(eq(apiTokens.id, id), eq(apiTokens.userId, user.id)))
+      .returning({ id: apiTokens.id });
+    if (deleted.length === 0) {
+      return c.json({ success: false, error: 'Token 不存在或无权操作' }, 404);
+    }
+    return c.json({ success: true });
+  },
+);
 
 const deviceTokenSchema = z.object({
   token: z.string().min(1),
@@ -2745,6 +2817,18 @@ const ACHIEVEMENT_CATALOG = [
 const studentErrorSyncCache = new Map<string, number>(); // studentId -> lastSyncedAt(ms)
 const STUDENT_ERROR_SYNC_TTL_MS = 30_000;
 
+// Bug #224: 原实现只 set 不 delete。Map 在长寿命进程里会随在线学生增长缓慢膨胀。
+// 加一个低频 setInterval 清理 STUDENT_ERROR_SYNC_TTL_MS 之后无访问的条目；
+// 选择 TTL×4（2 分钟）作为清理阈值，远超 sync 跳过窗口，避免误清活条目。
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, lastSync] of studentErrorSyncCache) {
+    if (now - lastSync > STUDENT_ERROR_SYNC_TTL_MS * 4) {
+      studentErrorSyncCache.delete(key);
+    }
+  }
+}, 5 * 60_000).unref();
+
 app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
   const user = c.get('user');
   const start = Date.now();
@@ -3843,77 +3927,87 @@ app.delete(
 );
 
 // ========== Admin: Dashboard ==========
-app.get('/admin/dashboard/stats', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
-  const user = c.get('user');
-  const startedAt = Date.now();
-  routesLogger.info({ userId: user.id }, '[API /admin/dashboard/stats]');
+app.get(
+  '/admin/dashboard/stats',
+  // Bug #222: 仪表盘统计无 rateLimit；admin 仪表盘通常 10 个 count + 1 个 AVG 慢查询。
+  // 脚本可高频调（虽然有 60s memoize 缓存，但首次失效瞬间的 11 条并发查也会爆 DB）。
+  // 限制 10/min + 200/day。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    routesLogger.info({ userId: user.id }, '[API /admin/dashboard/stats]');
 
-  try {
-    const data = await memoizeAsync(`admin_dash:${user.id}`, 60_000, async () => {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const todayIso = todayStart.toISOString();
+    try {
+      const data = await memoizeAsync(`admin_dash:${user.id}`, 60_000, async () => {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayIso = todayStart.toISOString();
 
-      const [
-        schoolCount,
-        teacherCount,
-        studentCount,
-        essayCount,
-        todayEssayCount,
-        activeStudentCount,
-        apiCallsToday,
-        apiCallsTotal,
-        apiSuccessCount,
-        latencyRow,
-      ] = await Promise.all([
-        db.select({ value: count() }).from(schools),
-        db.select({ value: count() }).from(users).where(eq(users.role, UserRole.TEACHER)),
-        db.select({ value: count() }).from(users).where(eq(users.role, UserRole.STUDENT)),
-        db.select({ value: count() }).from(essays),
-        db.select({ value: count() }).from(essays).where(gte(essays.submittedAt, todayIso)),
-        db
-          .select({ value: count() })
-          .from(users)
-          .where(and(eq(users.role, UserRole.STUDENT), eq(users.isActive, true))),
-        db.select({ value: count() }).from(apiCallLogs).where(gte(apiCallLogs.createdAt, todayIso)),
-        db.select({ value: count() }).from(apiCallLogs),
-        db.select({ value: count() }).from(apiCallLogs).where(eq(apiCallLogs.status, 'success')),
-        db.select({ avg: sql<number>`AVG(${apiCallLogs.latencyMs})` }).from(apiCallLogs),
-      ]);
+        const [
+          schoolCount,
+          teacherCount,
+          studentCount,
+          essayCount,
+          todayEssayCount,
+          activeStudentCount,
+          apiCallsToday,
+          apiCallsTotal,
+          apiSuccessCount,
+          latencyRow,
+        ] = await Promise.all([
+          db.select({ value: count() }).from(schools),
+          db.select({ value: count() }).from(users).where(eq(users.role, UserRole.TEACHER)),
+          db.select({ value: count() }).from(users).where(eq(users.role, UserRole.STUDENT)),
+          db.select({ value: count() }).from(essays),
+          db.select({ value: count() }).from(essays).where(gte(essays.submittedAt, todayIso)),
+          db
+            .select({ value: count() })
+            .from(users)
+            .where(and(eq(users.role, UserRole.STUDENT), eq(users.isActive, true))),
+          db.select({ value: count() }).from(apiCallLogs).where(gte(apiCallLogs.createdAt, todayIso)),
+          db.select({ value: count() }).from(apiCallLogs),
+          db.select({ value: count() }).from(apiCallLogs).where(eq(apiCallLogs.status, 'success')),
+          db.select({ avg: sql<number>`AVG(${apiCallLogs.latencyMs})` }).from(apiCallLogs),
+        ]);
 
-      const totalApi = Number(apiCallsTotal[0]?.value ?? 0);
-      const successApi = Number(apiSuccessCount[0]?.value ?? 0);
-      const totalStudents = Number(studentCount[0]?.value ?? 0);
-      return {
-        totalSchools: Number(schoolCount[0]?.value ?? 0),
-        totalTeachers: Number(teacherCount[0]?.value ?? 0),
-        totalStudents,
-        totalEssays: Number(essayCount[0]?.value ?? 0),
-        todayEssays: Number(todayEssayCount[0]?.value ?? 0),
-        activeRate:
-          totalStudents === 0
-            ? 0
-            : Math.round((Number(activeStudentCount[0]?.value ?? 0) / totalStudents) * 100),
-        apiCallsToday: Number(apiCallsToday[0]?.value ?? 0),
-        apiCallsTotal: totalApi,
-        apiSuccessRate: totalApi === 0 ? 0 : Math.round((successApi / totalApi) * 100),
-        apiAvgLatencyMs: Math.round(Number(latencyRow[0]?.avg ?? 0)),
-      } satisfies AdminDashboardStats;
-    });
+        const totalApi = Number(apiCallsTotal[0]?.value ?? 0);
+        const successApi = Number(apiSuccessCount[0]?.value ?? 0);
+        const totalStudents = Number(studentCount[0]?.value ?? 0);
+        return {
+          totalSchools: Number(schoolCount[0]?.value ?? 0),
+          totalTeachers: Number(teacherCount[0]?.value ?? 0),
+          totalStudents,
+          totalEssays: Number(essayCount[0]?.value ?? 0),
+          todayEssays: Number(todayEssayCount[0]?.value ?? 0),
+          activeRate:
+            totalStudents === 0
+              ? 0
+              : Math.round((Number(activeStudentCount[0]?.value ?? 0) / totalStudents) * 100),
+          apiCallsToday: Number(apiCallsToday[0]?.value ?? 0),
+          apiCallsTotal: totalApi,
+          apiSuccessRate: totalApi === 0 ? 0 : Math.round((successApi / totalApi) * 100),
+          apiAvgLatencyMs: Math.round(Number(latencyRow[0]?.avg ?? 0)),
+        } satisfies AdminDashboardStats;
+      });
 
-    routesLogger.info(
-      { duration: Date.now() - startedAt, schools: data.totalSchools },
-      '[API /admin/dashboard/stats] exit',
-    );
-    return c.json({ success: true, data });
-  } catch (err) {
-    routesLogger.error(
-      { err: err instanceof Error ? err.message : 'unknown' },
-      '[API /admin/dashboard/stats] error:',
-    );
-    return c.json({ success: false, error: '获取仪表盘统计失败' }, 500);
-  }
-});
+      routesLogger.info(
+        { duration: Date.now() - startedAt, schools: data.totalSchools },
+        '[API /admin/dashboard/stats] exit',
+      );
+      return c.json({ success: true, data });
+    } catch (err) {
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
+        '[API /admin/dashboard/stats] error:',
+      );
+      return c.json({ success: false, error: '获取仪表盘统计失败' }, 500);
+    }
+  },
+);
 
 // ========== Admin: Schools ==========
 const schoolCreateSchema = z.object({
@@ -4212,6 +4306,11 @@ app.delete(
 
 app.get(
   '/admin/schools/:id/stats',
+  // Bug #221: 学校统计无 rateLimit；脚本可疯狂调 5 条 GROUP BY 把 DB 跑满。
+  // 限制 10/min + 200/day。已有 60s memoizeAsync 缓存做软保护，但失效后第一次
+  // 仍可能命中慢查询；rateLimit 是兜底。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   async (c) => {
@@ -4500,85 +4599,94 @@ app.delete(
 );
 
 // ========== Admin: API Logs ==========
-app.get('/admin/api-logs', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
-  const user = c.get('user');
-  const startedAt = Date.now();
-  const provider = c.req.query('provider');
-  const dateFrom = c.req.query('dateFrom');
-  const dateTo = c.req.query('dateTo');
-  // Bug #125: 之前 Number(query ?? '50') 缺 NaN 兜底，且无 total；改为使用统一的
-  // parsePositiveInt/parseNonNegativeInt 兜底异常输入，并返回 total 便于前端翻页。
-  // Bug #125 续: apiCallLogs 表会无限增长，前端只展示最近 N 条；这里限制 max=500，
-  // 真正的长期保留策略应在 worker 中加 retention 任务定期清理（> 90 天）。
-  const offset = parseNonNegativeInt(c.req.query('offset'), 0);
-  const limit = parsePositiveInt(c.req.query('limit'), 50, 500);
+app.get(
+  '/admin/api-logs',
+  // Bug #223: API 日志查询无 rateLimit；admin 脚本可拖全表 + GROUP BY 把 DB 跑满。
+  // 限制 10/min + 200/day（与 dashboard 对齐）。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const provider = c.req.query('provider');
+    const dateFrom = c.req.query('dateFrom');
+    const dateTo = c.req.query('dateTo');
+    // Bug #125: 之前 Number(query ?? '50') 缺 NaN 兜底，且无 total；改为使用统一的
+    // parsePositiveInt/parseNonNegativeInt 兜底异常输入，并返回 total 便于前端翻页。
+    // Bug #125 续: apiCallLogs 表会无限增长，前端只展示最近 N 条；这里限制 max=500，
+    // 真正的长期保留策略应在 worker 中加 retention 任务定期清理（> 90 天）。
+    const offset = parseNonNegativeInt(c.req.query('offset'), 0);
+    const limit = parsePositiveInt(c.req.query('limit'), 50, 500);
 
-  // Bug #137: dateFrom > dateTo 时整段 SQL 必然返回 0，但前端会误以为没有数据；
-  // 解析为可比较的时间字符串后显式拒绝，提示用户修正。
-  if (dateFrom && dateTo) {
-    const fromMs = Date.parse(dateFrom);
-    const toMs = Date.parse(dateTo);
-    if (Number.isFinite(fromMs) && Number.isFinite(toMs) && fromMs > toMs) {
-      return c.json(
-        { success: false, error: 'dateFrom 不能晚于 dateTo' },
-        400,
-      );
+    // Bug #137: dateFrom > dateTo 时整段 SQL 必然返回 0，但前端会误以为没有数据；
+    // 解析为可比较的时间字符串后显式拒绝，提示用户修正。
+    if (dateFrom && dateTo) {
+      const fromMs = Date.parse(dateFrom);
+      const toMs = Date.parse(dateTo);
+      if (Number.isFinite(fromMs) && Number.isFinite(toMs) && fromMs > toMs) {
+        return c.json(
+          { success: false, error: 'dateFrom 不能晚于 dateTo' },
+          400,
+        );
+      }
     }
-  }
 
-  routesLogger.info(
-    {
-      userId: user.id,
-      provider: provider ?? 'all',
-      dateFrom: dateFrom ?? '',
-      dateTo: dateTo ?? '',
-    },
-    '[API /admin/api-logs]',
-  );
-
-  try {
-    const conds = [];
-    if (provider) conds.push(eq(apiCallLogs.provider, provider));
-    if (dateFrom) conds.push(gte(apiCallLogs.createdAt, dateFrom));
-    if (dateTo) conds.push(lt(apiCallLogs.createdAt, dateTo));
-    const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
-
-    const rows = await db.query.apiCallLogs.findMany({
-      where,
-      orderBy: desc(apiCallLogs.createdAt),
-      limit,
-      offset,
-    });
-
-    const totalRow = await db.select({ c: count() }).from(apiCallLogs).where(where);
-    const total = totalRow[0]?.c ?? 0;
-
-    const data: ApiCallLogItem[] = rows.map((r) => ({
-      id: r.id,
-      provider: r.provider,
-      model: r.model,
-      endpoint: r.endpoint,
-      tokensUsed: r.tokensUsed,
-      latencyMs: r.latencyMs,
-      cost: r.cost,
-      status: r.status,
-      errorMessage: r.errorMessage,
-      essayId: r.essayId,
-      createdAt: r.createdAt,
-    }));
     routesLogger.info(
-      { duration: Date.now() - startedAt, count: data.length },
-      '[API /admin/api-logs] exit',
+      {
+        userId: user.id,
+        provider: provider ?? 'all',
+        dateFrom: dateFrom ?? '',
+        dateTo: dateTo ?? '',
+      },
+      '[API /admin/api-logs]',
     );
-    return c.json({ success: true, data, total, limit, offset });
-  } catch (err) {
-    routesLogger.error(
-      { err: err instanceof Error ? err.message : 'unknown' },
-      '[API /admin/api-logs] error:',
-    );
-    return c.json({ success: false, error: '获取 API 日志失败' }, 500);
-  }
-});
+
+    try {
+      const conds = [];
+      if (provider) conds.push(eq(apiCallLogs.provider, provider));
+      if (dateFrom) conds.push(gte(apiCallLogs.createdAt, dateFrom));
+      if (dateTo) conds.push(lt(apiCallLogs.createdAt, dateTo));
+      const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
+
+      const rows = await db.query.apiCallLogs.findMany({
+        where,
+        orderBy: desc(apiCallLogs.createdAt),
+        limit,
+        offset,
+      });
+
+      const totalRow = await db.select({ c: count() }).from(apiCallLogs).where(where);
+      const total = totalRow[0]?.c ?? 0;
+
+      const data: ApiCallLogItem[] = rows.map((r) => ({
+        id: r.id,
+        provider: r.provider,
+        model: r.model,
+        endpoint: r.endpoint,
+        tokensUsed: r.tokensUsed,
+        latencyMs: r.latencyMs,
+        cost: r.cost,
+        status: r.status,
+        errorMessage: r.errorMessage,
+        essayId: r.essayId,
+        createdAt: r.createdAt,
+      }));
+      routesLogger.info(
+        { duration: Date.now() - startedAt, count: data.length },
+        '[API /admin/api-logs] exit',
+      );
+      return c.json({ success: true, data, total, limit, offset });
+    } catch (err) {
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
+        '[API /admin/api-logs] error:',
+      );
+      return c.json({ success: false, error: '获取 API 日志失败' }, 500);
+    }
+  },
+);
 
 // ========== Admin: Announcements ==========
 const announcementCreateSchema = z.object({

@@ -33,5 +33,6 @@ ${essay}
   "relevanceScore": 1.5,
   "contentScore": 4.5,
   "comment": "内容维度的评语"
-}`;
+}
+注意：expansionScore 与 relevanceScore 各自范围 0-2.5，两者之和应与 contentScore (0-5.0) 一致。`;
 }

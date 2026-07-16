@@ -72,12 +72,10 @@ export async function performOcr(imageBase64: string): Promise<OcrResult> {
   const apiKey = process.env.OCR_API_KEY;
 
   if (!apiKey) {
-    ocrLogger.warn('OCR_API_KEY not configured, returning mock result');
-    return {
-      content:
-        'This is a mock OCR result. Please configure OCR_API_KEY to enable real handwriting recognition.',
-      confidence: 0.85,
-    };
+    // Bug #7: 不要静默返回英文占位文本——手写作文会被替换为占位内容并入库，污染数据。
+    // 直接抛错，由调用方返回 503 让前端提示用户/管理员配置 OCR 服务。
+    ocrLogger.error('OCR_API_KEY not configured; refusing to run OCR');
+    throw new Error('OCR 服务未配置：缺少 OCR_API_KEY 环境变量');
   }
 
   const url = 'https://vision.googleapis.com/v1/images:annotate';

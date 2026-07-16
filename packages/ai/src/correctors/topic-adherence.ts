@@ -52,7 +52,7 @@ ${essay}
     { "element": "观点论述", "required": false, "present": false, "evidence": "" }
   ],
   "topicRelevance": {
-    "score": 4.5,
+    "score": 1.5,
     "comment": "全文紧扣主题，无偏离内容"
   },
   "topicAdherenceScore": 1.5,
@@ -63,5 +63,6 @@ ${essay}
     { "priority": "high", "category": "审题扣题", "suggestion": "在结尾段补充个人参赛收获与感悟，回应题目第三个要点" }
   ],
   "comment": "审题扣题维度评语"
-}`;
+}
+注意：topicRelevance.score 范围 0-2.0，应与 topicAdherenceScore (0-2.0) 一致。`;
 }

@@ -8,7 +8,7 @@ import { env } from '@betterwrite/shared/env';
 import { logger } from '@betterwrite/shared/logger';
 import { CORRECTION_QUEUE, type CorrectionJobData } from '@betterwrite/shared/queue';
 import { Worker } from 'bullmq';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 
 export { performOcr, type OcrResult } from './ocr.js';
@@ -61,10 +61,22 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
 
   const now = new Date().toISOString();
 
-  await db
+  // 抢占式状态更新：仅在 status ∈ {pending, failed} 时才将状态置为 correcting。
+  // 多个 worker 实例并发处理同一 essayId 时，只有一个 UPDATE 会真正修改行；
+  // 其他实例返回 0 行变更，立即放弃以避免重复调用 AI（Bug #5 修复）。
+  const claimResult = await db
     .update(essays)
     .set({ status: 'correcting', updatedAt: now })
-    .where(eq(essays.id, essayId));
+    .where(and(eq(essays.id, essayId), inArray(essays.status, ['pending', 'failed'])))
+    .returning({ id: essays.id });
+
+  if (claimResult.length === 0) {
+    correctionLogger.warn(
+      { status: essay.status },
+      'Essay already claimed by another worker, skipping',
+    );
+    return;
+  }
 
   const startTime = Date.now();
 
@@ -73,7 +85,24 @@ export async function processCorrection(job: CorrectionJob): Promise<void> {
 
     if (router.availableNames().length === 0) {
       correctionLogger.warn('No AI provider configured, using mock correction');
-      result = createMockCorrection(essay.content, essay.wordCount ?? 0);
+      const taskInput: EssayTaskInput = essay.task
+        ? {
+            title: essay.task.title,
+            requirements: essay.task.requirements,
+            keyPoints: safeParseJson<string[]>(essay.task.keyPoints, []),
+            topicType: essay.task.topicType,
+            wordLimitMin: essay.task.wordLimitMin,
+            wordLimitMax: essay.task.wordLimitMax,
+          }
+        : {
+            title: '自由写作',
+            requirements: '请根据题目要求完成一篇英语作文。',
+            keyPoints: [],
+            topicType: 'narration',
+            wordLimitMin: 80,
+            wordLimitMax: 125,
+          };
+      result = createMockCorrection(essay.content, essay.wordCount ?? 0, taskInput);
     } else if (!essay.task) {
       result = await correctEssay(
         essay.content,
@@ -175,6 +204,7 @@ function safeParseJson<T>(value: string | null | undefined, fallback: T): T {
 function createMockCorrection(
   content: string,
   wordCount: number,
+  task: EssayTaskInput,
 ): Awaited<ReturnType<typeof correctEssay>> {
   const length = content.length;
   let base = 10;
@@ -184,16 +214,40 @@ function createMockCorrection(
   else if (length > 200) base = 10;
   else base = 7;
 
+  // 使用任务的真实字数上下限（Bug #2 修复）
+  const wordMin = task.wordLimitMin;
+  const wordMax = task.wordLimitMax;
   let total = base;
-  if (wordCount < 80) total = Math.min(total, 9.5);
-  if (wordCount >= 100 && wordCount <= 125) total = Math.min(15, total + 0.5);
+  if (wordCount < wordMin) total = Math.min(total, 9.5);
+  if (wordCount >= Math.max(100, wordMin) && wordCount <= wordMax) {
+    total = Math.min(15, total + 0.5);
+  }
+
+  // 使用 SCORING_WEIGHTS 中定义的真实权重（Bug #1 修复）
+  // topicAdherence: 2.0 / 15 = 0.1333
+  // content:       5.0 / 15 = 0.3333
+  // language:      4.0 / 15 = 0.2667
+  // structure:     2.5 / 15 = 0.1667
+  // presentation:  1.5 / 15 = 0.1
+  const DIMENSION_MAX = {
+    topicAdherence: 2.0,
+    content: 5.0,
+    language: 4.0,
+    structure: 2.5,
+    presentation: 1.5,
+  } as const;
+  const topicAdherenceScore =
+    Math.round(Math.min(total * (2.0 / 15), DIMENSION_MAX.topicAdherence) * 10) / 10;
+  const contentScore =
+    Math.round(Math.min(total * (5.0 / 15), DIMENSION_MAX.content) * 10) / 10;
+  const languageScore =
+    Math.round(Math.min(total * (4.0 / 15), DIMENSION_MAX.language) * 10) / 10;
+  const structureScore =
+    Math.round(Math.min(total * (2.5 / 15), DIMENSION_MAX.structure) * 10) / 10;
+  const presentationScore =
+    Math.round(Math.min(total * (1.5 / 15), DIMENSION_MAX.presentation) * 10) / 10;
 
   const tier = getScoreTier(total);
-  const topicAdherenceScore = Math.round(total * 0.2 * 10) / 10;
-  const contentScore = Math.round(total * 0.1 * 10) / 10;
-  const languageScore = Math.round(total * 0.4 * 10) / 10;
-  const structureScore = Math.round(total * 0.2 * 10) / 10;
-  const presentationScore = Math.round(total * 0.1 * 10) / 10;
 
   return {
     topicAdherenceScore,

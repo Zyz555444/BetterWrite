@@ -33,8 +33,10 @@ export const contentPointSchema = z.object({
 
 export const contentAnalysisSchema = z.object({
   pointCoverage: z.array(contentPointSchema),
-  expansionScore: z.number().min(0).max(4.5),
-  relevanceScore: z.number().min(0).max(4.5),
+  // Bug #18: 子维度分数区间曾设为 0-4.5，但 contentScore 整体 max=5.0
+  // 两者相加极易超过 5.0；改为 0-2.5 + 0-2.5 = 0-5.0 与 contentScore 上限一致。
+  expansionScore: z.number().min(0).max(2.5),
+  relevanceScore: z.number().min(0).max(2.5),
   contentScore: z.number().min(0).max(5),
   comment: z.string(),
 });
@@ -120,7 +122,9 @@ export const topicAdherenceAnalysisSchema = z.object({
   keyPointCoverage: z.array(contentPointSchema),
   requiredElements: z.array(requiredElementSchema),
   topicRelevance: z.object({
-    score: z.number().min(0).max(5),
+    // Bug #18: topicRelevance.score 曾设为 0-5，但 topicAdherence 整体 max=2.0
+    // 4.5 > 2.0 的样例值会让 LLM 误以为整体维度可打到 4.5 分；改为 0-2 对齐。
+    score: z.number().min(0).max(2),
     comment: z.string(),
   }),
   topicAdherenceScore: z.number().min(0).max(2),

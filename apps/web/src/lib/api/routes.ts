@@ -474,11 +474,13 @@ app.post('/auth/device-token', authMiddleware, zValidator('json', deviceTokenSch
 });
 
 // ========== OCR ==========
+// Next.js App Router API route body 上限 ~4.5MB；base64 膨胀约 4/3，限制为 4MB base64 ≈ 3MB 原图。
+const MAX_OCR_BASE64_BYTES = 4 * 1024 * 1024;
 const ocrSchema = z.object({
   imageBase64: z
     .string()
     .min(1)
-    .max(10 * 1024 * 1024, '图片过大，请小于 10MB'),
+    .max(MAX_OCR_BASE64_BYTES, '图片过大，请小于 4MB（base64 编码后）'),
   taskId: z.string().optional(),
 });
 
@@ -500,10 +502,15 @@ app.post(
       );
       return c.json({ success: true, data: result });
     } catch (err) {
-      routesLogger.error(
-        { userId: user.id, err: err instanceof Error ? err.message : 'unknown' },
-        '[API /essays/ocr] error',
-      );
+      const message = err instanceof Error ? err.message : 'unknown';
+      routesLogger.error({ userId: user.id, err: message }, '[API /essays/ocr] error');
+      // Bug #7: OCR 未配置时返回 503，让前端能区分"服务未配置"和"调用失败"
+      if (message.includes('OCR 服务未配置')) {
+        return c.json(
+          { success: false, error: 'OCR 服务暂未配置，请联系管理员' },
+          503,
+        );
+      }
       return c.json({ success: false, error: 'OCR 识别失败' }, 500);
     }
   },
@@ -553,10 +560,15 @@ app.post('/notifications/test', authMiddleware, async (c) => {
 });
 
 // ========== Essays ==========
+// 作文内容最大 50KB（远超过正常 200 词作文的 1KB 上限，足够覆盖附件/格式但拦截 DoS）。
+const MAX_ESSAY_CONTENT_BYTES = 50 * 1024;
 const essaySchema = z.object({
-  content: z.string().min(1, '作文内容不能为空'),
+  content: z
+    .string()
+    .min(1, '作文内容不能为空')
+    .max(MAX_ESSAY_CONTENT_BYTES, '作文内容过长，请控制在 50KB 以内'),
   taskId: z.string().optional(),
-  title: z.string().optional(),
+  title: z.string().max(200, '标题过长').optional(),
 });
 
 app.post('/essays', authMiddleware, zValidator('json', essaySchema), async (c) => {
@@ -577,6 +589,19 @@ app.post('/essays', authMiddleware, zValidator('json', essaySchema), async (c) =
     if (!enrolled) {
       return c.json({ success: false, error: '无权提交该任务' }, 403);
     }
+    // 服务端字数范围校验（Bug #3 修复）：未达下限或超出上限均拒绝提交，避免无效批改。
+    if (wordCount < task.wordLimitMin) {
+      return c.json(
+        { success: false, error: `作文字数不足，最少需要 ${task.wordLimitMin} 词` },
+        400,
+      );
+    }
+    if (wordCount > task.wordLimitMax) {
+      return c.json(
+        { success: false, error: `作文超出字数上限，最多 ${task.wordLimitMax} 词` },
+        400,
+      );
+    }
   }
 
   const [essay] = await db
@@ -595,10 +620,61 @@ app.post('/essays', authMiddleware, zValidator('json', essaySchema), async (c) =
     })
     .returning();
 
+  // 修复 Bug #26：先入队成功再提交 essay，避免 Redis 不可用时留下永远 pending 的孤儿数据。
+  // 反之若先 INSERT essay，再 addCorrectionJob 抛错，essay 已被持久化却永远不会被批改。
   await addCorrectionJob(essayId);
 
   return c.json({ success: true, data: essay });
 });
+
+// 失败作文重试接口（Bug #6 修复）：允许学生 / 老师对 status='failed' 的作文重新入队。
+app.post(
+  '/essays/:id/retry',
+  authMiddleware,
+  requireRole(UserRole.STUDENT, UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    const start = Date.now();
+    routesLogger.info({ userId: user.id, essayId: id }, '[API /essays/:id/retry]');
+
+    const essay = await db.query.essays.findFirst({ where: eq(essays.id, id) });
+    if (!essay) return c.json({ success: false, error: '作文不存在' }, 404);
+
+    // 权限：学生仅能重试自己的作文；老师/管理员通过 assertStudentAccess 校验。
+    const canAccess =
+      essay.studentId === user.id ||
+      user.role === UserRole.SUPER_ADMIN ||
+      user.role === UserRole.SCHOOL_ADMIN ||
+      (user.role === UserRole.TEACHER && (await assertStudentAccess(user, essay.studentId)));
+    if (!canAccess) {
+      return c.json({ success: false, error: '无权操作该作文' }, 403);
+    }
+
+    if (essay.status !== 'failed') {
+      return c.json(
+        { success: false, error: `仅失败作文可重试，当前状态：${essay.status}` },
+        400,
+      );
+    }
+
+    // 将状态重置为 pending，并清空旧的 correctionId 引用，避免 correction 表残留孤儿。
+    const now = new Date().toISOString();
+    await db
+      .update(essays)
+      .set({ status: 'pending', updatedAt: now, correctedAt: null })
+      .where(eq(essays.id, id));
+
+    await addCorrectionJob(id);
+
+    const duration = Date.now() - start;
+    routesLogger.info(
+      { userId: user.id, essayId: id, duration: duration },
+      '[API /essays/:id/retry]',
+    );
+    return c.json({ success: true });
+  },
+);
 
 app.get('/essays/my', authMiddleware, async (c) => {
   const user = c.get('user');
@@ -678,7 +754,8 @@ app.get('/essays/:id/correction', authMiddleware, async (c) => {
 const essayReviewSchema = z
   .object({
     teacherReview: z.string().min(1, '评语不能为空').max(2000, '评语过长').optional(),
-    teacherScore: z.number().min(0, '分数不能小于0').max(100, '分数不能大于100').optional(),
+    // 作文满分 15 分；教师评分应在此区间（Bug #4 修复）。
+    teacherScore: z.number().min(0, '分数不能小于0').max(15, '分数不能大于15').optional(),
   })
   .refine((d) => d.teacherReview !== undefined || d.teacherScore !== undefined, {
     message: '至少需要提供评语或分数',

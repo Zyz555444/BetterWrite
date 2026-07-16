@@ -658,6 +658,22 @@ app.get('/auth/tokens', authMiddleware, async (c) => {
   return c.json({ success: true, data: list });
 });
 
+// Bug #161: /auth/tokens 只读，无法注销。设备丢失/离职时用户必须能撤销自己的 token。
+// 仅允许撤销自己 userId 下的 token，避免越权。
+app.delete('/auth/tokens/:id', authMiddleware, async (c) => {
+  const user = c.get('user');
+  const id = c.req.param('id');
+  routesLogger.info({ userId: user.id, id: id }, '[API DELETE /auth/tokens/:id]');
+  const deleted = await db
+    .delete(apiTokens)
+    .where(and(eq(apiTokens.id, id), eq(apiTokens.userId, user.id)))
+    .returning({ id: apiTokens.id });
+  if (deleted.length === 0) {
+    return c.json({ success: false, error: 'Token 不存在或无权操作' }, 404);
+  }
+  return c.json({ success: true });
+});
+
 const deviceTokenSchema = z.object({
   token: z.string().min(1),
   platform: z.enum(['ios', 'android']),
@@ -882,14 +898,18 @@ app.post(
     const start = Date.now();
     routesLogger.info({ userId: user.id, essayId: id }, '[API /essays/:id/retry]');
 
-    const essay = await db.query.essays.findFirst({ where: eq(essays.id, id) });
+    const essay = await db.query.essays.findFirst({
+      where: eq(essays.id, id),
+      with: { student: { columns: { id: true, schoolId: true } } },
+    });
     if (!essay) return c.json({ success: false, error: '作文不存在' }, 404);
 
-    // 权限：学生仅能重试自己的作文；老师/管理员通过 assertStudentAccess 校验。
+    // Bug #162: 之前对 SCHOOL_ADMIN 走无条件 `user.role === UserRole.SCHOOL_ADMIN` 分支，
+    // 跨校可重试任意作文。改为统一走"owner OR super_admin OR (school_admin && same school) OR (teacher && has class)"。
     const canAccess =
       essay.studentId === user.id ||
       user.role === UserRole.SUPER_ADMIN ||
-      user.role === UserRole.SCHOOL_ADMIN ||
+      (user.role === UserRole.SCHOOL_ADMIN && essay.student?.schoolId === user.schoolId) ||
       (user.role === UserRole.TEACHER && (await assertStudentAccess(user, essay.studentId)));
     if (!canAccess) {
       return c.json({ success: false, error: '无权操作该作文' }, 403);
@@ -948,14 +968,17 @@ app.get('/essays/:id', authMiddleware, async (c) => {
   routesLogger.info({ userId: user.id, role: user.role, essayId: id }, '[API /essays/:id]');
   const essay = await db.query.essays.findFirst({
     where: eq(essays.id, id),
-    with: { correction: true, student: true, task: true },
+    with: { correction: true, student: { columns: { id: true, schoolId: true } }, task: true },
   });
   if (!essay) return c.json({ success: false, error: 'Not found' }, 404);
 
+  // Bug #162: 之前对 SCHOOL_ADMIN 走无条件 `user.role === UserRole.SCHOOL_ADMIN` 分支，
+  // 跨校可查看任意学生的作文（含批改内容）。改为与 /essays/:id/review 一致：
+  // SCHOOL_ADMIN 必须同校。Teacher 走 assertStudentAccess（校验所教班级）。
   const canAccess =
     essay.studentId === user.id ||
     user.role === UserRole.SUPER_ADMIN ||
-    user.role === UserRole.SCHOOL_ADMIN ||
+    (user.role === UserRole.SCHOOL_ADMIN && essay.student?.schoolId === user.schoolId) ||
     (user.role === UserRole.TEACHER && (await assertStudentAccess(user, essay.studentId)));
 
   if (!canAccess) {
@@ -976,17 +999,18 @@ app.get('/essays/:id/correction', authMiddleware, async (c) => {
   );
   const essay = await db.query.essays.findFirst({
     where: eq(essays.id, id),
-    with: { correction: true, student: true },
+    with: { correction: true, student: { columns: { id: true, schoolId: true } } },
   });
   if (!essay) {
     routesLogger.warn({ id: id }, '[API /essays/:id/correction] essay not found');
     return c.json({ success: false, error: 'Not found' }, 404);
   }
 
+  // Bug #162: 同样的跨校 IDOR 修复，与 /essays/:id 一致。
   const canAccess =
     essay.studentId === user.id ||
     user.role === UserRole.SUPER_ADMIN ||
-    user.role === UserRole.SCHOOL_ADMIN ||
+    (user.role === UserRole.SCHOOL_ADMIN && essay.student?.schoolId === user.schoolId) ||
     (user.role === UserRole.TEACHER && (await assertStudentAccess(user, essay.studentId)));
 
   if (!canAccess) {
@@ -1194,6 +1218,9 @@ const taskSchema = z
 
 app.post(
   '/tasks',
+  // Bug #168: 创建作文任务无 rateLimit，teacher 可批量刷任务。
+  rateLimit(20, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   zValidator('json', taskSchema),
@@ -2020,6 +2047,9 @@ const importSchema = z.object({
 
 app.post(
   '/teacher/students/import',
+  // Bug #166: CSV 导入无 rateLimit，teacher 失误可塞 10MB CSV 反复提交。
+  rateLimit(5, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   zValidator('json', importSchema),
@@ -2029,14 +2059,25 @@ app.post(
     const start = Date.now();
     routesLogger.info({ userId: user.id, classId: classId }, '[API /teacher/students/import]');
 
+    // Bug #167: 限制单次导入最大行数 + CSV 字节数，避免一个请求塞 10 万行
+    // 把 DB + bcrypt 写满整分钟。
+    if (csv.length > 1_000_000) {
+      return c.json({ success: false, error: 'CSV 过大，请拆成多次导入（单次 ≤ 1MB）' }, 400);
+    }
+    const lines = csv.trim().split(/\r?\n/);
+    if (lines.length > 1001) {
+      return c.json(
+        { success: false, error: '单次最多导入 1000 名学生，请拆成多次' },
+        400,
+      );
+    }
+
     const cls = await db.query.classes.findFirst({ where: eq(classes.id, classId) });
     if (!cls) return c.json({ success: false, error: '班级不存在' }, 404);
     if (!(await assertClassAccess(user, classId))) {
       return c.json({ success: false, error: '无权操作该班级' }, 403);
     }
 
-    // 解析 CSV
-    const lines = csv.trim().split(/\r?\n/);
     if (lines.length === 0) return c.json({ success: false, error: 'CSV 为空' }, 400);
 
     const header = lines[0].toLowerCase().trim();
@@ -2380,8 +2421,19 @@ app.patch(
     });
     if (!existing) return c.json({ success: false, error: '资源不存在' }, 404);
 
+    // Bug #159: 之前只对 TEACHER 校验 createdBy，SCHOOL_ADMIN 可以改/删任意学校的资源（IDOR）。
+    // 改为：教师必须是创建者；学校管理员必须是创建者所在学校的 admin；超级管理员允许所有。
     if (user.role === UserRole.TEACHER && existing.createdBy !== user.id) {
       return c.json({ success: false, error: '无权修改他人的资源' }, 403);
+    }
+    if (user.role === UserRole.SCHOOL_ADMIN) {
+      const creator = await db.query.users.findFirst({
+        where: eq(users.id, existing.createdBy),
+        columns: { schoolId: true },
+      });
+      if (!creator || creator.schoolId !== user.schoolId) {
+        return c.json({ success: false, error: '无权修改其他学校的资源' }, 403);
+      }
     }
 
     const now = new Date().toISOString();
@@ -2422,8 +2474,18 @@ app.delete(
     });
     if (!existing) return c.json({ success: false, error: '资源不存在' }, 404);
 
+    // Bug #159: 同样的 IDOR 修复，与 PATCH 路径一致。
     if (user.role === UserRole.TEACHER && existing.createdBy !== user.id) {
       return c.json({ success: false, error: '无权删除他人的资源' }, 403);
+    }
+    if (user.role === UserRole.SCHOOL_ADMIN) {
+      const creator = await db.query.users.findFirst({
+        where: eq(users.id, existing.createdBy),
+        columns: { schoolId: true },
+      });
+      if (!creator || creator.schoolId !== user.schoolId) {
+        return c.json({ success: false, error: '无权删除其他学校的资源' }, 403);
+      }
     }
 
     await db.delete(teachingResources).where(eq(teachingResources.id, id));
@@ -2649,20 +2711,29 @@ app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async 
   return c.json({ success: true, data: groups });
 });
 
-app.post('/student/errors/sync', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
-  const user = c.get('user');
-  const start = Date.now();
-  routesLogger.info({ userId: user.id }, '[API /student/errors/sync]');
-  const synced = await syncStudentErrorBook(user.id);
-  // Bug #124: 主动 sync 也要刷新缓存，避免下一次 list 又走一遍。
-  studentErrorSyncCache.set(user.id, Date.now());
-  const duration = Date.now() - start;
-  routesLogger.info(
-    { userId: user.id, synced: synced, duration: duration },
-    '[API /student/errors/sync]',
-  );
-  return c.json({ success: true, data: { synced } });
-});
+app.post(
+  '/student/errors/sync',
+  // Bug #169: 同步错题本无 rateLimit；syncStudentErrorBook 要扫所有 correction 行
+  // + 重新聚合 stats，频繁调用会拖慢 DB。限制 1/min + 10/day。
+  rateLimit(1, 60_000),
+  rateLimit(10, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
+    const user = c.get('user');
+    const start = Date.now();
+    routesLogger.info({ userId: user.id }, '[API /student/errors/sync]');
+    const synced = await syncStudentErrorBook(user.id);
+    // Bug #124: 主动 sync 也要刷新缓存，避免下一次 list 又走一遍。
+    studentErrorSyncCache.set(user.id, Date.now());
+    const duration = Date.now() - start;
+    routesLogger.info(
+      { userId: user.id, synced: synced, duration: duration },
+      '[API /student/errors/sync]',
+    );
+    return c.json({ success: true, data: { synced } });
+  },
+);
 
 const errorPracticeBodySchema = z.object({ errorType: z.string().min(1).max(50) });
 
@@ -3047,7 +3118,11 @@ app.get('/student/question-bank/:id', authMiddleware, requireRole(UserRole.STUDE
   const user = c.get('user');
   const id = c.req.param('id');
   routesLogger.info({ userId: user.id, id: id }, '[API /student/question-bank/:id]');
-  const r = await db.query.questionBank.findFirst({ where: eq(questionBank.id, id) });
+  // Bug #160: 之前不校验 isPublic，未来若 admin 创建私有题目（题库编辑权限），
+  // 学生可直接 GET 私有题。防御性加上 isPublic=1 过滤。
+  const r = await db.query.questionBank.findFirst({
+    where: and(eq(questionBank.id, id), eq(questionBank.isPublic, 1)),
+  });
   if (!r) return c.json({ success: false, error: '题目不存在' }, 404);
   const data: QuestionBankItem = {
     id: r.id,
@@ -3542,13 +3617,19 @@ app.get('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT)
 });
 
 const draftBodySchema = z.object({
-  content: z.string().min(1),
+  // Bug #170: 草稿内容原 schema 仅有 min(1) 无 max，学生可塞 1MB 文本反复写入。
+  // 限制 50KB 与正式 essay 提交的 5000 字符（≈ 5KB）相比留足余量（学生可能粘贴长引文）。
+  content: z.string().min(1).max(50_000),
   wordCount: z.number().optional(),
   durationMs: z.number().optional(),
 });
 
 app.post(
   '/student/drafts/:taskId',
+  // Bug #170 续: 草稿自动保存可能高频触发，但 30/min + 200/day 足够（每 2 秒 1 次），
+  // 再快就属于滥用（批量扫或脚本）。
+  rateLimit(30, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.STUDENT),
   zValidator('json', draftBodySchema),
@@ -3861,6 +3942,9 @@ app.post(
 
 app.put(
   '/admin/schools/:id',
+  // Bug #136: 编辑学校也限流，与 POST 对齐。
+  rateLimit(10, 60_000),
+  rateLimit(100, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', schoolUpdateSchema),
@@ -3914,48 +3998,59 @@ app.put(
   },
 );
 
-app.delete('/admin/schools/:id', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
-  const user = c.get('user');
-  const startedAt = Date.now();
-  const id = c.req.param('id');
-  routesLogger.info({ userId: user.id, id: id }, '[API /admin/schools/:id DELETE]');
+app.delete(
+  '/admin/schools/:id',
+  // Bug #136: 关停学校涉及级联禁用师生+失效 session，开销大，限流。
+  rateLimit(5, 60_000),
+  rateLimit(50, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
+    const user = c.get('user');
+    const startedAt = Date.now();
+    const id = c.req.param('id');
+    routesLogger.info({ userId: user.id, id: id }, '[API /admin/schools/:id DELETE]');
 
-  try {
-    const existing = await db.query.schools.findFirst({ where: eq(schools.id, id) });
-    if (!existing) {
-      return c.json({ success: false, error: '学校不存在' }, 404);
-    }
-    const now = new Date().toISOString();
-    await db.update(schools).set({ isActive: false, updatedAt: now }).where(eq(schools.id, id));
-    // Bug #50: 学校软删除后，关联的教师/学生仍能用旧 session 登录、读写数据；
-    // 改为在关停学校的同时级联禁用其下所有用户，并清空其 active sessions。
-    const schoolUsers = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.schoolId, id));
-    const userIds = schoolUsers.map((u) => u.id);
-    if (userIds.length > 0) {
-      await db
-        .update(users)
-        .set({ isActive: false, updatedAt: now })
-        .where(inArray(users.id, userIds));
-      // 失效这些用户的所有 session，强制下线
-      for (const uid of userIds) {
-        await lucia.invalidateUserSessions(uid).catch(() => {
-          /* session 可能本来就不存在，忽略 */
-        });
+    try {
+      const existing = await db.query.schools.findFirst({ where: eq(schools.id, id) });
+      if (!existing) {
+        return c.json({ success: false, error: '学校不存在' }, 404);
       }
+      const now = new Date().toISOString();
+      await db.update(schools).set({ isActive: false, updatedAt: now }).where(eq(schools.id, id));
+      // Bug #50: 学校软删除后，关联的教师/学生仍能用旧 session 登录、读写数据；
+      // 改为在关停学校的同时级联禁用其下所有用户，并清空其 active sessions。
+      const schoolUsers = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.schoolId, id));
+      const userIds = schoolUsers.map((u) => u.id);
+      if (userIds.length > 0) {
+        await db
+          .update(users)
+          .set({ isActive: false, updatedAt: now })
+          .where(inArray(users.id, userIds));
+        // 失效这些用户的所有 session，强制下线
+        for (const uid of userIds) {
+          await lucia.invalidateUserSessions(uid).catch(() => {
+            /* session 可能本来就不存在，忽略 */
+          });
+        }
+      }
+      routesLogger.info(
+        { duration: Date.now() - startedAt },
+        '[API /admin/schools/:id DELETE] exit',
+      );
+      return c.json({ success: true });
+    } catch (err) {
+      routesLogger.error(
+        { err: err instanceof Error ? err.message : 'unknown' },
+        '[API /admin/schools/:id DELETE] error:',
+      );
+      return c.json({ success: false, error: '删除学校失败' }, 500);
     }
-    routesLogger.info({ duration: Date.now() - startedAt }, '[API /admin/schools/:id DELETE] exit');
-    return c.json({ success: true });
-  } catch (err) {
-    routesLogger.error(
-      { err: err instanceof Error ? err.message : 'unknown' },
-      '[API /admin/schools/:id DELETE] error:',
-    );
-    return c.json({ success: false, error: '删除学校失败' }, 500);
-  }
-});
+  },
+);
 
 app.get(
   '/admin/schools/:id/stats',
@@ -4157,6 +4252,9 @@ app.post(
 
 app.put(
   '/admin/api-configs/:id',
+  // Bug #164: 与 POST 路径保持同样的限流节奏。
+  rateLimit(10, 60_000),
+  rateLimit(100, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', apiConfigUpdateSchema),
@@ -4206,6 +4304,9 @@ app.put(
 
 app.delete(
   '/admin/api-configs/:id',
+  // Bug #164: 删除路径同样限流，避免脚本扫 id 删光所有 provider。
+  rateLimit(10, 60_000),
+  rateLimit(100, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   async (c) => {
@@ -4215,6 +4316,14 @@ app.delete(
     routesLogger.info({ userId: user.id, id: id }, '[API /admin/api-configs/:id DELETE]');
 
     try {
+      // Bug #165: 之前不存在也返回 success，前端无法区分；改为先校验存在性。
+      const existing = await db.query.apiConfigs.findFirst({
+        where: eq(apiConfigs.id, id),
+        columns: { id: true },
+      });
+      if (!existing) {
+        return c.json({ success: false, error: 'API 配置不存在' }, 404);
+      }
       await db.delete(apiConfigs).where(eq(apiConfigs.id, id));
       routesLogger.info(
         { duration: Date.now() - startedAt },
@@ -4409,6 +4518,9 @@ app.post(
 
 app.put(
   '/admin/announcements/:id',
+  // Bug #163: 编辑公告与 POST 保持同样的限流节奏。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', announcementUpdateSchema),
@@ -4461,6 +4573,9 @@ app.put(
 
 app.delete(
   '/admin/announcements/:id',
+  // Bug #163: 删公告必须限流，否则脚本可秒删全部历史公告。
+  rateLimit(10, 60_000),
+  rateLimit(200, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   async (c) => {
@@ -4631,6 +4746,9 @@ app.post(
 
 app.put(
   '/admin/question-bank/:id',
+  // Bug #153 续: PUT 路径与 POST 保持同样的限流节奏。
+  rateLimit(20, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   zValidator('json', questionUpdateSchema),
@@ -4681,6 +4799,9 @@ app.put(
 
 app.delete(
   '/admin/question-bank/:id',
+  // Bug #153 续: 删题目也限流；并修复 #165 类似的"不存在也返 success"问题。
+  rateLimit(20, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.SUPER_ADMIN),
   async (c) => {
@@ -4690,6 +4811,13 @@ app.delete(
     routesLogger.info({ userId: user.id, id: id }, '[API /admin/question-bank/:id DELETE]');
 
     try {
+      const existing = await db.query.questionBank.findFirst({
+        where: eq(questionBank.id, id),
+        columns: { id: true },
+      });
+      if (!existing) {
+        return c.json({ success: false, error: '题目不存在' }, 404);
+      }
       await db.delete(questionBank).where(eq(questionBank.id, id));
       routesLogger.info(
         { duration: Date.now() - startedAt },

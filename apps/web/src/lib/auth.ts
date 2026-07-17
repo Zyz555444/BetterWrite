@@ -39,7 +39,20 @@ export const validateRequest = cache(async () => {
     return { user: null, session: null };
   }
 
-  const result = await lucia.validateSession(sessionId);
+  // Bug #262: 之前直接 await lucia.validateSession(sessionId) 无 try/catch，
+  // 任意外部异常（DB 暂时性错误、Lucia adapter 抛错、malformed sessionId）都会
+  // propagate 到 RSC，让整个页面渲染失败并把内部错误信息泄漏给前端。
+  // 改为 try/catch：DB 错误时 fallback 到未登录（用户刷新即可），不向客户端泄漏。
+  let result: Awaited<ReturnType<typeof lucia.validateSession>>;
+  try {
+    result = await lucia.validateSession(sessionId);
+  } catch (err) {
+    logger.error(
+      { err: err instanceof Error ? err.message : 'unknown' },
+      '[Auth] validateSession threw, falling back to anonymous',
+    );
+    return { user: null, session: null };
+  }
   try {
     if (result.session?.fresh) {
       const sessionCookie = lucia.createSessionCookie(result.session.id);

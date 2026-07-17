@@ -156,8 +156,14 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   restoreSession: async () => {
     try {
-      const token = await SecureStore.getItemAsync(TOKEN_KEY);
-      const user = await readPersistedUser();
+      // Bug #256: 之前直接调 SecureStore.getItemAsync(TOKEN_KEY) 没 try/catch 兜底，
+      // 任何 SecureStore 异常（iOS Keychain 失败、Android EncryptedSharedPreferences
+      // 损坏、负空间、设备越狱检测等）都会向上 propagate，让整个 app 启动崩溃。
+      // 这里套了外层 try/catch，但为了更稳，仍用 getStoredToken() 走已被包裹的实现。
+      const [token, user] = await Promise.all([
+        getStoredToken(),
+        readPersistedUser(),
+      ]);
       if (token && user) {
         set({ token, user });
         await get().fetchMe();

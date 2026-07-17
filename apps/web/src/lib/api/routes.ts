@@ -732,7 +732,13 @@ app.post(
   },
 );
 
-app.get('/auth/tokens', authMiddleware, async (c) => {
+// Bug #255: 设备列表无 rateLimit；移动端高频轮询会被放大。
+app.get(
+  '/auth/tokens',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
   const user = c.get('user');
   routesLogger.info({ userId: user.id }, '[API /auth/tokens]');
   const list = await db.query.apiTokens.findMany({
@@ -1059,7 +1065,13 @@ app.post(
   },
 );
 
-app.get('/essays/my', authMiddleware, async (c) => {
+// Bug #248: 学生"我的作文"无 rateLimit。
+app.get(
+  '/essays/my',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
   const user = c.get('user');
   const list = await db.query.essays.findMany({
     where: eq(essays.studentId, user.id),
@@ -1070,7 +1082,13 @@ app.get('/essays/my', authMiddleware, async (c) => {
   return c.json({ success: true, data: list });
 });
 
-app.get('/essays/:id', authMiddleware, async (c) => {
+// Bug #249: 作文详情无 rateLimit；带 correction JOIN。
+app.get(
+  '/essays/:id',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
   routesLogger.info({ userId: user.id, role: user.role, essayId: id }, '[API /essays/:id]');
@@ -1098,7 +1116,13 @@ app.get('/essays/:id', authMiddleware, async (c) => {
   return c.json({ success: true, data: essay });
 });
 
-app.get('/essays/:id/correction', authMiddleware, async (c) => {
+// Bug #250: 批改结果详情无 rateLimit。
+app.get(
+  '/essays/:id/correction',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
   routesLogger.info(
@@ -1209,8 +1233,11 @@ app.put(
   },
 );
 
+// Bug #251: 教师"全部作文"列表无 rateLimit；多表 JOIN 跑全表。
 app.get(
   '/essays',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -1262,37 +1289,51 @@ app.get(
 );
 
 // ========== Tasks ==========
-app.get('/tasks', authMiddleware, async (c) => {
-  const user = c.get('user');
-  routesLogger.info({ userId: user.id, role: user.role }, '[API /tasks]');
-  let list: (typeof essayTasks.$inferSelect)[];
+// Bug #227: 任务列表无 rateLimit；教师/学生可被脚本高频拉全表（典型 P1 读端点）。
+// 限制 30/min + 1000/day。
+app.get(
+  '/tasks',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
+    const user = c.get('user');
+    routesLogger.info({ userId: user.id, role: user.role }, '[API /tasks]');
+    let list: (typeof essayTasks.$inferSelect)[];
 
-  if (user.role === UserRole.STUDENT) {
-    const enrollments = await db.query.classEnrollments.findMany({
-      where: eq(classEnrollments.userId, user.id),
-      columns: { classId: true },
-    });
-    const classIds = enrollments.map((e) => e.classId);
-    list = await db.query.essayTasks.findMany({
-      where:
-        classIds.length > 0
-          ? and(inArray(essayTasks.classId, classIds), eq(essayTasks.status, 'published'))
-          : undefined,
-      orderBy: desc(essayTasks.createdAt),
-      limit: 50,
-    });
-  } else {
-    list = await db.query.essayTasks.findMany({
-      orderBy: desc(essayTasks.createdAt),
-      limit: 50,
-    });
-  }
+    if (user.role === UserRole.STUDENT) {
+      const enrollments = await db.query.classEnrollments.findMany({
+        where: eq(classEnrollments.userId, user.id),
+        columns: { classId: true },
+      });
+      const classIds = enrollments.map((e) => e.classId);
+      list = await db.query.essayTasks.findMany({
+        where:
+          classIds.length > 0
+            ? and(inArray(essayTasks.classId, classIds), eq(essayTasks.status, 'published'))
+            : undefined,
+        orderBy: desc(essayTasks.createdAt),
+        limit: 50,
+      });
+    } else {
+      list = await db.query.essayTasks.findMany({
+        orderBy: desc(essayTasks.createdAt),
+        limit: 50,
+      });
+    }
 
-  routesLogger.info({ userId: user.id, returning: list.length }, '[API /tasks]');
-  return c.json({ success: true, data: list });
-});
+    routesLogger.info({ userId: user.id, returning: list.length }, '[API /tasks]');
+    return c.json({ success: true, data: list });
+  },
+);
 
-app.get('/tasks/:id', authMiddleware, async (c) => {
+// Bug #228: 任务详情无 rateLimit；脚本可刷 ID 枚举。
+app.get(
+  '/tasks/:id',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
+  authMiddleware,
+  async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
   const task = await db.query.essayTasks.findFirst({ where: eq(essayTasks.id, id) });
@@ -1521,7 +1562,14 @@ app.put(
 );
 
 // ========== Teacher Classes ==========
-app.get('/teacher/classes', authMiddleware, requireRole(UserRole.TEACHER), async (c) => {
+// Bug #229: 教师班级列表无 rateLimit。
+app.get(
+  '/teacher/classes',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.TEACHER),
+  async (c) => {
   const user = c.get('user');
   routesLogger.info({ userId: user.id }, '[API /teacher/classes]');
 
@@ -1542,7 +1590,14 @@ app.get('/teacher/classes', authMiddleware, requireRole(UserRole.TEACHER), async
 });
 
 // ========== Teacher Dashboard ==========
-app.get('/teacher/dashboard', authMiddleware, requireRole(UserRole.TEACHER), async (c) => {
+// Bug #230: 教师 dashboard 已有 60s memoize 缓存，但首次命中仍是多表 JOIN，限流防刷。
+app.get(
+  '/teacher/dashboard',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.TEACHER),
+  async (c) => {
   const user = c.get('user');
   routesLogger.info({ userId: user.id }, '[API /teacher/dashboard]');
 
@@ -1935,8 +1990,11 @@ app.get(
 );
 
 // ========== Teacher Students ==========
+// Bug #231: 教师学生列表无 rateLimit；多表 JOIN（users + classEnrollments + essays）。
 app.get(
   '/teacher/students',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -2066,8 +2124,11 @@ app.get(
   },
 );
 
+// Bug #232: 教师学生详情无 rateLimit。
 app.get(
   '/teacher/students/:id',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -2391,8 +2452,11 @@ app.patch(
 );
 
 // ========== Teacher Resources ==========
+// Bug #234: 教师资源列表无 rateLimit；带 creator JOIN。
 app.get(
   '/teacher/resources',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -2539,8 +2603,11 @@ app.post(
   },
 );
 
+// Bug #235: 资源详情无 rateLimit。
 app.get(
   '/teacher/resources/:id',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -2573,8 +2640,11 @@ const updateResourceSchema = z.object({
   tags: z.array(z.string()).optional(),
 });
 
+// Bug #236: 资源编辑无 rateLimit。
 app.patch(
   '/teacher/resources/:id',
+  rateLimit(30, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   zValidator('json', updateResourceSchema),
@@ -2628,8 +2698,11 @@ app.patch(
   },
 );
 
+// Bug #237: 资源删除无 rateLimit。
 app.delete(
   '/teacher/resources/:id',
+  rateLimit(30, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
   authMiddleware,
   requireRole(UserRole.TEACHER, UserRole.SCHOOL_ADMIN, UserRole.SUPER_ADMIN),
   async (c) => {
@@ -2829,7 +2902,14 @@ setInterval(() => {
   }
 }, 5 * 60_000).unref();
 
-app.get('/student/errors', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #238: 学生错题本列表无 rateLimit；每次触发 syncStudentErrorBook 跑全量。
+app.get(
+  '/student/errors',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const start = Date.now();
   routesLogger.info({ userId: user.id }, '[API /student/errors]');
@@ -2961,7 +3041,14 @@ app.post(
   },
 );
 
-app.get('/student/errors/:type', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #239: 学生错题按类型列表无 rateLimit。
+app.get(
+  '/student/errors/:type',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const type = c.req.param('type');
   const offset = parseNonNegativeInt(c.req.query('offset'), 0);
@@ -3242,7 +3329,14 @@ app.post(
   },
 );
 
-app.get('/student/ai/history', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #240: 学生 AI 历史无 rateLimit。
+app.get(
+  '/student/ai/history',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const offset = parseNonNegativeInt(c.req.query('offset'), 0);
   const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
@@ -3275,7 +3369,14 @@ app.get('/student/ai/history', authMiddleware, requireRole(UserRole.STUDENT), as
 });
 
 // ========== Student Practice ==========
-app.get('/student/question-bank', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #241: 题库列表无 rateLimit。
+app.get(
+  '/student/question-bank',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const topicType = c.req.query('topicType');
   const difficulty = c.req.query('difficulty');
@@ -3313,7 +3414,14 @@ app.get('/student/question-bank', authMiddleware, requireRole(UserRole.STUDENT),
   return c.json({ success: true, data });
 });
 
-app.get('/student/question-bank/:id', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #242: 题库详情无 rateLimit。
+app.get(
+  '/student/question-bank/:id',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const id = c.req.param('id');
   routesLogger.info({ userId: user.id, id: id }, '[API /student/question-bank/:id]');
@@ -3458,7 +3566,14 @@ app.post(
   },
 );
 
-app.get('/student/practice/history', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #243: 学生练习历史无 rateLimit。
+app.get(
+  '/student/practice/history',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const offset = parseNonNegativeInt(c.req.query('offset'), 0);
   const limit = parsePositiveInt(c.req.query('limit'), 20, 100);
@@ -3494,7 +3609,14 @@ app.get('/student/practice/history', authMiddleware, requireRole(UserRole.STUDEN
 });
 
 // ========== Student Progress ==========
-app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #244: 学生进度无 rateLimit；多表 JOIN 跑全量作文。
+app.get(
+  '/student/progress',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const start = Date.now();
   routesLogger.info({ userId: user.id }, '[API /student/progress]');
@@ -3598,7 +3720,14 @@ app.get('/student/progress', authMiddleware, requireRole(UserRole.STUDENT), asyn
   return c.json({ success: true, data });
 });
 
-app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #245: 学生成就无 rateLimit；每次跑全量作文 + 解析 corrections JSON。
+app.get(
+  '/student/achievements',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const start = Date.now();
   routesLogger.info({ userId: user.id }, '[API /student/achievements]');
@@ -3717,7 +3846,14 @@ app.get('/student/achievements', authMiddleware, requireRole(UserRole.STUDENT), 
 });
 
 // ========== Student Dashboard & Drafts ==========
-app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #246: 学生 dashboard 已有 60s memoize 缓存，但首次命中仍是多表 JOIN，限流防刷。
+app.get(
+  '/student/dashboard',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const start = Date.now();
   routesLogger.info({ userId: user.id }, '[API /student/dashboard]');
@@ -3790,7 +3926,14 @@ app.get('/student/dashboard', authMiddleware, requireRole(UserRole.STUDENT), asy
   return c.json({ success: true, data });
 });
 
-app.get('/student/drafts/:taskId', authMiddleware, requireRole(UserRole.STUDENT), async (c) => {
+// Bug #247: 学生草稿读无 rateLimit；前端高频自动保存对应"读最近草稿"轮询。
+app.get(
+  '/student/drafts/:taskId',
+  rateLimit(60, 60_000),
+  rateLimit(2000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.STUDENT),
+  async (c) => {
   const user = c.get('user');
   const taskId = c.req.param('taskId');
   routesLogger.info({ userId: user.id, taskId: taskId }, '[API /student/drafts/:taskId GET]');
@@ -4022,7 +4165,14 @@ const schoolUpdateSchema = schoolCreateSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
 
-app.get('/admin/schools', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+// Bug #252: 学校列表无 rateLimit；带多表 JOIN（teacherCounts/studentCounts/classCounts/essayCounts/scoreAverages）。
+app.get(
+  '/admin/schools',
+  rateLimit(20, 60_000),
+  rateLimit(500, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
   const user = c.get('user');
   const startedAt = Date.now();
   const region = c.req.query('region');
@@ -4907,7 +5057,14 @@ const questionCreateSchema = z
 
 const questionUpdateSchema = questionCreateSchema.partial();
 
-app.get('/admin/question-bank', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+// Bug #253: 题库管理列表无 rateLimit。
+app.get(
+  '/admin/question-bank',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
   const user = c.get('user');
   const startedAt = Date.now();
   const topicType = c.req.query('topicType');
@@ -5101,7 +5258,14 @@ app.delete(
 );
 
 // ========== Admin: Scoring Config (read-only) ==========
-app.get('/admin/scoring-config', authMiddleware, requireRole(UserRole.SUPER_ADMIN), async (c) => {
+// Bug #254: 评分配置无 rateLimit（虽然只是常量返回，但 admin 脚本高频调用浪费 CPU）。
+app.get(
+  '/admin/scoring-config',
+  rateLimit(30, 60_000),
+  rateLimit(1000, 24 * 60 * 60_000),
+  authMiddleware,
+  requireRole(UserRole.SUPER_ADMIN),
+  async (c) => {
   const user = c.get('user');
   const startedAt = Date.now();
   routesLogger.info({ userId: user.id }, '[API /admin/scoring-config]');
